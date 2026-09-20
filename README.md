@@ -1,11 +1,7 @@
 # jot
 
 **VS Code, but in your terminal.**
-
-<img width="1925" height="1019" alt="{85DF00B6-9481-45AB-9786-67D7F77591DC}" src="https://github.com/user-attachments/assets/2f0f6632-c6bd-4f2f-882d-3c6ff0a925a3" />
-<img width="1912" height="1008" alt="{2104253A-E5D9-407D-B911-4F53E86A9816}" src="https://github.com/user-attachments/assets/0081284e-e348-4f3a-9d18-e73d43537185" />
-<img width="582" height="239" alt="{6092B372-FA46-42FE-B498-F7EE0B201366}" src="https://github.com/user-attachments/assets/521e7c42-2429-48a6-b802-7ac81c6013d0" />
-
+<img width="2533" height="1372" alt="image" src="https://github.com/user-attachments/assets/b77080c2-8370-42ab-89f5-dac1c1de6e3c" />
 Just try it.
 
 ## Install
