@@ -490,7 +490,7 @@ void LuaAPI::render_float_layer(int min_zindex, int max_zindex)
       auto &p = editor->get_pane();
       auto &b = editor->get_buffer(p.buffer_id);
       x = p.x + 9 + b.cursor.x;
-      y = p.y + editor->tab_height + b.cursor.y - b.scroll_offset;
+      y = pane_content_top(p) + b.cursor.y - b.scroll_offset;
     }
     else if (f->relative == "win" && !editor->panes.empty())
     {

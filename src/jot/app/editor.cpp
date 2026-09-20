@@ -263,7 +263,29 @@ void Editor::initialize_state_defaults()
   // One row, like the pane tab strip: the second row's content (the message or
   // the workspace label) rides as a segment on the same bar now.
   status_height = 1;
-  tab_height = 1;
+  // Panes have no tab strip of their own any more -- the workspace strip owns
+  // row 0 and `topbar_height` already keeps the panes below it -- so a pane's
+  // own chrome is only the winbar (0 until Phase 3 draws one).
+  tab_height = 0;
+  // The workspace strip: whether it owns row 0, how many tabs it takes before
+  // hiding itself, and where a newcomer lands in the order.
+  tabline_visible = config.get_bool("tabline", true);
+  tabline_auto_hide = std::max(0, config.get_int("tabline_auto_hide", 0));
+  {
+    const std::string insert = config.get("tabline_insert", "after_current");
+    if (insert == "start")
+    {
+      tabline_insert = TabInsert::TAB_INSERT_START;
+    }
+    else if (insert == "end")
+    {
+      tabline_insert = TabInsert::TAB_INSERT_END;
+    }
+    else
+    {
+      tabline_insert = TabInsert::TAB_INSERT_AFTER_CURRENT;
+    }
+  }
   tab_size = config.get_int("tab_size", 2);
   show_indent_guides = config.get_bool("show_indent_guides", true);
   relative_line_numbers = config.get_bool("relative_line_numbers", false);

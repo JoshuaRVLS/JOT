@@ -492,11 +492,11 @@ TEST_CASE("Bottom panel: the list answers only over its own rows", "[jot]")
   REQUIRE(e.bottom_panel_view_for_test() == (int)BOTTOM_PANEL_PROBLEMS);
   REQUIRE(e.focus_state_for_test() == (int)FOCUS_BOTTOM_PANEL);
 
-  // A code cell: inside the pane, on a body row below its tab strip (the
-  // pane's first row) and above the panel.
+  // A code cell: inside the pane, on its first text row (below the workspace
+  // strip, which is outside the pane) and above the panel.
   const SplitPane &pane = e.pane_for_test();
   const int code_x = pane.x + 3;
-  const int code_y = pane.y + 1;
+  const int code_y = pane_content_top(pane);
   REQUIRE(code_y < e.bottom_panel_view_tab_y_for_test());
 
   // The list is a dock, not a mode: a press or a motion in the buffer is not

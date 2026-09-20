@@ -140,7 +140,7 @@ void Editor::render_lsp_signature()
     draw_w = std::max(1, draw_w - minimap_width);
   }
   const int line_num_width = 7;
-  int visible_h = std::max(1, pane.h - tab_height);
+  int visible_h = std::max(1, pane_viewport_h(pane));
   int visible_w = std::max(12, draw_w - 2 - line_num_width);
 
   int widest = 0;
@@ -161,14 +161,14 @@ void Editor::render_lsp_signature()
   int cursor_x =
       pane.x + 1 + line_num_width + (cursor_visual - scroll_visual)
       + lsp_inlay_hint_cells_before(buf.filepath, buf.cursor.y, buf.cursor.x, line);
-  const int viewport_h = std::max(1, pane.h - tab_height);
+  const int viewport_h = std::max(1, pane_viewport_h(pane));
   const auto fold_view = Folding::view_of(buf.fold_ranges);
   const int cursor_row = std::max(0,
                                   fold_view->visible_row_for_line(buf.scroll_offset,
                                                                  buf.cursor.y,
                                                                  viewport_h,
                                                                  (int)buf.line_count()));
-  int cursor_y = pane.y + tab_height + cursor_row;
+  int cursor_y = pane_content_top(pane) + cursor_row;
 
   int min_x = pane.x + 1 + line_num_width;
   int max_x = pane.x + draw_w - box_w - 1;
@@ -176,7 +176,7 @@ void Editor::render_lsp_signature()
   {
     max_x = min_x;
   }
-  int min_y = pane.y + tab_height;
+  int min_y = pane_content_top(pane);
   int box_x = std::clamp(cursor_x - 2, min_x, max_x);
   int box_y = cursor_y - box_h - 2;
   if (box_y < min_y)

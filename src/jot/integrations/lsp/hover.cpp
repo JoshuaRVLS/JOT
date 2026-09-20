@@ -585,8 +585,8 @@ void Editor::handle_lsp_hover_result(const LSPHoverResult &hover)
   const SplitPane &pane = get_pane();
   constexpr int line_num_width = 7;
   int row = hover.origin_line - buf.scroll_offset;
-  int max_row = std::max(0, pane.h - tab_height);
-  int anchor_y = pane.y + tab_height + std::clamp(row, 0, max_row);
+  int max_row = std::max(0, pane_viewport_h(pane));
+  int anchor_y = pane_content_top(pane) + std::clamp(row, 0, max_row);
   int popup_x =
       pane.x + 1 + line_num_width + std::max(0, hover.origin_character - buf.scroll_x) + 2;
   // Lua hover UI: same hook as the mouse path, anchored at the cursor line.

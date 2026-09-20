@@ -110,6 +110,34 @@ public:
   }
   FileBuffer &buffer_for_test(int id = -1);
   SplitPane &pane_for_test(int id = -1);
+  // Every pane as laid out by the last update_pane_layout, so a test can check
+  // the row budget each one was charged (see test_pane_row_budget.cpp).
+  const std::vector<SplitPane> &panes_for_test() const
+  {
+    return panes;
+  }
+  void split_pane_for_test(bool vertical)
+  {
+    if (vertical)
+    {
+      split_pane_vertical();
+    }
+    else
+    {
+      split_pane_horizontal();
+    }
+    update_pane_layout();
+  }
+  void toggle_pane_zoom_for_test()
+  {
+    toggle_pane_zoom();
+    update_pane_layout();
+  }
+  void close_current_pane_for_test()
+  {
+    close_pane();
+    update_pane_layout();
+  }
   // Settings-menu state accessors for headless tests (the menu surface is
   // private EditorState; tests drive it through these + handle_settings_input).
   bool settings_menu_open_for_test() const

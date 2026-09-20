@@ -149,6 +149,14 @@ void Editor::update_pane_layout()
   const int available_w = area.w;
   const int origin_y = area.y;
 
+  // The chrome each pane spends above its text, resolved here because this is
+  // the one pass that owns every pane's geometry: the zoomed branch below sets
+  // the active pane's rows and parks the others, and both get the same header.
+  for (SplitPane &pane : panes)
+  {
+    pane.header_height = pane_header_height(pane);
+  }
+
   if (pane_zoom_active && panes.size() > 1 && current_pane >= 0
       && current_pane < (int)panes.size())
   {

@@ -24,9 +24,9 @@ void Editor::render_image_viewer(const SplitPane &pane)
   // explorer. The cell grid starts under the pane's tab strip and stops above
   // its bottom edge, matching render_buffer_content.
   int area_x = pane.x;
-  int area_y = pane.y + tab_height;
+  int area_y = pane_content_top(pane);
   int area_w = std::max(1, pane.w);
-  int area_h = std::max(0, pane.h - tab_height);
+  int area_h = pane_viewport_h(pane);
   if (area_h <= 0)
     return;
 

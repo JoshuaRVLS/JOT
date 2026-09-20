@@ -6,11 +6,13 @@
 
 namespace
 {
-  // jot ships two themes, both of them its own: `jot-dark` (warm charcoal,
-  // amber keywords, teal functions) and `jot-light` (the same ink on warm
-  // paper). The names they replaced -- `dark` and `light`, which the whole
-  // bundled catalog used to be keyed off -- still resolve, so a config written
-  // before the change keeps the colour scheme it asked for.
+  // jot ships its own pair -- `jot-dark` (warm charcoal, amber keywords, teal
+  // functions) and `jot-light` (the same ink on warm paper) -- plus the flexoki
+  // pair ported from kepano's Flexoki palette (flexoki-dark / flexoki-light, MIT
+  // licensed, https://stephango.com/flexoki). The names the two jot themes
+  // replaced -- `dark` and `light`, which the whole bundled catalog used to be
+  // keyed off -- still resolve, so a config written before the change keeps the
+  // colour scheme it asked for.
   const char *legacy_theme_alias(const std::string &name)
   {
     const std::string needle = string_util::lower_copy(name);
@@ -32,6 +34,10 @@ std::vector<std::string> Editor::list_available_themes()
 
   if (themes.empty())
   {
+    // No Lua runtime to read the bundled files with: still answer with every
+    // scheme the install ships. `apply_theme` reports the failure itself.
+    themes.push_back("flexoki-dark");
+    themes.push_back("flexoki-light");
     themes.push_back("jot-dark");
     themes.push_back("jot-light");
     return themes;

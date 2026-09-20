@@ -3,19 +3,28 @@
 Themes are native JSON data. The primary location is
 `~/.config/jot/configs/colors/`; legacy `~/.config/jot/themes/` is also scanned.
 
-jot ships two themes, both of them its own:
+jot ships four themes: its own pair, and a port of kepano's Flexoki.
 
 | Theme | Look |
 |---|---|
 | `jot-dark` (default) | warm charcoal (`#1e1b18`), cream ink, amber keywords, soft teal functions |
 | `jot-light` | the same ink on warm paper (`#f9f4ea`) |
+| `flexoki-dark` | Flexoki's ink palette: black (`#100f0f`) paper, base-200 text, green keywords, cyan strings |
+| `flexoki-light` | the same scheme on Flexoki paper (`#fffcf0`) with the 600-step accents |
 
-The amber/teal pair is the palette's signature: keywords, the active pane
+The amber/teal pair is the jot palette's signature: keywords, the active pane
 border, the cursor line number and the search highlight all carry the accent,
 so the chrome reads as jot's own scheme rather than a neutral grey editor with
 a blue border.
 
-Both shipped themes are exact 24-bit palettes: every slot names a `#rrggbb`
+The Flexoki pair is [Flexoki](https://stephango.com/flexoki) by kepano (MIT
+licensed), ported slot by slot from the official VS Code and Helix themes: the
+400-step accents on the dark surfaces, the 600-step accents on paper, and the
+base steps (50-950) for text, line numbers, borders and every panel surface.
+Accent roles follow the upstream themes rather than jot's -- keywords are green,
+numbers purple, operators red -- which is what makes it recognisably Flexoki.
+
+Every shipped theme is an exact 24-bit palette: every slot names a `#rrggbb`
 colour, and jot paints it verbatim (SGR `38;2`/`48;2`, or the exact value in the
 GUI) instead of rounding it to the nearest of 256 entries. A slot still accepts
 an xterm 256 index for a theme written that way, and the two forms can be mixed

@@ -217,7 +217,7 @@ int Editor::integrated_terminal_panel_h() const
   }
   // Bottom panel: the stored height, capped so the panes always keep a
   // few rows (the same bound the drag clamps to).
-  int max_h = std::max(5, ui->get_height() - status_height - tab_height - 5);
+  int max_h = std::max(5, ui->get_height() - status_height - pane_area_top() - 5);
   return std::clamp(integrated_terminal_height, 5, max_h);
 }
 
@@ -231,7 +231,7 @@ int Editor::integrated_terminal_panel_y() const
   {
     return topbar_height();
   }
-  return std::max(tab_height, ui->get_height() - status_height - integrated_terminal_panel_h());
+  return std::max(pane_area_top(), ui->get_height() - status_height - integrated_terminal_panel_h());
 }
 
 int Editor::integrated_terminal_panel_w() const

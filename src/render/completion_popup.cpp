@@ -141,21 +141,21 @@ void Editor::render_lsp_completion()
 
   const int line_num_width = 7;
   const bool use_nerd_icons = config.get_bool("lsp_completion_nerd_icons", true);
-  int visible_h = std::max(1, pane.h - tab_height);
+  int visible_h = std::max(1, pane_viewport_h(pane));
   int visible_w = std::max(12, draw_w - 2 - line_num_width);
 
   // Caret screen row: the popup placement is decided from the space below
   // and above it, so this must be known before sizing the box.
-  const int viewport_h = std::max(1, pane.h - tab_height);
+  const int viewport_h = std::max(1, pane_viewport_h(pane));
   const auto fold_view = Folding::view_of(buf.fold_ranges);
   const int cursor_row = std::max(0,
                                   fold_view->visible_row_for_line(buf.scroll_offset,
                                                                  buf.cursor.y,
                                                                  viewport_h,
                                                                  (int)buf.line_count()));
-  const int cursor_y = pane.y + tab_height + cursor_row;
+  const int cursor_y = pane_content_top(pane) + cursor_row;
   const int space_below = (pane.y + visible_h - 1) - cursor_y;
-  const int space_above = cursor_y - (pane.y + tab_height);
+  const int space_above = cursor_y - pane_content_top(pane);
 
   const int max_items_cfg = std::clamp(config.get_int("lsp_completion_max_items", 8), 3, 20);
   int max_items = std::min(max_items_cfg, (int)lsp_completion_items.size());
@@ -254,7 +254,7 @@ void Editor::render_lsp_completion()
     max_x = min_x;
   }
 
-  int min_y = pane.y + tab_height;
+  int min_y = pane_content_top(pane);
   int max_y = pane.y + visible_h - box_h;
   if (max_y < min_y)
   {

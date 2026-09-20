@@ -19,8 +19,9 @@ wavy underline with a hex colour through init.lua and reads the SGR 58 sequence
 back out of the stream: an underline is where a quantised colour would be
 hardest to notice and easiest to ship.
 
-Scenes: the default scheme (jot-dark), jot-light, the legacy `dark` name, the
-theme chooser's list, and a decoration's exact underline colour.
+Scenes: the default scheme (jot-dark), jot-light, the ported flexoki pair, the
+legacy `dark` name, the theme chooser's list, and a decoration's exact underline
+colour.
 
 Usage: test/theme_probe.py [path-to-jot] [--dump]
 Exit codes: 0 pass, 1 fail, 2 skipped (no binary).
@@ -51,10 +52,18 @@ JOT_DARK_BODY = truecolour(0x1E1B18)
 JOT_DARK_STATUS = truecolour(0x2A2522)
 JOT_LIGHT_BODY = truecolour(0xF9F4EA)
 JOT_LIGHT_STATUS = truecolour(0xECE4D6)
+# The ported Flexoki pair: `black` and `base-950` for the dark editor, `paper`
+# and `base-50` for the light one (see .configs/configs/colors/flexoki-*.json).
+FLEXOKI_DARK_BODY = truecolour(0x100F0F)
+FLEXOKI_DARK_STATUS = truecolour(0x1C1B1A)
+FLEXOKI_LIGHT_BODY = truecolour(0xFFFCF0)
+FLEXOKI_LIGHT_STATUS = truecolour(0xF2F0E5)
 # The accent each theme inks its active pane border with, as it must appear in
 # the escape stream: 38;2;r;g;b, never 38;5;n.
 JOT_DARK_ACCENT = b"\x1b[38;2;245;176;107m"  # #f5b06b
 JOT_LIGHT_ACCENT = b"\x1b[38;2;169;92;20m"  # #a95c14
+FLEXOKI_DARK_ACCENT = b"\x1b[38;2;58;169;159m"  # #3aa99f, cyan-400
+FLEXOKI_LIGHT_ACCENT = b"\x1b[38;2;36;131;123m"  # #24837b, cyan-600
 # A decoration's underline colour as SGR 58's 24-bit colon form.
 DECO_UNDERLINE = b"\x1b[58:2::68:204:153m"  # #44cc99
 # What an editor with no theme applied paints (the built-in ANSI default).
@@ -143,6 +152,12 @@ def main() -> int:
         # jot theme that replaced it rather than to the ANSI fallback.
         ("dark (legacy name)", "dark", JOT_DARK_BODY, JOT_DARK_STATUS, JOT_DARK_ACCENT),
         ("light (legacy name)", "light", JOT_LIGHT_BODY, JOT_LIGHT_STATUS, JOT_LIGHT_ACCENT),
+        # The ported palette is a file like any other: it has to resolve, paint
+        # its own 24-bit surfaces, and ink the border with its own accent.
+        ("flexoki-dark", "flexoki-dark", FLEXOKI_DARK_BODY, FLEXOKI_DARK_STATUS,
+         FLEXOKI_DARK_ACCENT),
+        ("flexoki-light", "flexoki-light", FLEXOKI_LIGHT_BODY, FLEXOKI_LIGHT_STATUS,
+         FLEXOKI_LIGHT_ACCENT),
     ]
     for index, (label, scheme, want_body, want_status, want_accent) in enumerate(scenes):
         cfg = f"/tmp/jot_theme_probe_cfg_{index}"
@@ -196,6 +211,18 @@ def main() -> int:
     print(f"chooser: lists {listed}")
     if len(listed) != 2:
         failures.append(f"chooser did not list both jot themes (saw {listed})")
+
+    # ...and the Flexoki pair, which is named `flexoki-*`: the query letter has
+    # to be its own (the palette filters on the argument).
+    screen = run(binary, path, root, cfg, keys=PALETTE + b"theme f")
+    if dump:
+        print(screen.text())
+        print("-" * 70)
+    view = screen.text()
+    listed = [name for name in ("flexoki-dark", "flexoki-light") if name in view]
+    print(f"chooser: lists {listed}")
+    if len(listed) != 2:
+        failures.append(f"chooser did not list both flexoki themes (saw {listed})")
 
     if failures:
         for failure in failures:

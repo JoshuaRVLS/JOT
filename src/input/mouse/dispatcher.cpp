@@ -398,6 +398,20 @@ void Editor::handle_mouse(void *event_ptr)
     }
   }
 
+  // Row 0 is the workspace tab strip, not a pane row: it sees the event first
+  // so a press, a close, a middle click or a drag can never fall through to the
+  // text underneath.
+  if ((is_click || is_click_release || is_middle_click || is_motion)
+      && handle_tabline_mouse(event->x, event->y, is_click, is_click_release, is_middle_click,
+                              is_motion))
+  {
+    if (is_motion)
+    {
+      clear_debugger_breakpoint_hover();
+    }
+    return;
+  }
+
   if ((is_click || is_motion || is_right_click)
       && handle_menu_bar_mouse(event->x, event->y, is_click, is_motion))
   {
@@ -835,81 +849,15 @@ void Editor::handle_mouse(void *event_ptr)
   // math, and each used to prepare (or scan) the ranges on its own.
   const auto fold_view = Folding::view_of(buf.fold_ranges);
 
-  if ((is_click || is_middle_click) && event->y == pane.y && !buffers.empty())
-  {
-    int draw_w = std::max(1, pane.w);
-    if (show_minimap && draw_w > 20)
-    {
-      draw_w = std::max(1, draw_w - minimap_width);
-    }
-    int tabs_x = pane.x + 1;
-    int tabs_w = std::max(1, draw_w - 2);
-    if (event->x >= tabs_x && event->x < tabs_x + tabs_w)
-    {
-      FileTabLayout tabs = build_file_tab_layout(pane, draw_w);
-      int page = std::max(1, (int)tabs.segments.size());
-      if (tabs.scroll_left_x >= 0 && event->x >= tabs.scroll_left_x
-          && event->x < tabs.scroll_left_end_x)
-      {
-        if (scroll_local_tabs(pane, -page))
-        {
-          needs_redraw = true;
-        }
-        focus_state = FOCUS_EDITOR;
-        restart_blink();
-        return;
-      }
-      if (tabs.scroll_right_x >= 0 && event->x >= tabs.scroll_right_x
-          && event->x < tabs.scroll_right_end_x)
-      {
-        if (scroll_local_tabs(pane, page))
-        {
-          needs_redraw = true;
-        }
-        focus_state = FOCUS_EDITOR;
-        restart_blink();
-        return;
-      }
-      for (const auto &tab : tabs.segments)
-      {
-        if (is_middle_click && event->x >= tab.x && event->x < tab.end_x)
-        {
-          close_buffer_at(tab.buffer_id);
-          focus_state = FOCUS_EDITOR;
-          restart_blink();
-          needs_redraw = true;
-          return;
-        }
-
-        if (is_click && event->x == tab.close_x)
-        {
-          close_buffer_at(tab.buffer_id);
-          focus_state = FOCUS_EDITOR;
-          restart_blink();
-          needs_redraw = true;
-          return;
-        }
-
-        if (is_click && event->x >= tab.x && event->x < tab.close_x)
-        {
-          switch_to_local_tab(tab.tab_index);
-          focus_state = FOCUS_EDITOR;
-          restart_blink();
-          needs_redraw = true;
-          return;
-        }
-      }
-    }
-  }
 
   if (show_minimap && is_click)
   {
     if (event->x >= pane.x + pane.w - minimap_width && event->x < pane.x + pane.w)
     {
-      int h = std::max(1, pane.h - tab_height);
-      if (event->y >= pane.y + tab_height && event->y < pane.y + tab_height + h)
+      int h = std::max(1, pane_viewport_h(pane));
+      if (event->y >= pane_content_top(pane) && event->y < pane_content_top(pane) + h)
       {
-        int rel_y = event->y - (pane.y + tab_height);
+        int rel_y = event->y - pane_content_top(pane);
         int total_lines = fold_view->visible_line_count((int)buf.line_count());
         if (total_lines > 0)
         {
@@ -950,7 +898,7 @@ void Editor::handle_mouse(void *event_ptr)
 
   const int line_num_width = 7;
   const int code_start_x = pane.x + 1 + line_num_width;
-  const int content_top = pane.y + tab_height;
+  const int content_top = pane_content_top(pane);
   const int content_bottom = pane.y + pane.h - 1;
 
   int raw_rel_y = event->y - content_top;
@@ -966,7 +914,7 @@ void Editor::handle_mouse(void *event_ptr)
   // edges (edge-panning selection) or must clamp (gutter clicks); an
   // unconditional clamp would pin the cursor to column 0/the viewport edge
   // and defeat horizontal auto-scroll.
-  int visible_rows = std::max(1, pane.h - tab_height);
+  int visible_rows = std::max(1, pane_viewport_h(pane));
   int max_scroll_offset =
       std::max(0, fold_view->visible_line_count((int)buf.line_count()) - visible_rows);
 

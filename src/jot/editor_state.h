@@ -12,7 +12,8 @@
 // instead (jot/editor/*_controller.h) -- search and Discord so far -- so what
 // remains here is data the editor itself reads and writes.
 //
-//   state/pane_state.h        buffers, split tree, tabs, pane/scrollbar drags
+//   state/pane_state.h        buffers, split tree, pane-local tab history, drags
+//   state/tabline_state.h     the workspace tab strip (row 0) and its order
 //   state/workspace_state.h   sidebar, workspace session, git summary + panel
 //   state/panel_state.h       bottom/right docks, minimap, terminal selection
 //   state/surface_state.h     palette, pickers, prompts, menus, popup
@@ -32,6 +33,7 @@
 #include "jot/state/pane_state.h"
 #include "jot/state/panel_state.h"
 #include "jot/state/surface_state.h"
+#include "jot/state/tabline_state.h"
 #include "jot/state/view_state.h"
 #include "jot/state/workspace_state.h"
 
@@ -42,6 +44,7 @@ struct EditorState : EngineState,
                      PaneState,
                      PanelState,
                      SurfaceState,
+                     TablineState,
                      ViewState,
                      WorkspaceState
 {

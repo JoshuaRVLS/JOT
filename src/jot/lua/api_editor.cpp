@@ -289,6 +289,11 @@ void LuaAPI::push_theme_palette(lua_State *L)
   color("tab_inactive", t.fg_tab_inactive, t.bg_tab_inactive);
   color("tab_close", t.fg_tab_close, -1);
   color("tab_separator", t.fg_tab_separator, -1);
+  color("tab_pin", t.fg_tab_pin, -1);
+  color("tab_alt", t.fg_tab_alt, -1);
+  color("tab_target", t.fg_tab_target, -1);
+  color("tab_drop", t.fg_tab_drop, -1);
+  color("tab_hover", t.fg_tab_hover, t.bg_tab_hover);
   color("active_border", t.fg_active_border, t.bg_active_border);
   color("image_border", t.fg_image_border, t.bg_image_border);
   color("diagnostic_error", t.fg_diagnostic_error, -1);

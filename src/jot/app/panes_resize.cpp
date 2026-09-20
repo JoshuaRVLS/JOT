@@ -300,7 +300,7 @@ bool Editor::update_terminal_resize_drag(int y)
   }
   // Same bounds as integrated_terminal_panel_h: keep at least 5 rows of
   // panes and never grow past the status line.
-  int max_h = std::max(5, ui->get_height() - status_height - tab_height - 5);
+  int max_h = std::max(5, ui->get_height() - status_height - pane_area_top() - 5);
   int requested = terminal_resize_start_height + (terminal_resize_start_y - y);
   int next = std::clamp(requested, 5, max_h);
   if (integrated_terminal_height == next)

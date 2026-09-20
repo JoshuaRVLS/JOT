@@ -293,7 +293,10 @@ TEST_CASE("Explorer clicks work below the terminal's row count", "[jot]")
   REQUIRE(e.sidebar_visible_for_test());
 
   // Explorer rows start at y = 1 (row 0 is the header), so the filename index
-  // is y - 1.
+  // is y - 1. Opening the first file puts a tab on the workspace strip, which
+  // claims row 0: from then on the column starts a row lower (and one row
+  // shorter), so the index is y - 2. The hit test reads the same
+  // `y - topbar_height() - 1`, which is what keeps it on the painted row.
   const auto click_row = [&](int y)
   {
     e.mouse_event_for_test(5, y, /*bstate=*/1); // press
@@ -301,17 +304,20 @@ TEST_CASE("Explorer clicks work below the terminal's row count", "[jot]")
     return fs::path(e.buffer_for_test().filepath).filename().string();
   };
 
-  // Control: a row above the old cutoff must keep working.
+  // Control: a row above the old cutoff must keep working. No buffer is open
+  // yet, so the strip is hidden and the tree still starts at row 1.
   REQUIRE(click_row(1) == "f00.txt");
 
   // The regression: row 22 is the first row the old terminal-derived gate
-  // rejected, so this click used to be dropped entirely.
-  REQUIRE(click_row(22) == "f21.txt");
+  // rejected, so a click there used to be dropped entirely. With the strip up
+  // the same file now sits one row lower.
+  REQUIRE(click_row(23) == "f21.txt");
 
   // The last row of the explorer that is actually painted. It is the column's
-  // last row: the panel has no bottom border row, and the footer takes the row
-  // under the tree, so the painted list ends here. Its index is 36.
-  REQUIRE(click_row(37) == "f36.txt");
+  // last list row: the panel has no bottom border row, and the footer takes the
+  // row under the tree, so the painted list ends here (index 35 -- the strip
+  // cost the column one row, so f36 is below the fold until the tree scrolls).
+  REQUIRE(click_row(37) == "f35.txt");
 
   // The row below that is the footer, and the one under it the status line:
   // neither may open anything (the footer is not a tree row, and the status

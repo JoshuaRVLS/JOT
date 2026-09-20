@@ -4,15 +4,57 @@
 #pragma once
 
 #include "features/syntax_highlighter.h"
+#include "jot/model/buffer.h"
+#include "jot/model/theme.h"
 #include "tree_sitter/manager.h"
 #include "ui/components.h"
 #include "ui/text.h"
 #include <algorithm>
+#include <filesystem>
 #include <string>
+#include <system_error>
+#include <utility>
 #include <vector>
 
 namespace ui_internal
 {
+// The git_file_status map is keyed by absolute, lexically-normal paths, and the
+// tab strip looks one up per tab per frame. Resolving that path goes through
+// std::filesystem, so borrow the answer from the buffer's memo instead of
+// recomputing it on every frame; the memo re-derives itself whenever the
+// buffer's path changes (save-as, reload).
+inline const std::string &git_status_key_for(FileBuffer &buffer)
+{
+  if (buffer.git_status_key_path != buffer.filepath)
+  {
+    buffer.git_status_key_path = buffer.filepath;
+    std::error_code ec;
+    std::filesystem::path p = std::filesystem::absolute(buffer.filepath, ec);
+    if (ec)
+    {
+      p = std::filesystem::path(buffer.filepath);
+    }
+    buffer.git_status_key = p.lexically_normal().string();
+  }
+  return buffer.git_status_key;
+}
+
+// The (fg, bg) pair a tab takes from its git status.
+inline std::pair<int, int> git_tab_colors(const Theme &theme, const std::string &status)
+{
+  if (status.find('U') != std::string::npos || status == "AA" || status == "DD")
+    return {theme.fg_git_conflict, theme.bg_git_conflict};
+  if (status.find('D') != std::string::npos)
+    return {theme.fg_git_deleted, theme.bg_git_deleted};
+  if (status.find('R') != std::string::npos)
+    return {theme.fg_git_renamed, theme.bg_git_renamed};
+  if (status.find('A') != std::string::npos)
+    return {theme.fg_git_added, theme.bg_git_added};
+  if (status.find('?') != std::string::npos)
+    return {theme.fg_git_untracked, theme.bg_git_untracked};
+  return {theme.fg_git_modified, theme.bg_git_modified};
+}
+
 inline std::string trim_hover_fence_language(std::string lang)
 {
   size_t start = 0;

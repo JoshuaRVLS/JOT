@@ -55,12 +55,7 @@ bool HostCoreAPI::switch_buffer(int index)
     {
       pane.tab_buffer_ids.push_back(index);
     }
-    int draw_w = std::max(1, pane.w);
-    if (editor.show_minimap && draw_w > 20)
-    {
-      draw_w = std::max(1, draw_w - editor.minimap_width);
-    }
-    editor.reveal_local_tab(pane, editor.find_local_tab_index(pane, index), draw_w);
+    editor.reveal_tab_for_buffer(index);
   }
 
   editor.focus_state = Editor::FOCUS_EDITOR;

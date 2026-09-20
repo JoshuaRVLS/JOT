@@ -197,6 +197,16 @@ public:
   // currently owns. The editor constructor already boots the UI kit through
   // initialize_lua_runtime(), so the handlers are live in tests.
   UI *ui_for_test();
+  // The chrome heights the row budget is built from: the local tab strip and
+  // the breadcrumb winbar (test_pane_row_budget.cpp).
+  int tab_height_for_test() const
+  {
+    return tab_height;
+  }
+  int winbar_height_for_test() const
+  {
+    return winbar_height;
+  }
   int lua_float_count_for_test(const std::string &surface) const;
   void load_file(const std::string &fname);
   void run();

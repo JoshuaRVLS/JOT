@@ -7,6 +7,7 @@
 // Folding itself is untouched: the context menu's Toggle Fold, the fold
 // commands and the keyboard paths all still call toggle_fold_at_line.
 #include "editor.h"
+#include "jot/model/panes.h" // pane_content_top
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstdlib>
@@ -57,10 +58,10 @@ TEST_CASE("Clicking the gutter's old fold column does not fold", "[jot]")
   REQUIRE_FALSE(e.buffer_for_test().fold_ranges.empty());
 
   // The line number's first digit -- the fold marker's old cell -- on the rows
-  // the foldable headers occupy. The first content row sits under the tab
-  // strip, one below the pane's top.
+  // the foldable headers occupy. The first content row is the pane's own first
+  // text row (the workspace strip sits above the pane, not inside it).
   const int x = e.pane_for_test().x + 2;
-  const int first_row = e.pane_for_test().y + 1;
+  const int first_row = pane_content_top(e.pane_for_test());
   for (int y = first_row; y < first_row + 5; y++)
   {
     e.mouse_event_for_test(x, y, /*bstate=*/1); // left press

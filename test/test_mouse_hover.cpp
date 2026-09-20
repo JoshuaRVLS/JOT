@@ -10,6 +10,7 @@
 // through and the view "teleported" to the cursor on every motion cell, in both
 // the terminal and the GUI.
 #include "editor.h"
+#include "jot/model/panes.h" // pane_content_top
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstdlib>
@@ -61,15 +62,16 @@ namespace
   }
 
   // The screen row that renders buffer line 0: found by clicking, since the
-  // pane's chrome height (tab strip, border) is the renderer's business. The
-  // tab strip is skipped -- a click there activates the tab and can re-home the
-  // caret on line 0, which would look like a hit.
+  // pane's chrome height (the winbar, when a pane has one) is the renderer's
+  // business. Walking starts at the pane's first text row, so clicking chrome
+  // (which would activate a tab or a breadcrumb) cannot look like a hit.
   int first_code_row(Editor &e)
   {
     // Park the caret elsewhere first: the editor starts at 0,0, so "the click
     // left the caret on line 0" proves nothing until it has moved.
     e.scroll_cursor_to_for_test(5, 0);
-    for (int row = e.pane_for_test().y + 1; row < e.pane_for_test().y + 8; row++)
+    const int top = pane_content_top(e.pane_for_test());
+    for (int row = top; row < top + 8; row++)
     {
       e.reset_mouse_clicks_for_test();
       e.mouse_event_for_test(code_col(e, 0), row, /*bstate=*/1);
@@ -80,7 +82,7 @@ namespace
       }
       e.scroll_cursor_to_for_test(5, 0);
     }
-    return e.pane_for_test().y + 1;
+    return top;
   }
 
   // A file long enough that the caret can sit far outside the viewport.
@@ -108,15 +110,15 @@ namespace
     e.render_for_test();
   }
 
-  // A point inside the pane's code area (past the 9-cell gutter, below the tab
-  // strip), on the pane the editor is actually drawing.
+  // A point inside the pane's code area (past the 9-cell gutter, a few rows
+  // into the text), on the pane the editor is actually drawing.
   int code_x(Editor &e)
   {
     return e.pane_for_test().x + 20;
   }
   int code_y_upper(Editor &e)
   {
-    return e.pane_for_test().y + 4;
+    return pane_content_top(e.pane_for_test()) + 3;
   }
 } // namespace
 
@@ -305,8 +307,8 @@ TEST_CASE("A press still reveals the caret", "[jot]")
   e.apply_resize_for_test(100, 30);
 
   scroll_away_from_caret(e, /*caret_line=*/200, /*top_line=*/150);
-  const int mouse_line =
-      e.buffer_for_test().scroll_offset + (code_y_upper(e) - e.pane_for_test().y - 1);
+  const int mouse_line = e.buffer_for_test().scroll_offset
+                         + (code_y_upper(e) - pane_content_top(e.pane_for_test()));
   REQUIRE(mouse_line < 200); // the click lands well above the old caret
 
   e.mouse_event_for_test(code_x(e), code_y_upper(e), /*bstate=*/1); // press

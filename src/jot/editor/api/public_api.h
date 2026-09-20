@@ -96,3 +96,7 @@ public:
   }
   bool resume_last_workspace_session();
   void set_home_menu_visible(bool visible);
+  // Scrolls the strip so the tab for `buffer_id` is on screen. The surfaces
+  // that show a buffer themselves (host API, session restore) need to leave the
+  // strip agreeing with what the pane is showing.
+  void reveal_tab_for_buffer(int buffer_id);

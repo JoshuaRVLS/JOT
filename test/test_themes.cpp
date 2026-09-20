@@ -1,4 +1,5 @@
-// The bundled themes: jot-dark and jot-light, the two schemes jot ships.
+// The bundled themes: jot-dark and jot-light, the schemes jot maintains, plus
+// the flexoki pair ported from kepano's Flexoki palette.
 //
 // A theme is data that fails quietly. A typo'd group name paints nothing and is
 // invisible until someone notices one token type is the wrong colour; a name
@@ -45,6 +46,24 @@ namespace
   fs::path bundled_themes_dir()
   {
     return fs::path(JOT_LUA_SOURCE_DIR).parent_path().parent_path() / ".configs" / "configs" / "colors";
+  }
+
+  // Every scheme jot ships, in the order the chooser lists them. The cases below
+  // are written against this list instead of a hardcoded pair, so a new theme
+  // reaches all of them (the fixture, the chooser, the slot-parity and the
+  // all-hex checks) by being added here.
+  const std::vector<std::string> &bundled_theme_files()
+  {
+    static const std::vector<std::string> files = {
+        "flexoki-dark.json", "flexoki-light.json", "jot-dark.json", "jot-light.json"};
+    return files;
+  }
+
+  // "jot-dark.json" -> "jot-dark": what the chooser lists and `:colorscheme`
+  // takes.
+  std::string theme_name_of(const std::string &file)
+  {
+    return file.substr(0, file.size() - std::string(".json").size());
   }
 
   // One slot as the file wrote it.
@@ -144,7 +163,7 @@ namespace
       setenv("JOT_CACHE_HOME", cfgdir, 1);
       const fs::path colors = fs::path(cfgdir) / "configs" / "colors";
       fs::create_directories(colors);
-      for (const char *name : {"jot-dark.json", "jot-light.json"})
+      for (const std::string &name : bundled_theme_files())
       {
         fs::copy_file(bundled_themes_dir() / name, colors / name, fs::copy_options::overwrite_existing);
       }
@@ -218,6 +237,48 @@ TEST_CASE("jot-light is the same scheme on warm paper", "[jot][theme]")
   REQUIRE(rgb_of(t.fg_string) == 0x1D6B52);
   REQUIRE(rgb_of(t.fg_function_method) == 0x396F6C);
   REQUIRE(rgb_of(t.fg_active_border) == 0xA95C14);
+}
+
+TEST_CASE("flexoki carries kepano's palette, not an approximation", "[jot][theme]")
+{
+  // The Flexoki pair is data ported from another project. The slot-parity and
+  // all-hex cases above check the *shape* of a theme; this one pins the actual
+  // values, so a wrong step (base-900 where the surface is base-850) or a hue
+  // that quietly drifts back to the jot palette fails here.
+  Editor &e = probe_editor();
+
+  REQUIRE(e.apply_theme_for_test("flexoki-dark"));
+  REQUIRE(e.theme_name_for_test() == "flexoki-dark");
+  {
+    const Theme &t = e.theme_for_test();
+    REQUIRE(jot_ui::is_exact_color(t.bg_default));
+    REQUIRE(rgb_of(t.fg_default) == 0xCECDC3); // base-200 ink
+    REQUIRE(rgb_of(t.bg_default) == 0x100F0F); // black
+    REQUIRE(rgb_of(t.fg_comment) == 0x878580); // base-500
+    REQUIRE(rgb_of(t.fg_keyword) == 0x879A39); // green-400
+    REQUIRE(rgb_of(t.fg_string) == 0x3AA99F);  // cyan-400
+    REQUIRE(rgb_of(t.fg_number) == 0x8B7EC8);  // purple-400
+    REQUIRE(rgb_of(t.fg_function) == 0xDA702C); // orange-400
+    REQUIRE(rgb_of(t.fg_type) == 0xD0A215);     // yellow-400
+    // The surfaces the chrome reads: base-950 float over black, base-850 for
+    // the raised band under the pointer.
+    REQUIRE(rgb_of(t.bg_tab_hover) == 0x343331);
+  }
+
+  REQUIRE(e.apply_theme_for_test("flexoki-light"));
+  REQUIRE(e.theme_name_for_test() == "flexoki-light");
+  {
+    const Theme &t = e.theme_for_test();
+    REQUIRE(rgb_of(t.fg_default) == 0x100F0F); // black ink
+    REQUIRE(rgb_of(t.bg_default) == 0xFFFCF0); // paper
+    REQUIRE(rgb_of(t.fg_comment) == 0x6F6E69); // base-600
+    REQUIRE(rgb_of(t.fg_keyword) == 0x66800B); // green-600
+    REQUIRE(rgb_of(t.fg_string) == 0x24837B);  // cyan-600
+    REQUIRE(rgb_of(t.fg_number) == 0x5E409D);  // purple-600
+    REQUIRE(rgb_of(t.fg_function) == 0xBC5215); // orange-600
+    REQUIRE(rgb_of(t.fg_type) == 0xAD8301);     // yellow-600
+    REQUIRE(rgb_of(t.bg_tab_hover) == 0xDAD8CE);
+  }
 }
 
 TEST_CASE("Hex theme colours accept every documented form", "[jot][theme]")
@@ -362,17 +423,22 @@ TEST_CASE("A file the user writes under a legacy name beats the alias", "[jot][t
   REQUIRE(rgb_of(e.theme_for_test().bg_default) == 0xF9F4EA);
 }
 
-TEST_CASE("The chooser lists jot's two themes and nothing else", "[jot][theme]")
+TEST_CASE("The chooser lists the schemes jot bundles and nothing else", "[jot][theme]")
 {
   // jot ships no third-party catalog any more: the chooser (what `:theme`
-  // opens) shows the two schemes the editor actually maintains. The test's
-  // config dir holds a copy of each and the bundled tree holds the originals,
-  // and they resolve to the same two names.
+  // opens) shows the schemes the editor actually maintains -- the two jot
+  // palettes and the Flexoki pair. The test's config dir holds a copy of each
+  // and the bundled tree holds the originals, and they resolve to the same
+  // names.
   Editor &e = probe_editor();
   const auto themes = e.available_themes_for_test();
-  REQUIRE(themes.size() == 2);
-  REQUIRE(std::find(themes.begin(), themes.end(), "jot-dark") != themes.end());
-  REQUIRE(std::find(themes.begin(), themes.end(), "jot-light") != themes.end());
+  REQUIRE(themes.size() == bundled_theme_files().size());
+  for (const std::string &file : bundled_theme_files())
+  {
+    const std::string name = theme_name_of(file);
+    INFO("bundled theme not listed: " << name);
+    REQUIRE(std::find(themes.begin(), themes.end(), name) != themes.end());
+  }
 
   // None of the names the removed catalog was keyed on is listed, including the
   // two that still resolve as aliases: a stale name must not look selectable.
@@ -384,51 +450,57 @@ TEST_CASE("The chooser lists jot's two themes and nothing else", "[jot][theme]")
   }
 }
 
-TEST_CASE("Both bundled themes define the same slots", "[jot][theme]")
+TEST_CASE("Every bundled theme defines the same slots", "[jot][theme]")
 {
-  // A slot in one file but not the other does not fail loudly -- it falls back
-  // to the struct default, which is a 16-colour value on the wrong palette.
-  const auto dark = parse_theme(bundled_themes_dir() / "jot-dark.json");
-  const auto light = parse_theme(bundled_themes_dir() / "jot-light.json");
+  // A slot in one file but not another does not fail loudly -- it falls back to
+  // the struct default, which is a 16-colour value on the wrong palette. jot-dark
+  // is the reference; every other scheme has to carry the same set.
+  const auto reference = parse_theme(bundled_themes_dir() / "jot-dark.json");
+  REQUIRE(reference.size() > 70);
 
-  REQUIRE(dark.size() > 70);
-  std::set<std::string> only_dark;
-  std::set<std::string> only_light;
-  for (const auto &entry : dark)
+  for (const std::string &file : bundled_theme_files())
   {
-    if (light.find(entry.first) == light.end())
-      only_dark.insert(entry.first);
-  }
-  for (const auto &entry : light)
-  {
-    if (dark.find(entry.first) == dark.end())
-      only_light.insert(entry.first);
-  }
-  INFO("dark only: " << only_dark.size() << ", light only: " << only_light.size());
-  REQUIRE(only_dark.empty());
-  REQUIRE(only_light.empty());
+    const auto slots = parse_theme(bundled_themes_dir() / file);
+    std::set<std::string> only_reference;
+    std::set<std::string> only_theme;
+    for (const auto &entry : reference)
+    {
+      if (slots.find(entry.first) == slots.end())
+        only_reference.insert(entry.first);
+    }
+    for (const auto &entry : slots)
+    {
+      if (reference.find(entry.first) == reference.end())
+        only_theme.insert(entry.first);
+    }
+    INFO(file << " -- jot-dark only: " << only_reference.size()
+              << ", this theme only: " << only_theme.size());
+    REQUIRE(only_reference.empty());
+    REQUIRE(only_theme.empty());
 
-  // Every slot that names a background must name a foreground too: a group with
-  // a bg but no fg paints text in the inherited colour, which on a light theme
-  // is invisible.
-  int bg_without_fg = 0;
-  for (const auto &entry : dark)
-  {
-    if (entry.second.second.present && entry.second.second.value >= 0 && !entry.second.first.present)
-      bg_without_fg++;
+    // Every slot that names a background must name a foreground too: a group
+    // with a bg but no fg paints text in the inherited colour, which on a light
+    // theme is invisible. CursorLine is the one deliberate exception (it only
+    // tints the row).
+    int bg_without_fg = 0;
+    for (const auto &entry : slots)
+    {
+      if (entry.second.second.present && entry.second.second.value >= 0
+          && !entry.second.first.present)
+        bg_without_fg++;
+    }
+    REQUIRE(bg_without_fg <= 1);
   }
-  // CursorLine is the one deliberate exception (it only tints the row).
-  REQUIRE(bg_without_fg <= 1);
 }
 
 TEST_CASE("Every bundled theme colour is an exact 24-bit value", "[jot][theme]")
 {
-  // The two shipped schemes are true 24-bit palettes: no slot is left as an
-  // xterm index, which would be the quiet way for the themes to drift back onto
-  // the 256-entry grid (an index paints fine, it just is not the colour the
-  // scheme was designed with). The only numeric slots allowed are the -1s that
-  // mean "this group only sets a foreground".
-  for (const char *name : {"jot-dark.json", "jot-light.json"})
+  // The shipped schemes are true 24-bit palettes: no slot is left as an xterm
+  // index, which would be the quiet way for the themes to drift back onto the
+  // 256-entry grid (an index paints fine, it just is not the colour the scheme
+  // was designed with). The only numeric slots allowed are the -1s that mean
+  // "this group only sets a foreground".
+  for (const std::string &name : bundled_theme_files())
   {
     const auto groups = parse_theme(bundled_themes_dir() / name);
     int indices = 0;

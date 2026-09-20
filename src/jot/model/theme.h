@@ -151,6 +151,16 @@ struct Theme
   int bg_tab_inactive = 0;
   int fg_tab_close = 1;
   int fg_tab_separator = 8;
+  // The strip's riders: the pin glyph, the dot on a tab another pane shows, the
+  // letter in jump-to-buffer mode, the drop marker while dragging, and the band
+  // under the pointer (its own fg and bg -- the hovered tab paints its label on
+  // that band, so a theme owns both halves the way it does for TabLine).
+  int fg_tab_pin = 3;
+  int fg_tab_alt = 6;
+  int fg_tab_target = 6;
+  int fg_tab_drop = 6;
+  int fg_tab_hover = 7;
+  int bg_tab_hover = 0;
   int fg_active_border = 3;
   int bg_active_border = 0;
   int fg_image_border = 7;

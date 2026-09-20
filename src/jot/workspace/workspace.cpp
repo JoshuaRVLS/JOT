@@ -619,12 +619,7 @@ bool Editor::restore_workspace_session()
     {
       pane.tab_buffer_ids.push_back(current_buffer);
     }
-    int draw_w = std::max(1, pane.w);
-    if (show_minimap && draw_w > 20)
-    {
-      draw_w = std::max(1, draw_w - minimap_width);
-    }
-    reveal_local_tab(pane, find_local_tab_index(pane, current_buffer), draw_w);
+    reveal_tab_for_buffer(current_buffer);
   }
 
   clamp_cursor(get_pane().buffer_id);

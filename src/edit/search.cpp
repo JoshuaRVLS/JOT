@@ -711,7 +711,7 @@ bool SearchController::handle_mouse(int x, int y, bool is_click)
   {
     w = std::max(20, editor_.ui->get_width() - px);
   }
-  const int py = editor_.topbar_height() + editor_.tab_height;
+  const int py = editor_.pane_area_top();
   if (x < px || x >= px + w || y < py || y >= py + h)
   {
     return false;

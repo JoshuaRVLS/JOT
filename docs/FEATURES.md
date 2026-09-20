@@ -24,9 +24,9 @@ pitch and install steps, see the [README](../README.md).
 - **Git workflows** for status, diffs, staging, unstaging, committing, log,
   blame, and refresh — all from inside the editor.
 - **Lua plugins and JSON colorschemes** for customization, with behavior owned
-  by the C++ core. The two shipped schemes (`jot-dark`, `jot-light`) are exact
-  24-bit palettes authored in hex; a theme file may also use xterm-256 indices,
-  or mix the two.
+  by the C++ core. The shipped schemes (`jot-dark`, `jot-light` and the
+  Flexoki pair) are exact 24-bit palettes authored in hex; a theme file may also
+  use xterm-256 indices, or mix the two.
 
 ## Running jot
 
@@ -575,9 +575,10 @@ so they need a grammar for the file type.
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous pane-local tab |
-| `Alt+,` / `Alt+.` | Previous / next tab |
-| `Alt+1..9` / `Alt+0` | Switch to tab 1..9 / last tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab in this pane's own history |
+| `Alt+,` / `Alt+.` | Previous / next tab on the workspace strip |
+| `Alt+1..9` / `Alt+0` | Switch to strip position 1..9 / the last tab |
+| `Alt+R`, then a letter | Jump to the tab painted with that letter |
 | `Alt+W` | Close current file tab |
 | `Alt+N` | New buffer |
 | `Alt+S` | Save |
@@ -598,6 +599,27 @@ so they need a grammar for the file type.
 | `` Ctrl+` `` | Open / focus / hide terminal panel |
 | `F12` | Toggle zen focus mode (hide chrome, center buffer) |
 | `:settings` or `Ctrl+,` (GUI) | Open the settings menu (all config keys: booleans toggle, values edit inline; Lua-registered keys included) |
+
+### The workspace tab strip
+
+The strip owns row 0, above the panes: every open buffer appears once, in the
+workspace's own order, whichever pane is showing it. That is the one place the
+buffers are addressable -- `Alt+1..9` and a click pick a *position on the strip*,
+while `Ctrl+Tab` keeps walking the focused pane's history. Clicking a tab whose
+buffer another pane already shows takes focus to that pane; the dot next to such
+a tab is that marker, and the pin glyph marks a tab held at the front of the
+order.
+
+`Alt+R` arms the letter picker: every tab is painted with the letter it answers
+to (the file's initials first, then the home row), and the next key switches to
+that tab (any other key just puts the letters away). Dragging a tab reorders the
+strip; the tab menu (right-click) offers Save, Close, Pin/Unpin and Close Other
+Tabs.
+
+Settings: `tabline` (`true`) shows or hides the row, `tabline_auto_hide` (`0`)
+hides it again once there are that many buffers or fewer (`0` never hides it),
+and `tabline_insert` (`after_current`, or `start` / `end`) decides where a buffer
+the strip has not seen before lands in the order.
 
 ### Pane layout
 

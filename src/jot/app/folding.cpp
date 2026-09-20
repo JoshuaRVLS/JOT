@@ -6,9 +6,9 @@
 
 namespace
 {
-  int fold_viewport_height(const SplitPane &pane, int tab_height)
+  int fold_viewport_height(const SplitPane &pane)
   {
-    return std::max(1, pane.h - tab_height);
+    return std::max(1, pane_viewport_h(pane));
   }
 
   int anchored_scroll_for_header(const std::vector<FoldRange> &ranges,
@@ -76,7 +76,7 @@ bool Editor::toggle_fold_at_line(FileBuffer &buf, int line)
   }
   const bool will_collapse = !buf.fold_ranges[index].collapsed;
   const int header_line = buf.fold_ranges[index].start_line;
-  const int viewport_h = fold_viewport_height(get_pane(), tab_height);
+  const int viewport_h = fold_viewport_height(get_pane());
   const int header_row =
       will_collapse
           ? Folding::visible_row_for_line(
@@ -112,7 +112,7 @@ bool Editor::fold_at_cursor()
   }
   const bool will_collapse = !buf.fold_ranges[index].collapsed;
   const int header_line = buf.fold_ranges[index].start_line;
-  const int viewport_h = fold_viewport_height(get_pane(), tab_height);
+  const int viewport_h = fold_viewport_height(get_pane());
   const int header_row =
       will_collapse
           ? Folding::visible_row_for_line(

@@ -168,6 +168,12 @@ void Config::load_defaults()
   // jot's own theme (warm charcoal, amber keywords, teal functions) is what a
   // fresh install opens in; jot-light is the same ink on warm paper.
   settings["color_scheme"] = "jot-dark";
+  // The workspace tab strip (row 0): shown by default, hidden once there are
+  // this many buffers or fewer (0 = never hide), and where a buffer the strip
+  // has not seen before lands in the order ("after_current", "start", "end").
+  settings["tabline"] = "true";
+  settings["tabline_auto_hide"] = "0";
+  settings["tabline_insert"] = "after_current";
   settings["right_panel_width"] = "42";
   settings["zen_content_width"] = "100";
   settings["terminal_height"] = "10";

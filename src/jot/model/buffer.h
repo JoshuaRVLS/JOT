@@ -85,6 +85,12 @@ struct FileBuffer
   bool modified;
   bool is_preview = false;
   bool is_placeholder = false;
+  // Identity for the tab strip: 0 until the tab order first sees this buffer,
+  // then a number that stays with it for the buffer's life. Buffer *indices*
+  // shift whenever one closes to the left (buffers is a vector that is erased
+  // from the middle), so the strip's order, its pinned set and its jump-to-
+  // buffer letters all key on this instead (see features/tab_order.h).
+  long long tab_uid = 0;
   std::stack<State> undo_stack;
   std::stack<State> redo_stack;
   std::set<int> bookmarks;

@@ -190,14 +190,12 @@ bool Editor::open_context_menu_for_mouse(int x, int y)
   auto &buf = get_buffer(pane.buffer_id);
   context_menu_target_pane = current_pane;
 
-  if (y == pane.y && !buffers.empty())
+  // The workspace strip (row 0) carries the tab actions; a tab that is on
+  // screen somewhere else gets its menu there too, so the target buffer is the
+  // one the pointer is over rather than the focused pane's.
+  if (y == tabline_y() && tabline_shown())
   {
-    int draw_w = std::max(1, pane.w);
-    if (show_minimap && draw_w > 20)
-    {
-      draw_w = std::max(1, draw_w - minimap_width);
-    }
-    FileTabLayout tabs = build_file_tab_layout(pane, draw_w);
+    const FileTabLayout tabs = build_tabline_layout();
     for (const auto &tab : tabs.segments)
     {
       if (x >= tab.x && x < tab.end_x)
@@ -206,6 +204,11 @@ bool Editor::open_context_menu_for_mouse(int x, int y)
         std::vector<ContextMenuItem> items = {
             {"Save", CONTEXT_ACTION_SAVE_BUFFER, tab.buffer_id >= 0},
             {"Close Buffer", CONTEXT_ACTION_CLOSE_BUFFER, tab.buffer_id >= 0},
+            {"Pin / Unpin Tab", CONTEXT_ACTION_PIN_TAB,
+             tab.buffer_id >= 0 && !tab_order.pinned(tab.buffer_id, buffers)},
+            {"Unpin Tab", CONTEXT_ACTION_UNPIN_TAB,
+             tab.buffer_id >= 0 && tab_order.pinned(tab.buffer_id, buffers)},
+            {"Close Other Tabs", CONTEXT_ACTION_CLOSE_OTHER_TABS, tab.buffer_id >= 0},
         };
         open_context_menu(x, y, CONTEXT_MENU_TAB, items);
         return true;
@@ -215,8 +218,8 @@ bool Editor::open_context_menu_for_mouse(int x, int y)
 
   const int line_num_width = 7;
   const int code_start_x = pane.x + 1 + line_num_width;
-  const int content_top = pane.y + tab_height;
-  const int visible_rows = std::max(1, pane.h - tab_height);
+  const int content_top = pane_content_top(pane);
+  const int visible_rows = std::max(1, pane_viewport_h(pane));
   if (y >= content_top && y < content_top + visible_rows)
   {
     int rel_y = std::clamp(y - content_top, 0, visible_rows - 1);

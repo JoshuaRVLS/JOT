@@ -45,48 +45,11 @@ namespace
     return base.empty() ? "[No Name]" : base;
   }
 
-  // The git_file_status map is keyed by absolute, lexically-normal path, and the
-  // tab strip looks one up per tab per frame. Resolving that path goes through
-  // std::filesystem, so borrow the answer from the buffer's memo instead of
-  // recomputing it on every frame; the memo re-derives itself whenever the
-  // buffer's path changes (save-as, reload).
-  const std::string &git_status_key_for(FileBuffer &buffer)
-  {
-    if (buffer.git_status_key_path != buffer.filepath)
-    {
-      buffer.git_status_key_path = buffer.filepath;
-      std::error_code ec;
-      std::filesystem::path p = std::filesystem::absolute(buffer.filepath, ec);
-      if (ec)
-      {
-        p = std::filesystem::path(buffer.filepath);
-      }
-      buffer.git_status_key = p.lexically_normal().string();
-    }
-    return buffer.git_status_key;
-  }
-
-  std::pair<int, int> git_tab_colors(const Theme &theme, const std::string &status)
-  {
-    if (status.find('U') != std::string::npos || status == "AA" || status == "DD")
-      return {theme.fg_git_conflict, theme.bg_git_conflict};
-    if (status.find('D') != std::string::npos)
-      return {theme.fg_git_deleted, theme.bg_git_deleted};
-    if (status.find('R') != std::string::npos)
-      return {theme.fg_git_renamed, theme.bg_git_renamed};
-    if (status.find('A') != std::string::npos)
-      return {theme.fg_git_added, theme.bg_git_added};
-    if (status.find('?') != std::string::npos)
-      return {theme.fg_git_untracked, theme.bg_git_untracked};
-    return {theme.fg_git_modified, theme.bg_git_modified};
-  }
-
   bool compute_code_cursor_screen_pos(const SplitPane &pane,
                                       const FileBuffer &buf,
                                       bool show_minimap,
                                       int minimap_width,
                                       int tab_size,
-                                      int tab_height,
                                       int hint_cells,
                                       int &display_x,
                                       int &display_y)
@@ -99,10 +62,10 @@ namespace
 
     const int code_start_x = pane.x + 1 + kLineNumberGutterWidth;
     const int code_end_x = pane.x + draw_w - 2;
-    const int min_y = pane.y + tab_height;
+    const int min_y = pane_content_top(pane);
     int max_y = pane.y + pane.h - 1;
 
-    const int viewport_h = std::max(1, pane.h - tab_height);
+    const int viewport_h = std::max(1, pane_viewport_h(pane));
     // One prepared view for the whole question: the loop it replaces asked
     // "which line is on row N" once per row, re-scanning every fold range each
     // time. This runs twice per frame (the idle and the paint path).
@@ -114,7 +77,7 @@ namespace
     // Reports false when the caret has no cell on screen (its line scrolled out
     // of view, or the pane is too narrow for the code area); the caller then
     // hides the caret. display_y is still filled in for the found_row case.
-    display_y = (found_row ? visible_row : viewport_h - 1) + pane.y + tab_height;
+    display_y = (found_row ? visible_row : viewport_h - 1) + pane_content_top(pane);
 
     int logical_cursor_x = buf.cursor.x;
     int logical_scroll_x = buf.scroll_x;
@@ -271,7 +234,6 @@ void Editor::render()
                                          show_minimap,
                                          minimap_width,
                                          tab_size,
-                                         tab_height,
                                          lsp_inlay_hint_cells_before(buf.filepath,
                                                                      buf.cursor.y,
                                                                      buf.cursor.x,
@@ -303,6 +265,7 @@ void Editor::render()
       render_menu_bar();
       render_menu_dropdown();
     }
+    render_tabline();
     render_status_line();
     if (lua_api)
     {
@@ -319,7 +282,8 @@ void Editor::render()
   {
     render_menu_bar();
   }
-  render_tabs();
+  // The workspace strip owns row 0; the panes lay out below it.
+  render_tabline();
   update_pane_layout();
 
   if (telescope.is_active())
@@ -533,7 +497,6 @@ void Editor::render()
                                            show_minimap,
                                            minimap_width,
                                            tab_size,
-                                           tab_height,
                                            lsp_inlay_hint_cells_before(buf.filepath,
                                                                        buf.cursor.y,
                                                                        buf.cursor.x,
@@ -642,167 +605,6 @@ void Editor::render_pane_resize_guides()
   draw_node(pane_root, area.x, area.y, area.w, area.h);
 }
 
-Editor::FileTabLayout Editor::build_file_tab_layout(const SplitPane &pane, int draw_w)
-{
-  FileTabLayout layout;
-  layout.x = pane.x + 1;
-  layout.y = pane.y;
-  layout.w = std::max(1, draw_w - 2);
-
-  std::vector<int> tab_ids = pane.tab_buffer_ids;
-  if (tab_ids.empty() && pane.buffer_id >= 0 && pane.buffer_id < (int)buffers.size())
-  {
-    tab_ids.push_back(pane.buffer_id);
-  }
-
-  std::vector<std::string> base_names(buffers.size());
-  std::unordered_map<std::string, int> base_count;
-  for (int id : tab_ids)
-  {
-    if (id < 0 || id >= (int)buffers.size())
-    {
-      continue;
-    }
-    if (buffers[id].is_placeholder && !buffers[id].modified && buffers[id].filepath.empty())
-    {
-      continue;
-    }
-    std::string base = file_tab_base_name(buffers[id]);
-    base_names[id] = base;
-    base_count[base]++;
-  }
-
-  int hidden_total = 0;
-  for (int id : tab_ids)
-  {
-    if (id >= 0 && id < (int)buffers.size()
-        && !(buffers[id].is_placeholder && !buffers[id].modified && buffers[id].filepath.empty()))
-    {
-      hidden_total++;
-    }
-  }
-
-  const int valid_start = std::clamp(pane.tab_scroll_index, 0, std::max(0, hidden_total - 1));
-  layout.hidden_before = valid_start;
-  const bool reserve_left = valid_start > 0;
-  layout.scroll_left_label = reserve_left ? ("‹" + std::to_string(valid_start)) : "";
-  layout.scroll_left_x = reserve_left ? layout.x : -1;
-  layout.scroll_left_end_x = reserve_left ? layout.x + ui_cell_count(layout.scroll_left_label) : -1;
-
-  int tab_x = reserve_left ? layout.scroll_left_end_x : layout.x;
-  int valid_index = 0;
-  int last_visible_index = valid_start - 1;
-  for (int tab_i = 0; tab_i < (int)tab_ids.size(); tab_i++)
-  {
-    int id = tab_ids[tab_i];
-    if (id < 0 || id >= (int)buffers.size())
-    {
-      continue;
-    }
-    if (buffers[id].is_placeholder && !buffers[id].modified && buffers[id].filepath.empty())
-    {
-      continue;
-    }
-    if (valid_index < valid_start)
-    {
-      valid_index++;
-      continue;
-    }
-
-    std::string name = base_names[id];
-    if (base_count[name] > 1 && !buffers[id].filepath.empty())
-    {
-      std::filesystem::path p(buffers[id].filepath);
-      std::string parent = p.parent_path().filename().string();
-      if (!parent.empty())
-      {
-        name += " <" + parent + ">";
-      }
-    }
-
-    const int remaining_valid = hidden_total - valid_index;
-    std::string overflow_preview =
-        remaining_valid > 1 ? "›+" + std::to_string(remaining_valid - 1) : "";
-    const int overflow_reserve = ui_cell_count(overflow_preview);
-    const int hard_end = layout.x + layout.w - overflow_reserve;
-    int available = hard_end - tab_x;
-    if (available < 7)
-    {
-      layout.hidden_after = remaining_valid;
-      break;
-    }
-
-    std::string marker = buffers[id].modified ? " ●" : "";
-    std::string label_text = name + marker;
-    // Per-language icon in the tab header (same glyph + brand color as the
-    // status line and file explorer); unnamed buffers stay icon-less.
-    std::string icon;
-    int icon_fg = -1;
-    if (!buffers[id].filepath.empty())
-    {
-      const jot_icons::FileTypeIcon type_icon =
-          jot_icons::file_type_icon(buffers[id].filepath);
-      icon = type_icon.glyph;
-      icon_fg = type_icon.color;
-    }
-    const int icon_cells = ui_cell_count(icon);
-    const int max_label_w = std::max(5, std::min(24, available - 3 - icon_cells));
-    const int max_name_w = std::max(1, max_label_w - 2 - icon_cells);
-    std::string text = " " + ellipsize_right(label_text, max_name_w) + " ";
-
-    const int text_w = ui_cell_count(text);
-    const int need = text_w + icon_cells + 3; // leading edge + icon + close control + trailing edge
-    if (tab_x + need > hard_end)
-    {
-      layout.hidden_after = remaining_valid;
-      break;
-    }
-
-    FileTabSegment segment;
-    segment.buffer_id = id;
-    segment.tab_index = valid_index;
-    segment.x = tab_x;
-    segment.label_x = tab_x + 1 + icon_cells;
-    segment.icon = icon;
-    segment.icon_fg = icon_fg;
-    segment.label = text;
-    segment.close_x = segment.label_x + text_w;
-    segment.end_x = segment.close_x + 2;
-    segment.active = (id == pane.buffer_id);
-    segment.modified = buffers[id].modified;
-    segment.preview = buffers[id].is_preview;
-    if (!buffers[id].filepath.empty())
-    {
-      auto status_it = git_file_status.find(git_status_key_for(buffers[id]));
-      if (status_it != git_file_status.end())
-      {
-        segment.git_status = status_it->second;
-      }
-    }
-    layout.segments.push_back(std::move(segment));
-    tab_x += need;
-    last_visible_index = valid_index;
-    valid_index++;
-  }
-
-  if (last_visible_index >= valid_start)
-  {
-    layout.hidden_after = std::max(0, hidden_total - last_visible_index - 1);
-  }
-  layout.hidden_count = layout.hidden_after;
-
-  if (layout.hidden_after > 0)
-  {
-    layout.overflow_label = "›+" + std::to_string(layout.hidden_after);
-    layout.overflow_x =
-        std::max(layout.x, layout.x + layout.w - ui_cell_count(layout.overflow_label));
-    layout.scroll_right_x = layout.overflow_x;
-    layout.scroll_right_end_x = layout.overflow_x + ui_cell_count(layout.overflow_label);
-  }
-
-  return layout;
-}
-
 int Editor::find_local_tab_index(const SplitPane &pane, int buffer_id) const
 {
   for (int i = 0; i < (int)pane.tab_buffer_ids.size(); i++)
@@ -813,62 +615,6 @@ int Editor::find_local_tab_index(const SplitPane &pane, int buffer_id) const
     }
   }
   return -1;
-}
-
-void Editor::clamp_tab_scroll(SplitPane &pane)
-{
-  pane.tab_scroll_index =
-      std::clamp(pane.tab_scroll_index, 0, std::max(0, (int)pane.tab_buffer_ids.size() - 1));
-}
-
-void Editor::reveal_local_tab(SplitPane &pane, int target_index, int draw_w)
-{
-  if (pane.tab_buffer_ids.empty())
-  {
-    pane.tab_scroll_index = 0;
-    return;
-  }
-  target_index = std::clamp(target_index, 0, (int)pane.tab_buffer_ids.size() - 1);
-  clamp_tab_scroll(pane);
-  if (target_index < pane.tab_scroll_index)
-  {
-    pane.tab_scroll_index = target_index;
-    return;
-  }
-
-  FileTabLayout layout = build_file_tab_layout(pane, draw_w);
-  for (const auto &segment : layout.segments)
-  {
-    if (segment.tab_index == target_index)
-    {
-      return;
-    }
-  }
-  pane.tab_scroll_index = target_index;
-}
-
-bool Editor::scroll_local_tabs(SplitPane &pane, int delta)
-{
-  if (pane.tab_buffer_ids.size() <= 1 || delta == 0)
-  {
-    return false;
-  }
-  int old_scroll = pane.tab_scroll_index;
-  pane.tab_scroll_index = std::clamp(
-      pane.tab_scroll_index + delta, 0, std::max(0, (int)pane.tab_buffer_ids.size() - 1));
-  if (pane.tab_scroll_index > 0)
-  {
-    int draw_w = std::max(1, pane.w);
-    if (show_minimap && draw_w > 20)
-    {
-      draw_w = std::max(1, draw_w - minimap_width);
-    }
-    while (pane.tab_scroll_index > 0 && build_file_tab_layout(pane, draw_w).segments.empty())
-    {
-      pane.tab_scroll_index--;
-    }
-  }
-  return pane.tab_scroll_index != old_scroll;
 }
 
 bool Editor::switch_to_local_tab(int target_index)
@@ -892,12 +638,9 @@ bool Editor::switch_to_local_tab(int target_index)
   clamp_cursor(buffer_id);
   ensure_cursor_visible();
 
-  int draw_w = std::max(1, pane.w);
-  if (show_minimap && draw_w > 20)
-  {
-    draw_w = std::max(1, draw_w - minimap_width);
-  }
-  reveal_local_tab(pane, target_index, draw_w);
+  // The workspace strip scrolls to keep the pane's new buffer visible; the
+  // pane itself has no strip left to reveal into.
+  reveal_tabline_position(tab_order.position_of(buffers, buffer_id));
   needs_redraw = true;
   return true;
 }
@@ -1072,79 +815,8 @@ void Editor::render_pane(const SplitPane &pane, int pane_index)
                   theme.bg_panel_border,
                   pane_layout::border_edges(rect, pane_neighbours(pane, draw_w)));
 
-  // Pane-local file tabs name the pane's open buffers. The strip stays up
-  // even when only one file is open so the top row always carries the
-  // buffer's tab header; untouched placeholder buffers keep the plain border
-  // instead of an empty strip.
-  const auto is_real_tab_buffer = [&](int id) -> bool
-  {
-    return id >= 0 && id < (int)buffers.size()
-           && !(buffers[id].is_placeholder && !buffers[id].modified
-                && buffers[id].filepath.empty());
-  };
-  bool has_tabs = false;
-  if (!pane.tab_buffer_ids.empty())
-  {
-    for (int id : pane.tab_buffer_ids)
-    {
-      if (is_real_tab_buffer(id))
-      {
-        has_tabs = true;
-        break;
-      }
-    }
-  }
-  else
-  {
-    has_tabs = is_real_tab_buffer(pane.buffer_id);
-  }
-  if (has_tabs)
-  {
-    FileTabLayout tabs = build_file_tab_layout(pane, draw_w);
-
-    if (!tabs.scroll_left_label.empty() && tabs.scroll_left_x >= 0)
-    {
-      ui->draw_text(
-          tabs.scroll_left_x, tabs.y, tabs.scroll_left_label, theme.fg_comment, theme.bg_status);
-    }
-
-    for (const auto &tab : tabs.segments)
-    {
-      int fg = tab.active ? theme.fg_tab_active : theme.fg_tab_inactive;
-      int bg = tab.active ? theme.bg_tab_active : theme.bg_tab_inactive;
-      if (!tab.active && !tab.git_status.empty())
-      {
-        auto git_colors = git_tab_colors(theme, tab.git_status);
-        fg = git_colors.first;
-        bg = git_colors.second;
-      }
-      ui->draw_text(tab.x,
-                    tabs.y,
-                    tab.active ? "▌" : " ",
-                    tab.active ? theme.fg_active_border : theme.fg_tab_separator,
-                    bg,
-                    tab.active);
-      // File-type glyph in its brand color (see file_icons.h), like the
-      // status line and explorer; the label follows right after it.
-      if (!tab.icon.empty())
-      {
-        // Brand color even on the active tab (matches the status line and
-        // explorer) so the glyph keeps its identity across tab states.
-        const int icon_fg = tab.icon_fg >= 0 ? tab.icon_fg : fg;
-        ui->draw_text(tab.x + 1, tabs.y, tab.icon, icon_fg, bg, tab.active, tab.preview);
-      }
-      ui->draw_text(tab.label_x, tabs.y, tab.label, fg, bg, tab.active, tab.preview);
-      ui->draw_text(
-          tab.close_x, tabs.y, "×", tab.active ? theme.fg_tab_close : theme.fg_comment, bg);
-      ui->draw_text(tab.close_x + 1, tabs.y, " ", theme.fg_tab_separator, bg);
-    }
-
-    if (!tabs.overflow_label.empty())
-    {
-      ui->draw_text(
-          tabs.overflow_x, tabs.y, tabs.overflow_label, theme.fg_comment, theme.bg_status);
-    }
-  }
+  // The pane draws no tab strip of its own: the workspace strip owns row 0
+  // (render_tabline), and this pane's text starts at pane_content_top.
 
   if (view_override != nullptr)
   {

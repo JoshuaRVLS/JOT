@@ -3,6 +3,13 @@
 
 void Editor::handle_modeless_input(int ch, bool is_ctrl, bool is_shift, bool is_alt)
 {
+  // The workspace strip's keys (Alt+1..9 and friends, jump-to-buffer mode):
+  // first, so a jump letter is never read as a command of its own.
+  if (handle_tabline_key(ch, is_ctrl, is_shift, is_alt))
+  {
+    return;
+  }
+
   // An image tab's buffer is only an empty placeholder (see open_file). Letting
   // an edit key through would type into that placeholder, and the next save
   // would write it over the picture; navigation pans the preview instead of a
@@ -439,40 +446,6 @@ void Editor::handle_modeless_input(int ch, bool is_ctrl, bool is_shift, bool is_
   }
 
   // VSCode-like line move shortcut.
-  // Power user tab shortcuts (pane-local):
-  // - Alt+, / Alt+.
-  // - Alt+1..9
-  // - Alt+0 (last tab)
-  if (is_alt && (ch == ',' || ch == '<'))
-  {
-    if (cycle_local_tab(-1))
-    {
-      return;
-    }
-  }
-  if (is_alt && (ch == '.' || ch == '>'))
-  {
-    if (cycle_local_tab(1))
-    {
-      return;
-    }
-  }
-  if (is_alt && ch >= '1' && ch <= '9')
-  {
-    int target = (ch - '1');
-    if (switch_to_local_tab(target))
-    {
-      return;
-    }
-  }
-  if (is_alt && ch == '0')
-  {
-    auto &pane = get_pane();
-    if (!pane.tab_buffer_ids.empty() && switch_to_local_tab((int)pane.tab_buffer_ids.size() - 1))
-    {
-      return;
-    }
-  }
 
   // Power user action shortcuts (modeless-friendly).
   if (is_alt && (ch == 'w' || ch == 'W'))

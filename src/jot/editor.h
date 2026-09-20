@@ -35,6 +35,7 @@
 #include "jot/editor/search_controller.h"
 #include "smooth_scroll.h"
 #include "tools/lsp/client.h"
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
@@ -62,7 +63,9 @@ class Editor : private EditorState
 
 private:
   // Temporary presentation gate. Keep the underlying feature intact while the
-  // compact editor layout is evaluated.
+  // compact editor layout is evaluated. This is only the native *menu bar*
+  // (File/Edit/... and its drop-downs); the row it used now belongs to the tab
+  // strip, and the menus are retired until something asks for them back.
   static constexpr bool kTopBarVisible = false;
 
   // The activity bar is what turns the primary sidebar into a dock with more
@@ -73,9 +76,60 @@ private:
     return !show_activity_bar;
   }
 
+  // Rows spent above the panes: the retired menu bar (0) plus the tab strip.
   int topbar_height() const
   {
+    return (kTopBarVisible ? 1 : 0) + (tabline_shown() ? 1 : 0);
+  }
+
+  // Whether the workspace strip owns row 0 right now: it can be turned off, and
+  // `tabline_auto_hide` keeps it out of the way with only a few tabs open.
+  bool tabline_shown() const
+  {
+    return tabline_visible && (int)tab_order.indices(buffers).size() > tabline_auto_hide;
+  }
+
+  // The strip's first screen row (below the retired menu bar, when it ever
+  // returns).
+  int tabline_y() const
+  {
     return kTopBarVisible ? 1 : 0;
+  }
+
+  // Whether this pane's buffer pays a breadcrumb row. The backends only have
+  // something to say about code: images, plain text and terminals get their
+  // text back. Phase 3 fills this in.
+  bool pane_has_winbar(const SplitPane &pane) const
+  {
+    (void)pane;
+    return false;
+  }
+
+  // The chrome rows a pane spends above its text: the winbar when this pane has
+  // one, nothing otherwise (the workspace strip is global and sits above the
+  // panes, not inside them). update_pane_layout stores the answer on the pane;
+  // everything else reads it back through pane_content_top / pane_viewport_h
+  // (jot/model/panes.h), so the rule lives in one place.
+  int pane_header_height(const SplitPane &pane) const
+  {
+    if (winbar_height <= 0 || !pane_has_winbar(pane))
+    {
+      return 0;
+    }
+    return tab_height + winbar_height;
+  }
+
+  // The screen row a pane's chrome starts at, for the few things that anchor to
+  // the top of the pane area rather than to one pane (the find panel's overlay
+  // rows, the caret it places).
+  int pane_area_top() const
+  {
+    if (panes.empty())
+    {
+      return topbar_height();
+    }
+    const SplitPane &pane = panes[(size_t)std::clamp(current_pane, 0, (int)panes.size() - 1)];
+    return topbar_height() + pane_header_height(pane);
   }
 
   // The find/replace panel: its query, its flags, its matches, its render and
@@ -213,6 +267,10 @@ private:
   static constexpr ContextMenuAction CONTEXT_ACTION_TERMINAL_RESET_SCROLL =
       ::CONTEXT_ACTION_TERMINAL_RESET_SCROLL;
   static constexpr ContextMenuAction CONTEXT_ACTION_TOGGLE_FOLD = ::CONTEXT_ACTION_TOGGLE_FOLD;
+  static constexpr ContextMenuAction CONTEXT_ACTION_PIN_TAB = ::CONTEXT_ACTION_PIN_TAB;
+  static constexpr ContextMenuAction CONTEXT_ACTION_UNPIN_TAB = ::CONTEXT_ACTION_UNPIN_TAB;
+  static constexpr ContextMenuAction CONTEXT_ACTION_CLOSE_OTHER_TABS =
+      ::CONTEXT_ACTION_CLOSE_OTHER_TABS;
 
   static constexpr SidebarView SIDEBAR_VIEW_EXPLORER = ::SIDEBAR_VIEW_EXPLORER;
   static constexpr SidebarView SIDEBAR_VIEW_GIT = ::SIDEBAR_VIEW_GIT;

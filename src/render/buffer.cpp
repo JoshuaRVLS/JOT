@@ -49,9 +49,9 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
 {
   auto &buf = get_buffer(buffer_id);
   int x = pane.x;
-  int y = pane.y + tab_height;
+  int y = pane_content_top(pane);
   int w = std::max(1, pane.w);
-  int h = std::max(0, pane.h - tab_height);
+  int h = pane_viewport_h(pane);
   if (h <= 0)
   {
     return;

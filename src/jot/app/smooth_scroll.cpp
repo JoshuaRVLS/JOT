@@ -55,7 +55,7 @@ bool Editor::scroll_view_smooth(int lines, int base_ms)
   FileBuffer &buf = get_buffer(pane.buffer_id);
   refresh_folds(buf);
 
-  const int view_h = std::max(1, pane.h - tab_height);
+  const int view_h = std::max(1, pane_viewport_h(pane));
   const int before = buf.scroll_offset;
   // One prepared fold view for the whole gesture step: both the walk to the
   // destination and the clamp answer from it.
@@ -164,7 +164,7 @@ bool Editor::advance_smooth_scroll(long long now_ms)
                               : 1.0;
   const double fraction = SmoothScroll::position_fraction(smooth_scroll_.easing, progress);
   const double span = (double)(smooth_scroll_.in_flight.target - smooth_scroll_.from);
-  const int view_h = std::max(1, pane.h - tab_height);
+  const int view_h = std::max(1, pane_viewport_h(pane));
   const int wanted = (int)std::lround((double)smooth_scroll_.from + span * fraction);
   const int clamped =
       Folding::clamp_scroll_offset(buf.fold_ranges, wanted, view_h, (int)buf.line_count());

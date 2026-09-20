@@ -18,7 +18,7 @@ void SearchController::render_panel()
   int w = std::min(72, std::max(42, editor_.ui->get_render_width() / 2));
   int h = replace_visible_ ? 5 : 4;
   int x = editor_.ui->get_width() - w - 2;
-  int y = editor_.topbar_height() + editor_.tab_height;
+  int y = editor_.pane_area_top();
 
   if (x < 0)
     x = 0;
@@ -139,7 +139,7 @@ void SearchController::place_cursor()
   const bool replace = replace_visible_ && focus_replace_;
   const std::string &input = replace ? replace_text_ : query_;
   const int cursor_x = x + label_w + std::min(input_w - 1, std::max(0, ui_cell_count(input)));
-  const int cursor_y = editor_.topbar_height() + editor_.tab_height + (replace ? 2 : 1);
+  const int cursor_y = editor_.pane_area_top() + (replace ? 2 : 1);
   editor_.ui->set_cursor(cursor_x, cursor_y);
 }
 

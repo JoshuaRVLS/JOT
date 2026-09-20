@@ -193,13 +193,7 @@ void Editor::close_buffer_at(int index)
     {
       pane.tab_buffer_ids.push_back(pane.buffer_id);
     }
-    clamp_tab_scroll(pane);
-    int draw_w = std::max(1, pane.w);
-    if (show_minimap && draw_w > 20)
-    {
-      draw_w = std::max(1, draw_w - minimap_width);
-    }
-    reveal_local_tab(pane, find_local_tab_index(pane, pane.buffer_id), draw_w);
+    reveal_tabline_position(tab_order.position_of(buffers, pane.buffer_id));
   }
 
   if (!panes.empty())
@@ -213,13 +207,7 @@ void Editor::close_buffer_at(int index)
     {
       pane.tab_buffer_ids.push_back(current_buffer);
     }
-    clamp_tab_scroll(pane);
-    int draw_w = std::max(1, pane.w);
-    if (show_minimap && draw_w > 20)
-    {
-      draw_w = std::max(1, draw_w - minimap_width);
-    }
-    reveal_local_tab(pane, find_local_tab_index(pane, current_buffer), draw_w);
+    reveal_tabline_position(tab_order.position_of(buffers, current_buffer));
   }
   message = "Closed file";
   needs_redraw = true;
@@ -274,7 +262,7 @@ void Editor::reopen_last_closed_buffer()
   {
     draw_w = std::max(1, draw_w - minimap_width);
   }
-  reveal_local_tab(pane, find_local_tab_index(pane, current_buffer), draw_w);
+  reveal_tab_for_buffer(current_buffer);
   clamp_cursor(current_buffer);
   ensure_cursor_visible();
 

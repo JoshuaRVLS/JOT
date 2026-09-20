@@ -19,16 +19,43 @@ private:
   {
     return ui && ui->full_repaint_pending();
   }
-  void render_tabs();
+  // The workspace tab strip (row 0): the order reconciliation, the layout the
+  // painter and the hit-tests share, and the operations on it (src/render/tabs.cpp).
+  void sync_tab_order();
+  FileTabLayout build_tabline_layout();
+  void render_tabline();
+  bool handle_tabline_mouse(int x,
+                            int y,
+                            bool is_click,
+                            bool is_click_release,
+                            bool is_middle_click,
+                            bool is_motion);
+  bool tabline_activate(int position);
+  bool tabline_scroll(int delta);
+  // The strip's keys, shared by both input modes: Alt+1..9 and Alt+0 pick a
+  // position, Alt+, / Alt+. step through the order, Alt+R arms jump-to-buffer
+  // mode (a letter then picks the tab it is painted on). Returns false when the
+  // key is not the strip's, so the caller keeps handling it.
+  bool handle_tabline_key(int ch, bool is_ctrl, bool is_shift, bool is_alt);
+  // Steps to the previous (-1) or next (+1) position in the strip order, wrapping
+  // at the ends (the strip is a ring, like barbar's :BufferNext).
+  bool cycle_tabline_tab(int delta);
+  void reveal_tabline_position(int position);
+  // Closes every tab but `keep_buffer`, leaving that one focused.
+  void close_other_tabs(int keep_buffer);
+  bool buffer_visible_in_other_pane(int buffer_id) const;
+  int tabline_position_at(const FileTabLayout &layout, int x) const;
+  int tabline_scroll_chip_at(const FileTabLayout &layout, int x) const;
+  int tabline_drop_position(const FileTabLayout &layout) const;
+  int tabline_drop_position_x(const FileTabLayout &layout) const;
   void render_panes();
   void render_pane_resize_guides();
   void render_easter_egg();
   void render_pane(const SplitPane &pane, int pane_index);
-  FileTabLayout build_file_tab_layout(const SplitPane &pane, int draw_w);
   int find_local_tab_index(const SplitPane &pane, int buffer_id) const;
-  void clamp_tab_scroll(SplitPane &pane);
-  void reveal_local_tab(SplitPane &pane, int target_index, int draw_w);
-  bool scroll_local_tabs(SplitPane &pane, int delta);
+  // Shows a buffer in the focused pane, adding it to that pane's history.
+  bool show_buffer_in_current_pane(int buffer_id);
+  // Pane-local tab history: Ctrl+Tab / Ctrl+Shift+Tab cycle it, Alt+W closes.
   bool switch_to_local_tab(int target_index);
   bool cycle_local_tab(int delta);
   void render_telescope();

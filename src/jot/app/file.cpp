@@ -363,7 +363,7 @@ void Editor::open_file(const std::string &path, bool preview)
         {
           draw_w = std::max(1, draw_w - minimap_width);
         }
-        reveal_local_tab(pane, find_local_tab_index(pane, current_buffer), draw_w);
+        reveal_tab_for_buffer(current_buffer);
       }
       needs_redraw = true;
       return;
@@ -429,7 +429,7 @@ void Editor::open_file(const std::string &path, bool preview)
     {
       draw_w = std::max(1, draw_w - minimap_width);
     }
-    reveal_local_tab(pane, find_local_tab_index(pane, existing_index), draw_w);
+    reveal_tab_for_buffer(existing_index);
     if (!preview && buffers[existing_index].is_preview)
     {
       buffers[existing_index].is_preview = false;
@@ -561,7 +561,7 @@ void Editor::finish_open_file(FileBuffer fb, const std::string &path_to_open, bo
   {
     draw_w = std::max(1, draw_w - minimap_width);
   }
-  reveal_local_tab(pane, find_local_tab_index(pane, current_buffer), draw_w);
+  reveal_tab_for_buffer(current_buffer);
   if (preview)
   {
     preview_buffer_index = current_buffer;
@@ -630,7 +630,7 @@ void Editor::create_new_buffer()
   {
     draw_w = std::max(1, draw_w - minimap_width);
   }
-  reveal_local_tab(pane, find_local_tab_index(pane, current_buffer), draw_w);
+  reveal_tab_for_buffer(current_buffer);
 }
 void Editor::save_file()
 {

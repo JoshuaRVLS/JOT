@@ -219,6 +219,11 @@ void LuaAPI::set_theme_color(std::string name, int fg, int bg)
       {"TabLineSel", "tab_active"},
       {"TabLineFill", "tab_separator"},
       {"TabClose", "tab_close"},
+      {"TabLinePin", "tab_pin"},
+      {"TabLineAlt", "tab_alt"},
+      {"TabLineTarget", "tab_target"},
+      {"TabLineDrop", "tab_drop"},
+      {"TabLineHover", "tab_hover"},
       {"Sidebar", "sidebar"},
       {"SidebarDir", "sidebar_directory"},
       {"SidebarSel", "sidebar_selected"},
@@ -544,6 +549,29 @@ void LuaAPI::set_theme_color(std::string name, int fg, int bg)
   else if (name == "tab_separator" || name == "tabline_fill" || name == "fg_tab_separator")
   {
     set_fg(theme.fg_tab_separator);
+  }
+  // The strip's riders (TabLinePin / TabLineAlt / TabLineTarget / TabLineDrop)
+  // and the band under the pointer (TabLineHover, which is a pair like any
+  // other painted group).
+  else if (name == "tab_pin" || name == "fg_tab_pin")
+  {
+    set_fg(theme.fg_tab_pin);
+  }
+  else if (name == "tab_alt" || name == "fg_tab_alt")
+  {
+    set_fg(theme.fg_tab_alt);
+  }
+  else if (name == "tab_target" || name == "fg_tab_target")
+  {
+    set_fg(theme.fg_tab_target);
+  }
+  else if (name == "tab_drop" || name == "fg_tab_drop")
+  {
+    set_fg(theme.fg_tab_drop);
+  }
+  else if (name == "tab_hover" || name == "fg_tab_hover" || name == "bg_tab_hover")
+  {
+    set_pair(theme.fg_tab_hover, theme.bg_tab_hover);
   }
   else if (name == "active_border" || name == "win_active_border" || name == "fg_active_border"
            || name == "bg_active_border")

@@ -290,40 +290,15 @@ void Editor::handle_mouse_input(int x,
     return;
   }
 
-  if ((is_scroll_up || is_scroll_down) && !panes.empty())
+  // The wheel over the workspace strip scrolls it, wherever the pointer is
+  // horizontally: the strip spans the whole row and belongs to no pane.
+  if ((is_scroll_up || is_scroll_down) && tabline_shown() && y == tabline_y())
   {
-    int pane_index = -1;
-    for (int i = 0; i < (int)panes.size(); i++)
+    if (tabline_scroll(is_scroll_up ? -1 : 1))
     {
-      const auto &candidate = panes[i];
-      if (x >= candidate.x && x < candidate.x + candidate.w && y == candidate.y)
-      {
-        pane_index = i;
-        break;
-      }
+      needs_redraw = true;
     }
-    if (pane_index >= 0)
-    {
-      if (pane_index != current_pane)
-      {
-        activate_pane(pane_index);
-      }
-      auto &pane = get_pane(current_pane);
-      int draw_w = std::max(1, pane.w);
-      if (show_minimap && draw_w > 20)
-      {
-        draw_w = std::max(1, draw_w - minimap_width);
-      }
-      FileTabLayout tabs = build_file_tab_layout(pane, draw_w);
-      if (x >= tabs.x && x < tabs.x + tabs.w)
-      {
-        if (scroll_local_tabs(pane, is_scroll_up ? -1 : 1))
-        {
-          needs_redraw = true;
-        }
-        return;
-      }
-    }
+    return;
   }
 
   if (show_sidebar)
@@ -413,7 +388,7 @@ void Editor::handle_mouse_input(int x,
   auto &buf = get_buffer(pane.buffer_id);
   refresh_folds(buf);
 
-  int visible_rows = std::max(1, pane.h - tab_height);
+  int visible_rows = std::max(1, pane_viewport_h(pane));
   const int wheel_step = std::max(1, std::min(5, visible_rows / 6));
 
   // An image pane has no text to scroll: the wheel pans the viewer's preview

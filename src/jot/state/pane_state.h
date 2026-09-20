@@ -29,6 +29,11 @@ struct PaneState
   // first visible tab when the strip overflows, and the buffer a preview tab
   // (single-click open) is showing.
   int tab_height = 0;
+  // The breadcrumb winbar's height in cells (0 when it is off or the buffer on
+  // screen has none). A pane's own header is tab_height + this, resolved once
+  // per pane in update_pane_layout and read back through pane_content_top /
+  // pane_viewport_h.
+  int winbar_height = 0;
   int tab_size = 0;
   int tab_scroll_index = 0;
   int preview_buffer_index = 0;

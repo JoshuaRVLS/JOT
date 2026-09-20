@@ -471,6 +471,21 @@ void Editor::execute_context_menu_item(int index)
   case CONTEXT_ACTION_CLOSE_BUFFER:
     close_buffer_at(target_buffer);
     break;
+  case CONTEXT_ACTION_PIN_TAB:
+    // Sync first: pinning works on uids, which the model hands out for buffers
+    // it has seen -- and the strip that opened this menu has already synced.
+    sync_tab_order();
+    tab_order.set_pinned(target_buffer, buffers, true);
+    needs_redraw = true;
+    break;
+  case CONTEXT_ACTION_UNPIN_TAB:
+    sync_tab_order();
+    tab_order.set_pinned(target_buffer, buffers, false);
+    needs_redraw = true;
+    break;
+  case CONTEXT_ACTION_CLOSE_OTHER_TABS:
+    close_other_tabs(target_buffer);
+    break;
   case CONTEXT_ACTION_SIDEBAR_OPEN:
     if (!target_path.empty())
     {
