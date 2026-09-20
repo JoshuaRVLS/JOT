@@ -8,6 +8,16 @@ UI *Editor::ui_for_test()
   return ui;
 }
 
+Winbar::WinbarLayout Editor::winbar_layout_for_test()
+{
+  if (panes.empty())
+  {
+    return {};
+  }
+  const int index = std::clamp(current_pane, 0, (int)panes.size() - 1);
+  return build_winbar_layout(panes[(size_t)index], index);
+}
+
 void Editor::render_frame_for_test()
 {
   render_frame();

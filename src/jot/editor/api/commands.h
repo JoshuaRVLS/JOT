@@ -71,6 +71,10 @@ private:
   // immediately (no restart). Idempotent; called after Lua config/plugin load
   // and by reload_config().
   void apply_config_live();
+  // `winbar`: off / auto / on, read here so the ctor, :reload and a live
+  // settings edit all land on the same answer (the row's height is part of the
+  // pane geometry, so the next frame's layout pass picks it up).
+  void apply_winbar_setting();
 
   int create_pane(int x, int y, int w, int h, int buffer_id);
   void update_pane_layout();

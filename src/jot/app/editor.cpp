@@ -70,8 +70,28 @@ void Editor::load_runtime_config()
 #endif
 }
 
+void Editor::apply_winbar_setting()
+{
+  // `auto` (code files only) unless `on` / `off` says otherwise: an unknown
+  // value keeps the default rather than turning the row on for a typo.
+  const std::string mode = config.get("winbar", "auto");
+  if (mode == "off")
+  {
+    winbar_mode = Winbar::WINBAR_MODE_OFF;
+  }
+  else if (mode == "on")
+  {
+    winbar_mode = Winbar::WINBAR_MODE_ON;
+  }
+  else
+  {
+    winbar_mode = Winbar::WINBAR_MODE_AUTO;
+  }
+}
+
 void Editor::apply_config_live()
 {
+  apply_winbar_setting();
   tab_size = std::clamp(config.get_int("tab_size", 2), 1, 16);
   show_indent_guides = config.get_bool("show_indent_guides", true);
   relative_line_numbers = config.get_bool("relative_line_numbers", false);
@@ -286,6 +306,8 @@ void Editor::initialize_state_defaults()
       tabline_insert = TabInsert::TAB_INSERT_AFTER_CURRENT;
     }
   }
+  // The breadcrumb winbar (the row a pane spends on its symbol chain).
+  apply_winbar_setting();
   tab_size = config.get_int("tab_size", 2);
   show_indent_guides = config.get_bool("show_indent_guides", true);
   relative_line_numbers = config.get_bool("relative_line_numbers", false);

@@ -573,6 +573,26 @@ void LuaAPI::set_theme_color(std::string name, int fg, int bg)
   {
     set_pair(theme.fg_tab_hover, theme.bg_tab_hover);
   }
+  // The breadcrumb winbar: the row band, the crumb labels, the separator
+  // between crumbs and the band under the pointer.
+  else if (name == "winbar" || name == "fg_winbar" || name == "bg_winbar")
+  {
+    set_pair(theme.fg_winbar, theme.bg_winbar);
+  }
+  else if (name == "winbar_breadcrumb" || name == "winbar_crumb" || name == "fg_winbar_crumb"
+           || name == "bg_winbar_crumb")
+  {
+    set_pair(theme.fg_winbar_crumb, theme.bg_winbar_crumb);
+  }
+  else if (name == "winbar_separator" || name == "fg_winbar_separator"
+           || name == "bg_winbar_separator")
+  {
+    set_pair(theme.fg_winbar_separator, theme.bg_winbar_separator);
+  }
+  else if (name == "winbar_hover" || name == "fg_winbar_hover" || name == "bg_winbar_hover")
+  {
+    set_pair(theme.fg_winbar_hover, theme.bg_winbar_hover);
+  }
   else if (name == "active_border" || name == "win_active_border" || name == "fg_active_border"
            || name == "bg_active_border")
   {

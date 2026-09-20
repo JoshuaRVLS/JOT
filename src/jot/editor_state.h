@@ -14,6 +14,7 @@
 //
 //   state/pane_state.h        buffers, split tree, pane-local tab history, drags
 //   state/tabline_state.h     the workspace tab strip (row 0) and its order
+//   state/winbar_state.h      the breadcrumb winbar and the menu a crumb opens
 //   state/workspace_state.h   sidebar, workspace session, git summary + panel
 //   state/panel_state.h       bottom/right docks, minimap, terminal selection
 //   state/surface_state.h     palette, pickers, prompts, menus, popup
@@ -35,6 +36,7 @@
 #include "jot/state/surface_state.h"
 #include "jot/state/tabline_state.h"
 #include "jot/state/view_state.h"
+#include "jot/state/winbar_state.h"
 #include "jot/state/workspace_state.h"
 
 struct EditorState : EngineState,
@@ -46,6 +48,7 @@ struct EditorState : EngineState,
                      SurfaceState,
                      TablineState,
                      ViewState,
+                     WinbarState,
                      WorkspaceState
 {
 };

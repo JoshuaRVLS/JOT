@@ -412,6 +412,24 @@ void Editor::handle_mouse(void *event_ptr)
     return;
   }
 
+  // Below the strip, the winbar: a crumb opens its menu, a motion moves the
+  // hover band, and an open menu keeps the pointer until it picks (the panes
+  // below never see those events).
+  if ((is_click || is_click_release || is_motion)
+      && handle_winbar_mouse(event->x, event->y, is_click, is_click_release, is_motion))
+  {
+    if (is_motion)
+    {
+      clear_debugger_breakpoint_hover();
+    }
+    return;
+  }
+  if (is_right_click && winbar_menu_open())
+  {
+    close_winbar_menu();
+    return;
+  }
+
   if ((is_click || is_motion || is_right_click)
       && handle_menu_bar_mouse(event->x, event->y, is_click, is_motion))
   {

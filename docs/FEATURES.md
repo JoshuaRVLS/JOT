@@ -100,6 +100,10 @@ an explicit font file.
 - Pane-local file tabs with click-to-switch and close buttons, plus reopen of
   the last closed tab.
 - Split panes in any direction; move focus or resize with keyboard or mouse.
+- A breadcrumb winbar over every code pane: the workspace root, the folders
+  down to the file, then the symbols enclosing the caret. Every crumb opens its
+  own drop-down, and a folder row opens the folder's listing beside it as a
+  cascade (`winbar` = `off` / `auto` / `on`).
 - Open, save, save-as, close, quit (with force variants), and autosave with a
   configurable interval.
 
@@ -620,6 +624,36 @@ Settings: `tabline` (`true`) shows or hides the row, `tabline_auto_hide` (`0`)
 hides it again once there are that many buffers or fewer (`0` never hides it),
 and `tabline_insert` (`after_current`, or `start` / `end`) decides where a buffer
 the strip has not seen before lands in the order.
+
+### The breadcrumb winbar
+
+A code pane spends its first row on a breadcrumb: the workspace root, the
+folders down to the file, the file, and then the symbols enclosing the caret
+(`Widget › render_thing`). The tail — the file and the current symbol — is inked
+and bold; the rest stays quiet. The row is the pane's own, so a split pays it
+twice and the panes line up either way. `winbar` picks the mode: `off` never
+shows it, `auto` (the default) shows it for code files only, `on` for every named
+file.
+
+Every crumb is a press away from its siblings: a folder crumb lists what is
+inside it, a file crumb its folder, a symbol crumb the symbols sharing its scope,
+with the row the chain is already on marked by a dot. A **folder row wears a
+chevron and opens its own panel *beside* the one that offered it** — the cascade
+keeps every level it stepped through on screen, so the panels read as the path
+you walked (dropbar's model). The cascade follows the pointer: moving the
+selection onto a folder row opens that folder, moving onto a file row drops the
+levels below it again.
+
+| Key / mouse | Action |
+| --- | --- |
+| press a crumb | open its drop-down (press it again to put it away) |
+| click a row | open the file / jump to the symbol |
+| hover a folder row | open that folder's panel beside it |
+| `j` / `k`, `↓` / `↑` | move the deepest panel's selection |
+| `Enter`, `l`, `→`, space | open the selected folder / file or symbol |
+| `h`, `←` | step back one level |
+| `Esc`, click outside it, press its crumb again | put the whole cascade away |
+| wheel | walk the rows of the panel under the pointer |
 
 ### Pane layout
 

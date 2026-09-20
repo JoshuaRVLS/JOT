@@ -231,6 +231,9 @@ public:
   bool emit_lsp_signature(const SignatureView &view);
   bool emit_context_menu(const ContextMenuView &view);
   bool emit_menu_dropdown(const MenuDropdownView &view);
+  // The winbar row and the drop-down a crumb opens (render/winbar.cpp).
+  bool emit_winbar(const WinbarView &view);
+  bool emit_winbar_menu(const WinbarMenuView &view);
   bool emit_search(const SearchView &view);
   bool emit_home(const HomeView &view);
   bool emit_status(const StatusView &view);

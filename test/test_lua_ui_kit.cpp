@@ -337,13 +337,13 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   const std::string path = std::string(JOT_LUA_SOURCE_DIR) + "/features/ui.lua";
   REQUIRE(luaL_loadfile(L, path.c_str()) == LUA_OK);
   REQUIRE(lua_pcall(L, 0, 1, 0) == LUA_OK);
-  REQUIRE(lua_istable(L, 1));  REQUIRE( g.handler_count == 20 );
+  REQUIRE(lua_istable(L, 1));  REQUIRE( g.handler_count == 22 );
   bool has_palette = false, has_quick_pick = false, has_popup = false;
   bool has_save = false, has_quit = false, has_ts = false;
   bool has_lsp = false, has_lsp_status = false, has_telescope = false;
   bool has_completion = false, has_signature = false, has_context = false, has_menu = false;
   bool has_search = false, has_home = false, has_status = false, has_sidebar = false;
-  bool has_side_panel = false;
+  bool has_side_panel = false, has_winbar = false, has_winbar_menu = false;
   for (int i = 0; i < g.handler_count; i++)
   {
     has_palette = has_palette || g.handlers[i] == "command_palette";
@@ -364,6 +364,8 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
     has_status = has_status || g.handlers[i] == "status_line";
     has_sidebar = has_sidebar || g.handlers[i] == "sidebar";
     has_side_panel = has_side_panel || g.handlers[i] == "side_panel";
+    has_winbar = has_winbar || g.handlers[i] == "winbar";
+    has_winbar_menu = has_winbar_menu || g.handlers[i] == "winbar_menu";
   }
   REQUIRE(has_palette);
   REQUIRE(has_quick_pick);
@@ -383,6 +385,8 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   REQUIRE(has_status);
   REQUIRE(has_sidebar);
   REQUIRE(has_side_panel);
+  REQUIRE(has_winbar);
+  REQUIRE(has_winbar_menu);
 
   // --- command palette ---
   push_module_field(L, 1, "command_palette");
@@ -1352,7 +1356,7 @@ TEST_CASE("Embedded Lua UI kit registers every handler from the binary copy")
   REQUIRE(luaL_loadbuffer(L, reinterpret_cast<const char *>(emb), emb_size, "embedded ui.lua")
           == LUA_OK);
   REQUIRE(lua_pcall(L, 0, 1, 0) == LUA_OK);
-  REQUIRE(lua_istable(L, 1));  REQUIRE( g.handler_count == 20 );
+  REQUIRE(lua_istable(L, 1));  REQUIRE( g.handler_count == 22 );
 
   lua_close(L);
 }

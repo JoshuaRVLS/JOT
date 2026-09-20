@@ -27,6 +27,15 @@ void Editor::handle_mouse_input(int x,
     hide_lsp_completion();
   }
 
+  // The winbar's drop-down: the wheel walks the rows of the cascade level under
+  // the pointer, like the other menus.
+  if (winbar_menu_open() && (is_scroll_up || is_scroll_down) && ui
+      && winbar_menu_level_at(x, y) >= 0)
+  {
+    winbar_menu_scroll(winbar_menu_level_at(x, y), is_scroll_up ? -1 : 1);
+    return;
+  }
+
   if (is_click && handle_menu_bar_mouse(x, y, true, false))
   {
     return;

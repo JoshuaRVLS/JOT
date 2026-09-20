@@ -152,6 +152,10 @@ void Editor::update_pane_layout()
   // The chrome each pane spends above its text, resolved here because this is
   // the one pass that owns every pane's geometry: the zoomed branch below sets
   // the active pane's rows and parks the others, and both get the same header.
+  // The winbar is one row for a pane that shows it, and which panes those are
+  // is answered per pane by pane_header_height, so the height is published here
+  // (like tab_height) and read back through pane_content_top.
+  winbar_height = winbar_row_height();
   for (SplitPane &pane : panes)
   {
     pane.header_height = pane_header_height(pane);

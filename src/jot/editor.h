@@ -30,6 +30,7 @@
 #include "autoclose.h"
 #include "bracket.h"
 #include "editor_state.h"
+#include "features/language.h"
 #include "host_api.h"
 #include "jot/editor/discord_controller.h"
 #include "jot/editor/search_controller.h"
@@ -96,13 +97,61 @@ private:
     return kTopBarVisible ? 1 : 0;
   }
 
-  // Whether this pane's buffer pays a breadcrumb row. The backends only have
-  // something to say about code: images, plain text and terminals get their
-  // text back. Phase 3 fills this in.
+  // Whether the winbar is on at all (`winbar = off` turns the row off for
+  // every pane).
+  bool winbar_shown() const
+  {
+    return winbar_mode != Winbar::WINBAR_MODE_OFF;
+  }
+
+  // The row count a pane pays when it shows the winbar. Set once per layout
+  // pass by update_pane_layout, like tab_height, because the panes' geometry is
+  // resolved there and every later question goes through pane_content_top.
+  int winbar_row_height() const
+  {
+    return winbar_shown() ? 1 : 0;
+  }
+
+  // Whether this pane's buffer pays a breadcrumb row. Only the file itself can
+  // answer: `auto` keeps the row for code (a breadcrumb of a .png is noise),
+  // `on` shows it for every named file, and a buffer with no name -- an untitled
+  // scratch buffer, a lazy placeholder -- never pays one.
   bool pane_has_winbar(const SplitPane &pane) const
   {
-    (void)pane;
-    return false;
+    if (!winbar_shown() || winbar_height <= 0)
+    {
+      return false;
+    }
+    if (pane.buffer_id < 0 || pane.buffer_id >= (int)buffers.size())
+    {
+      return false;
+    }
+    const FileBuffer &buf = buffers[(size_t)pane.buffer_id];
+    if (buf.is_lazy() || buf.filepath.empty())
+    {
+      return false;
+    }
+    if (winbar_mode == Winbar::WINBAR_MODE_ON)
+    {
+      return true;
+    }
+    return Language::is_code_file(buf.filepath);
+  }
+
+  // The rows this pane actually spends on its winbar (0 when it shows none),
+  // which is what the Lua viewport and the tests want -- `winbar_height` is the
+  // row's height for a pane that has one, not this pane's answer.
+  int pane_winbar_height(const SplitPane &pane) const
+  {
+    return pane_has_winbar(pane) ? winbar_height : 0;
+  }
+
+  // The screen row this pane's winbar is drawn on. The row sits directly above
+  // the pane's text, below whatever chrome (the workspace strip) is not the
+  // pane's own.
+  int pane_winbar_y(const SplitPane &pane) const
+  {
+    return pane.y + pane_header_height(pane) - pane_winbar_height(pane);
   }
 
   // The chrome rows a pane spends above its text: the winbar when this pane has
@@ -112,7 +161,7 @@ private:
   // (jot/model/panes.h), so the rule lives in one place.
   int pane_header_height(const SplitPane &pane) const
   {
-    if (winbar_height <= 0 || !pane_has_winbar(pane))
+    if (!pane_has_winbar(pane))
     {
       return 0;
     }

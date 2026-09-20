@@ -413,6 +413,8 @@ void Editor::render()
     render_tree_sitter_status_modal();
     render_lsp_status_modal();
     render_context_menu();
+    // The winbar's own drop-down rides above the panes with the other menus.
+    render_winbar_menu();
     if (kTopBarVisible)
     {
       render_menu_dropdown();
@@ -768,6 +770,10 @@ void Editor::render_pane(const SplitPane &pane, int pane_index)
   {
     draw_w = std::max(1, draw_w - minimap_width);
   }
+
+  // The pane's breadcrumb row, when its buffer has one: the pane's own chrome,
+  // drawn before the text because the text starts below it.
+  render_winbar(pane, pane_index);
 
   // An image tab draws the picture inside the pane's own frame, the way any
   // other file draws its contents, instead of as a window-wide overlay.

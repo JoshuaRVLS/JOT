@@ -207,6 +207,95 @@ public:
   {
     return winbar_height;
   }
+  // The breadcrumb winbar (test_winbar.cpp): the row the active pane spends on
+  // it, the chain it shows, and the menu a crumb opens. The mouse and key entry
+  // points are the ones the real dispatcher calls, so a case can press a crumb
+  // and pick a row without a pty.
+  Winbar::WinbarLayout winbar_layout_for_test();
+  bool pane_has_winbar_for_test() const
+  {
+    return !panes.empty() && pane_has_winbar(panes[(size_t)std::clamp(current_pane, 0, (int)panes.size() - 1)]);
+  }
+  void set_winbar_mode_for_test(Winbar::WinbarMode mode)
+  {
+    winbar_mode = mode;
+    needs_redraw = true;
+  }
+  bool winbar_press_for_test(int x, int y)
+  {
+    return handle_winbar_mouse(x, y, true, false, false);
+  }
+  bool winbar_move_for_test(int x, int y)
+  {
+    return handle_winbar_mouse(x, y, false, false, true);
+  }
+  bool winbar_menu_key_for_test(int ch)
+  {
+    return handle_winbar_menu_input(ch);
+  }
+  bool winbar_menu_open_for_test() const
+  {
+    return winbar_menu_open();
+  }
+  // The cascade: one entry per open level, level 0 first. The per-level getters
+  // default to the crumb's own menu and take a level index for the folders.
+  int winbar_menu_level_count_for_test() const
+  {
+    return (int)winbar_menus.size();
+  }
+  int winbar_menu_selected_for_test(int level = 0) const
+  {
+    return winbar_menu_level(level).selected;
+  }
+  int winbar_menu_x_for_test(int level = 0) const
+  {
+    return winbar_menu_level(level).x;
+  }
+  int winbar_menu_y_for_test(int level = 0) const
+  {
+    return winbar_menu_level(level).y;
+  }
+  int winbar_menu_w_for_test(int level = 0) const
+  {
+    return winbar_menu_level(level).w;
+  }
+  int winbar_menu_h_for_test(int level = 0) const
+  {
+    return winbar_menu_level(level).h;
+  }
+  std::string winbar_menu_title_for_test(int level = 0) const
+  {
+    return winbar_menu_level(level).title;
+  }
+  std::vector<std::string> winbar_menu_labels_for_test(int level = 0) const
+  {
+    std::vector<std::string> out;
+    for (const Winbar::Entry &entry : winbar_menu_level(level).entries)
+    {
+      out.push_back(entry.label);
+    }
+    return out;
+  }
+  std::vector<bool> winbar_menu_dirs_for_test(int level = 0) const
+  {
+    std::vector<bool> out;
+    for (const Winbar::Entry &entry : winbar_menu_level(level).entries)
+    {
+      out.push_back(entry.is_dir);
+    }
+    return out;
+  }
+  // The private helper the getters read through: an out-of-range level reads as
+  // an empty one, so a closed menu can never index past the cascade.
+  const WinbarMenuLevel &winbar_menu_level(int level) const
+  {
+    static const WinbarMenuLevel empty;
+    if (level < 0 || level >= (int)winbar_menus.size())
+    {
+      return empty;
+    }
+    return winbar_menus[(size_t)level];
+  }
   int lua_float_count_for_test(const std::string &surface) const;
   void load_file(const std::string &fname);
   void run();

@@ -170,6 +170,10 @@ void Editor::handle_terminal_event(const Event &ev)
     {
       handle_context_menu_input(ch);
     }
+    else if (handle_winbar_menu_input(ch))
+    {
+      // consumed by the winbar's drop-down (false when none is open)
+    }
     else if (show_tree_sitter_status_modal && handle_tree_sitter_status_input(ch))
     {
       // consumed by the tree-sitter status panel

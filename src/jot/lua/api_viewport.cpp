@@ -29,7 +29,15 @@ void LuaAPI::push_viewport_info(lua_State *L)
   lua_push_int_field(L, "height", win_h);
   lua_push_int_field(L, "status_height", editor->status_height);
   lua_push_int_field(L, "tab_height", editor->tab_height);
-  lua_push_int_field(L, "winbar_height", editor->winbar_height);
+  // The active pane's own answer: 0 when its buffer does not show a winbar, 1
+  // when it does (the row count itself is `winbar_height`, which is set for a
+  // pane that has one).
+  int winbar_rows = 0;
+  if (editor->current_pane >= 0 && editor->current_pane < (int)editor->panes.size())
+  {
+    winbar_rows = editor->pane_winbar_height(editor->panes[(size_t)editor->current_pane]);
+  }
+  lua_push_int_field(L, "winbar_height", winbar_rows);
   lua_setfield(L, -2, "window");
   lua_newtable(L);
   lua_push_bool_field(L, "visible", editor->show_sidebar);

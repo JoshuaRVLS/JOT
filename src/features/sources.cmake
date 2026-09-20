@@ -23,4 +23,5 @@ set(JOT_FEATURES_SOURCES
   features/quote_text_object.cpp
   features/smooth_scroll.cpp
   features/tab_order.cpp
+  features/winbar.cpp
 )

@@ -251,6 +251,63 @@ struct MenuItemView
   bool enabled = true;
 };
 
+// The breadcrumb winbar (features/winbar.h). The native layout is passed
+// through column by column so a Lua painter draws the same row the mouse
+// hit-tests; `kind` picks the styling branch (a folder, the file, a symbol).
+struct WinbarCrumbView
+{
+  std::string label;
+  std::string kind;        // "folder" | "file" | "symbol"
+  std::string symbol_kind; // the index's own kind for a symbol ("class", ...)
+  std::string icon;        // Nerd Fonts glyph, empty when the crumb has none
+  int icon_fg = -1;        // brand color for a file icon, -1 = use the row fg
+  int x = 0;               // the crumb's leading cell (its separator)
+  int icon_x = -1;
+  int label_x = 0;
+  int end_x = 0;
+  bool current = false; // the innermost crumb (the cursor's own)
+  bool hovered = false;
+  bool active = false;  // its menu is open
+  bool ellipsis = false; // the chip standing in for the crumbs that did not fit
+};
+
+struct WinbarView
+{
+  int x = 0, y = 0, w = 0; // the pane's winbar row (absolute)
+  int pane = -1;
+  std::string filepath;
+  bool truncated = false;
+  std::vector<WinbarCrumbView> crumbs;
+};
+
+struct WinbarMenuEntryView
+{
+  std::string label;
+  std::string icon;
+  std::string kind; // "folder" | "file" | "symbol"
+  int index = 0;    // absolute row index
+  bool is_dir = false;
+  bool current = false;
+};
+
+// One level of the cascade: the crumb's own menu for level 0, and each deeper
+// level a folder opened from the row above it. Each level carries its own
+// rect, so a handler paints panels that sit exactly where the hit-test reads.
+struct WinbarMenuLevelView
+{
+  int x = 0, y = 0, w = 0, h = 0;
+  std::string title; // the crumb's, or the folder's own name
+  int selected = 0;
+  int scroll = 0; // first visible row
+  int total = 0;
+  std::vector<WinbarMenuEntryView> entries; // windowed to the visible rows
+};
+
+struct WinbarMenuView
+{
+  std::vector<WinbarMenuLevelView> levels; // level 0 first, deepest last
+};
+
 struct MenuDropdownView
 {
   std::string menu_label;

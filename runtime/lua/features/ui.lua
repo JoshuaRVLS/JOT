@@ -34,6 +34,7 @@ local statusline = require("jot_ui.statusline")
 local sidebar = require("jot_ui.sidebar")
 local side_panel = require("jot_ui.side_panel")
 local menu = require("jot_ui.menu")
+local winbar = require("jot_ui.winbar")
 local toast = require("jot_ui.toast")
 
 jot.ui.handler("command_palette", command_palette.command_palette)
@@ -51,6 +52,8 @@ jot.ui.handler("telescope", telescope.telescope)
 jot.ui.handler("lsp_completion", lsp.lsp_completion)
 jot.ui.handler("context_menu", menu.context_menu)
 jot.ui.handler("menu_dropdown", menu.menu_dropdown)
+jot.ui.handler("winbar", winbar.winbar)
+jot.ui.handler("winbar_menu", menu.winbar_menu)
 jot.ui.handler("search_panel", search.search_panel)
 jot.ui.handler("home_screen", home.home_screen)
 jot.ui.handler("status_line", statusline.status_line)
@@ -87,6 +90,8 @@ return {
   lsp_completion = lsp.lsp_completion,
   context_menu = menu.context_menu,
   menu_dropdown = menu.menu_dropdown,
+  winbar = winbar.winbar,
+  winbar_menu = menu.winbar_menu,
   search_panel = search.search_panel,
   home_screen = home.home_screen,
 }

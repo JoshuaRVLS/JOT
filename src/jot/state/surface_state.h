@@ -88,6 +88,8 @@ struct SurfaceState
   bool lua_ui_prev_sidebar = false;
   bool lua_ui_prev_side_panel = false;
   bool lua_ui_prev_settings = false;
+  bool lua_ui_prev_winbar = false;
+  bool lua_ui_prev_winbar_menu = false;
 
   bool show_menu_bar_dropdown = false;
   int menu_bar_active = 0;

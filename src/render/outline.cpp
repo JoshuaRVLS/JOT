@@ -1,4 +1,5 @@
 #include "editor.h"
+#include "features/winbar.h"
 #include "render/pane_edges.h"
 #include "jot/lua/api.h"
 #include "tools/symbols/index.h"
@@ -12,38 +13,12 @@
 namespace
 {
 
-  std::string outline_lower(std::string s)
-  {
-    std::transform(
-        s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-    return s;
-  }
-
+  // The kind -> color mapping now lives with the winbar (features/winbar.h),
+  // which paints the same kinds as breadcrumbs; the outline keeps its own name
+  // for it so the call sites below read the same.
   int outline_symbol_color(const Theme &theme, const std::string &kind)
   {
-    const std::string k = outline_lower(kind);
-    if (k == "function" || k == "method" || k == "constructor" || k == "macro")
-    {
-      return theme.fg_function;
-    }
-    if (k == "class" || k == "struct" || k == "union" || k == "interface" || k == "enum"
-        || k == "type" || k == "typedef" || k == "type_alias" || k == "enum_member")
-    {
-      return theme.fg_type;
-    }
-    if (k == "namespace" || k == "module" || k == "package")
-    {
-      return theme.fg_namespace;
-    }
-    if (k == "variable" || k == "property" || k == "field" || k == "parameter")
-    {
-      return theme.fg_variable;
-    }
-    if (k == "constant")
-    {
-      return theme.fg_constant;
-    }
-    return theme.fg_command;
+    return Winbar::symbol_color(theme, kind);
   }
 
 } // namespace

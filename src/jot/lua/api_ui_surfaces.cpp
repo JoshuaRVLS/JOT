@@ -149,6 +149,13 @@ void LuaAPI::push_ui_colors(lua_State *L, int t)
   lua_set_int_field(L, c, "selection_fg", th.fg_selection);
   lua_set_int_field(L, c, "selection_bg", th.bg_selection);
   lua_set_int_field(L, c, "comment", th.fg_comment);
+  // The breadcrumb winbar (render/winbar.cpp).
+  lua_set_int_field(L, c, "winbar_fg", th.fg_winbar);
+  lua_set_int_field(L, c, "winbar_bg", th.bg_winbar);
+  lua_set_int_field(L, c, "winbar_crumb_fg", th.fg_winbar_crumb);
+  lua_set_int_field(L, c, "winbar_separator", th.fg_winbar_separator);
+  lua_set_int_field(L, c, "winbar_hover_fg", th.fg_winbar_hover);
+  lua_set_int_field(L, c, "winbar_hover_bg", th.bg_winbar_hover);
   lua_set_int_field(L, c, "accent", th.fg_keyword);
   lua_set_int_field(L, c, "error", th.fg_status_error);
   lua_set_int_field(L, c, "warning", th.fg_status_warning);
@@ -611,6 +618,87 @@ bool LuaAPI::emit_menu_dropdown(const MenuDropdownView &view)
                          lua_rawseti(L, arr, (lua_Integer)i + 1);
                        }
                        lua_setfield(L, t, "items");
+                       push_ui_colors(L, t);
+                     });
+}
+
+bool LuaAPI::emit_winbar(const WinbarView &view)
+{
+  return emit_lua_ui("winbar",
+                     [&](lua_State *L, int t)
+                     {
+                       lua_set_int_field(L, t, "x", view.x);
+                       lua_set_int_field(L, t, "y", view.y);
+                       lua_set_int_field(L, t, "w", view.w);
+                       lua_set_int_field(L, t, "pane", view.pane);
+                       lua_set_str_field(L, t, "filepath", view.filepath);
+                       lua_set_bool_field(L, t, "truncated", view.truncated);
+                       lua_newtable(L);
+                       const int arr = lua_gettop(L);
+                       for (size_t i = 0; i < view.crumbs.size(); i++)
+                       {
+                         const WinbarCrumbView &crumb = view.crumbs[i];
+                         lua_newtable(L);
+                         const int ci = lua_gettop(L);
+                         lua_set_str_field(L, ci, "label", crumb.label);
+                         lua_set_str_field(L, ci, "kind", crumb.kind);
+                         lua_set_str_field(L, ci, "symbol_kind", crumb.symbol_kind);
+                         lua_set_str_field(L, ci, "icon", crumb.icon);
+                         lua_set_int_field(L, ci, "icon_fg", crumb.icon_fg);
+                         lua_set_int_field(L, ci, "x", crumb.x);
+                         lua_set_int_field(L, ci, "icon_x", crumb.icon_x);
+                         lua_set_int_field(L, ci, "label_x", crumb.label_x);
+                         lua_set_int_field(L, ci, "end_x", crumb.end_x);
+                         lua_set_bool_field(L, ci, "current", crumb.current);
+                         lua_set_bool_field(L, ci, "hovered", crumb.hovered);
+                         lua_set_bool_field(L, ci, "active", crumb.active);
+                         lua_set_bool_field(L, ci, "ellipsis", crumb.ellipsis);
+                         lua_rawseti(L, arr, (lua_Integer)i + 1);
+                       }
+                       lua_setfield(L, t, "crumbs");
+                       push_ui_colors(L, t);
+                     });
+}
+
+bool LuaAPI::emit_winbar_menu(const WinbarMenuView &view)
+{
+  return emit_lua_ui("winbar_menu",
+                     [&](lua_State *L, int t)
+                     {
+                       lua_newtable(L);
+                       const int levels = lua_gettop(L);
+                       for (size_t li = 0; li < view.levels.size(); li++)
+                       {
+                         const WinbarMenuLevelView &level = view.levels[li];
+                         lua_newtable(L);
+                         const int lt = lua_gettop(L);
+                         lua_set_int_field(L, lt, "x", level.x);
+                         lua_set_int_field(L, lt, "y", level.y);
+                         lua_set_int_field(L, lt, "w", level.w);
+                         lua_set_int_field(L, lt, "h", level.h);
+                         lua_set_str_field(L, lt, "title", level.title);
+                         lua_set_int_field(L, lt, "selected", level.selected);
+                         lua_set_int_field(L, lt, "scroll", level.scroll);
+                         lua_set_int_field(L, lt, "total", level.total);
+                         lua_newtable(L);
+                         const int arr = lua_gettop(L);
+                         for (size_t i = 0; i < level.entries.size(); i++)
+                         {
+                           const WinbarMenuEntryView &entry = level.entries[i];
+                           lua_newtable(L);
+                           const int ei = lua_gettop(L);
+                           lua_set_str_field(L, ei, "label", entry.label);
+                           lua_set_str_field(L, ei, "icon", entry.icon);
+                           lua_set_str_field(L, ei, "kind", entry.kind);
+                           lua_set_int_field(L, ei, "index", entry.index);
+                           lua_set_bool_field(L, ei, "is_dir", entry.is_dir);
+                           lua_set_bool_field(L, ei, "current", entry.current);
+                           lua_rawseti(L, arr, (lua_Integer)i + 1);
+                         }
+                         lua_setfield(L, lt, "entries");
+                         lua_rawseti(L, levels, (lua_Integer)li + 1);
+                       }
+                       lua_setfield(L, t, "levels");
                        push_ui_colors(L, t);
                      });
 }

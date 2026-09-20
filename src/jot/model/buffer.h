@@ -7,6 +7,7 @@
 #include "jot/model/decorations.h"
 #include "jot/model/fold_ranges.h"
 #include "jot/model/syntax.h"
+#include "tools/symbols/index.h" // SymbolMatch (the winbar's symbol cache)
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -134,6 +135,15 @@ struct FileBuffer
   // see FoldRanges in this header.
   FoldRanges fold_ranges;
   bool folds_dirty = true;
+  // The document-symbol index the breadcrumb winbar cuts its symbol crumbs from
+  // (tools/symbols/index.h). Validated by edit_generation the way the fold index
+  // is, and rebuilt by the winbar at most every ~250 ms while the buffer is
+  // being typed in: a symbol that appears one keystroke late beats a full-buffer
+  // scan per keystroke, and the row is a breadcrumb, not an outline.
+  std::vector<SymbolMatch> symbol_cache;
+  std::uint64_t symbol_cache_generation = 0;
+  bool symbol_cache_valid = false;
+  long long symbol_cache_ms = 0;
   // Incremental absolute bracket-depth prefix used by the rainbow-bracket
   // renderer. bracket_depth_prefix[i] holds the bracket depth at the start
   // of buffer line i (the floored raw +/- walk over lines [0, i)); entry i

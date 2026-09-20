@@ -12,6 +12,7 @@ add_executable(jot_tests
   test_pane_edges.cpp
   test_pane_row_budget.cpp
   test_tab_order.cpp
+  test_winbar.cpp
   test_color_codes.cpp
   test_color_formats.cpp
   test_color_space.cpp

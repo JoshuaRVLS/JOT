@@ -352,12 +352,18 @@ TEST_CASE("Bracket colors survive a resize when a line is wider than the pane", 
 
   e.apply_resize_for_test(100, 30);
   e.render_for_test();
-  const std::string narrow = join(bracket_color_fingerprint(e, /*first_row=*/2));
+  // The row after the pane's first text row: row 0 is the strip, then whatever
+  // chrome the pane pays (the breadcrumb winbar on a .cpp file), then the long
+  // line itself. That first line is skipped -- its own trailing brace is only
+  // visible in the wide pane, which is a real difference this case is not
+  // about; what must not move is the color of the lines below it.
+  const int first_row = pane_content_top(e.pane_for_test()) + 1;
+  const std::string narrow = join(bracket_color_fingerprint(e, first_row));
   REQUIRE_FALSE(narrow.empty());
 
   e.apply_resize_for_test(200, 30);
   e.render_for_test();
-  const std::string wide = join(bracket_color_fingerprint(e, /*first_row=*/2));
+  const std::string wide = join(bracket_color_fingerprint(e, first_row));
 
   INFO("narrow: " << narrow);
   INFO("wide:   " << wide);
@@ -397,15 +403,15 @@ TEST_CASE("Bracket colors match the file-position depth", "[jot]")
 
   // The long line's own braces sit at byte ~600, far outside a 100-column pane,
   // so the brackets the pane shows belong to lines 20 ("{") and 21 ("}").
-  // Line 20 is displayed at this grid row (row 0 is the tab strip, row 1 the
-  // first visible line), derived from the real scroll state rather than assumed.
-  // Row 1 is the first visible line, so line N sits at this grid row. The file
-  // is short enough to fit, so nothing is scrolled: the long line is on screen,
-  // but its braces (byte ~600) are outside a 100-column pane, which is precisely
-  // the case where the carried depth used to be taken from the truncated walk
-  // instead of the file position.
+  // Line 20 is displayed at this grid row, derived from the pane's own first
+  // text row (row 0 is the strip, then the winbar on a .cpp file) and the real
+  // scroll state rather than assumed. The file is short enough to fit, so
+  // nothing is scrolled: the long line is on screen, but its braces (byte ~600)
+  // are outside a 100-column pane, which is precisely the case where the
+  // carried depth used to be taken from the truncated walk instead of the file
+  // position.
   const int scroll_offset = e.buffer_for_test().scroll_offset;
-  const int line20_row = 1 + (20 - scroll_offset);
+  const int line20_row = pane_content_top(e.pane_for_test()) + (20 - scroll_offset);
   const std::vector<int> opening = bracket_colors_in_row(e, line20_row);
   const std::vector<int> closing = bracket_colors_in_row(e, line20_row + 1);
   REQUIRE(opening.size() == 1);

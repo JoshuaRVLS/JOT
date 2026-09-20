@@ -43,6 +43,39 @@ private:
   void reveal_tabline_position(int position);
   // Closes every tab but `keep_buffer`, leaving that one focused.
   void close_other_tabs(int keep_buffer);
+
+  // The breadcrumb winbar: the row a code pane spends above its text, and the
+  // drop-down a crumb opens (src/render/winbar.cpp, features/winbar.h). A crumb
+  // is a click away from its siblings -- the file's folder, the folder's
+  // children, the symbols sharing a scope -- and a folder row opens its own
+  // listing *beside* the level that offered it, a cascade that keeps every
+  // level it stepped through on screen (dropbar's model).
+  const std::vector<SymbolMatch> &winbar_symbols(int buffer_id);
+  Winbar::WinbarLayout build_winbar_layout(const SplitPane &pane, int pane_index);
+  void render_winbar(const SplitPane &pane, int pane_index);
+  void render_winbar_menu();
+  bool handle_winbar_mouse(int x, int y, bool is_click, bool is_click_release, bool is_motion);
+  // The cascade's own input, taken before any editing key: Esc puts the whole
+  // cascade away, h / Left steps back one level, j/k (Down/Up) move the deepest
+  // level's selection, Enter / Right / space opens the selected folder one level
+  // deeper (or the selected file), and every other key is swallowed so it
+  // cannot edit the buffer behind the menus.
+  bool handle_winbar_menu_input(int ch);
+  void open_winbar_menu(int crumb_index, int pane_index);
+  void close_winbar_menu();
+  void winbar_menu_move(int delta);
+  void winbar_menu_scroll(int level, int delta);
+  void winbar_menu_back();
+  void winbar_menu_activate(int level, int index);
+  void winbar_menu_hover(int level, int index);
+  void winbar_menu_clamp(int level);
+  // The cascade's own geometry: which pane's row a point is on (and which crumb
+  // of it), which level of the cascade a point lands in (-1 for none), and the
+  // level's order in the cascade.
+  bool winbar_row_crumb_at(int x, int y, int &pane_index, int &crumb_index);
+  int winbar_menu_level_at(int x, int y) const;
+  void winbar_menu_follow(int level);
+  void winbar_menu_open_submenu(int level, int entry_index);
   bool buffer_visible_in_other_pane(int buffer_id) const;
   int tabline_position_at(const FileTabLayout &layout, int x) const;
   int tabline_scroll_chip_at(const FileTabLayout &layout, int x) const;

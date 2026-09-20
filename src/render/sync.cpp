@@ -26,6 +26,8 @@ void Editor::sync_lua_ui_surfaces()
     lua_ui_prev_sidebar = false;
     lua_ui_prev_side_panel = false;
     lua_ui_prev_settings = false;
+    lua_ui_prev_winbar = false;
+    lua_ui_prev_winbar_menu = false;
     return;
   }
   auto sync = [&](bool visible, bool &prev, const char *name)
@@ -77,5 +79,21 @@ void Editor::sync_lua_ui_surfaces()
   // outside, :settings toggle): without the close emit the panel stays on
   // screen even though the scrim is gone.
   sync(show_settings_menu, lua_ui_prev_settings, "settings");
+  // The winbar row and the cascade its crumbs open are Lua surfaces too, and
+  // the same rule holds: a panel whose state is gone but whose close emit was
+  // never sent stays painted over the pane -- a box with nothing behind it, so
+  // nothing in it answers a click and nothing dismisses it. That is exactly
+  // what an unclosed menu looks like.
+  bool any_winbar = false;
+  for (const SplitPane &pane : panes)
+  {
+    if (pane_has_winbar(pane))
+    {
+      any_winbar = true;
+      break;
+    }
+  }
+  sync(any_winbar && !frame_owned, lua_ui_prev_winbar, "winbar");
+  sync(winbar_menu_open() && !frame_owned, lua_ui_prev_winbar_menu, "winbar_menu");
 }
 

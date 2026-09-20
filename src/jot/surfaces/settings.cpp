@@ -152,6 +152,7 @@ const KnownSetting kKnownSettings[] = {
     {"snippet_load_snipmate", "Snippets: load snipMate packs", SettingsEntry::Type::Bool},
     {"snippet_load_vscode", "Snippets: load VSCode packs", SettingsEntry::Type::Bool},
     {"snippet_paths", "Snippets: extra paths", SettingsEntry::Type::String},
+    {"winbar", "Breadcrumbs: auto / on / off", SettingsEntry::Type::String},
     {"snippet_tab_key", "Snippets: expand/jump key", SettingsEntry::Type::String},
     {"tab_size", "Tab size", SettingsEntry::Type::Int},
     {"terminal_height", "Terminal panel height", SettingsEntry::Type::Int},

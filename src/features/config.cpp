@@ -174,6 +174,10 @@ void Config::load_defaults()
   settings["tabline"] = "true";
   settings["tabline_auto_hide"] = "0";
   settings["tabline_insert"] = "after_current";
+  // The breadcrumb winbar: the row a pane spends above its text, with the
+  // symbol chain of the cursor's line on it. "auto" keeps it for code files
+  // ("on" shows it for every named file, "off" never).
+  settings["winbar"] = "auto";
   settings["right_panel_width"] = "42";
   settings["zen_content_width"] = "100";
   settings["terminal_height"] = "10";

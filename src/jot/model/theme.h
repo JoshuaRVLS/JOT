@@ -161,6 +161,17 @@ struct Theme
   int fg_tab_drop = 6;
   int fg_tab_hover = 7;
   int bg_tab_hover = 0;
+  // The breadcrumb winbar: the row's own band, the crumb labels on it, the
+  // separator between crumbs, and the band under the pointer (both halves, like
+  // TabLineHover, because the hovered crumb paints its label on it).
+  int fg_winbar = 7;
+  int bg_winbar = 0;
+  int fg_winbar_crumb = 7;
+  int bg_winbar_crumb = 0;
+  int fg_winbar_separator = 8;
+  int bg_winbar_separator = 0;
+  int fg_winbar_hover = 7;
+  int bg_winbar_hover = 0;
   int fg_active_border = 3;
   int bg_active_border = 0;
   int fg_image_border = 7;
