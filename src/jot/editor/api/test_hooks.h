@@ -301,6 +301,24 @@ public:
   {
     return cpp_definitions_summary();
   }
+  // The findings as the `:cppcheck next` walk sees them: the definition checks'
+  // rows in file/line order (the panel's list merges the servers in and sorts by
+  // severity, which is a different order).
+  std::vector<QuickPickItem> cpp_definition_findings_for_test() const
+  {
+    return cpp_definition_quick_pick_items();
+  }
+  // The Problems view's header row, built as the renderer builds it.
+  std::string problems_header_for_test(int max_width) const
+  {
+    return problems_summary_header(max_width);
+  }
+  // Steps to a definition finding through the same path `:cppcheck next|prev`
+  // and an announced scan use, so a case can assert where the caret lands.
+  bool cpp_definitions_jump_for_test(int direction)
+  {
+    return goto_next_cpp_definition_issue(direction);
+  }
   // What a file's diagnostics hold after the merge (LSP slices + the definition
   // checks), read through the same store the gutter and the picker read.
   std::size_t diagnostics_count_for_test(const std::string &path) const

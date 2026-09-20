@@ -7,6 +7,7 @@
 // checks what lands in the diagnostics every surface reads.
 #include "cpp_definitions.h"
 #include "editor.h"
+#include "ui/text.h"
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdlib>
@@ -462,4 +463,102 @@ TEST_CASE("C++ definitions: a landed scan feeds the diagnostics store", "[jot]")
   const std::string summary = e.cpp_definitions_summary_for_test();
   REQUIRE(summary.find("1 repeated") != std::string::npos);
   REQUIRE(summary.find("across 3 files") != std::string::npos);
+}
+
+// The Problems view leads with a header: the totals, the severities and how many
+// findings each file holds, in that order. It is what tells a panel whether the
+// scan found one thing in one file or forty across the tree.
+TEST_CASE("C++ definitions: the Problems header tallies the findings per file", "[jot]")
+{
+  seed_config_home();
+  char dir[] = "/tmp/jot_cpp_defs_header_XXXXXX";
+  REQUIRE(mkdtemp(dir) != nullptr);
+  const fs::path root = fs::path(dir);
+  {
+    std::ofstream out(root / "widget.hpp");
+    out << "#pragma once\nvoid reset();\nint missing();\n";
+  }
+  {
+    std::ofstream out(root / "widget.cpp");
+    out << "#include \"widget.hpp\"\nvoid reset() {}\nint twice() { return 1; }\n";
+  }
+  {
+    std::ofstream out(root / "other.cpp");
+    out << "int twice() { return 2; }\n";
+  }
+
+  Editor e;
+  e.set_home_menu_visible(false);
+  e.open_workspace(root.string(), false);
+  e.run_cpp_definitions_scan_for_test();
+
+  // Two findings, one per file: the repeated body on the second definition in
+  // path order (widget.cpp) and the header's unimplemented declaration.
+  const auto findings = e.cpp_definition_findings_for_test();
+  REQUIRE(findings.size() == 2);
+  REQUIRE(findings[0].filepath == (root / "widget.cpp").string());
+  REQUIRE(findings[0].severity == kError);
+  REQUIRE(findings[1].filepath == (root / "widget.hpp").string());
+  REQUIRE(findings[1].severity == kWarning);
+
+  const std::string header = e.problems_header_for_test(120);
+  REQUIRE(header.find("2 findings in 2 files") != std::string::npos);
+  REQUIRE(header.find("1 error, 1 warning") != std::string::npos);
+  REQUIRE(header.find("widget.cpp 1") != std::string::npos);
+  REQUIRE(header.find("widget.hpp 1") != std::string::npos);
+  // A narrow panel keeps the beginning and loses the tail, never a broken
+  // multi-byte cell (the separator is two cells wide).
+  const std::string narrow = e.problems_header_for_test(24);
+  REQUIRE(ui_cell_count(narrow) <= 24);
+  REQUIRE(narrow.find("2 findings") != std::string::npos);
+}
+
+TEST_CASE("C++ definitions: next and previous walk the findings", "[jot]")
+{
+  seed_config_home();
+  char dir[] = "/tmp/jot_cpp_defs_jump_XXXXXX";
+  REQUIRE(mkdtemp(dir) != nullptr);
+  const fs::path root = fs::path(dir);
+  {
+    std::ofstream out(root / "widget.hpp");
+    out << "#pragma once\nvoid reset();\nint missing();\n";
+  }
+  {
+    std::ofstream out(root / "widget.cpp");
+    out << "#include \"widget.hpp\"\nvoid reset() {}\nint twice() { return 1; }\n";
+  }
+  {
+    std::ofstream out(root / "other.cpp");
+    out << "int twice() { return 2; }\n";
+  }
+
+  Editor e;
+  e.set_home_menu_visible(false);
+  e.open_workspace(root.string(), false);
+  e.run_cpp_definitions_scan_for_test();
+
+  auto at = [&]() -> std::string
+  {
+    return fs::path(e.buffer_for_test().filepath).filename().string() + ":"
+           + std::to_string(e.buffer_for_test().cursor.y + 1) + ":"
+           + std::to_string(e.buffer_for_test().cursor.x + 1);
+  };
+
+  // Starting in the header above both findings, `next` lands on this file's own
+  // finding first -- the walk is by file and line, not by severity.
+  e.load_file((root / "widget.hpp").string());
+  e.scroll_cursor_to_for_test(0, 0);
+  REQUIRE(e.cpp_definitions_jump_for_test(1));
+  REQUIRE(at() == "widget.hpp:3:5");
+
+  // From there the next one is in the file that sorts before this one (nothing
+  // follows widget.hpp), and it wraps around to the first finding.
+  REQUIRE(e.cpp_definitions_jump_for_test(1));
+  REQUIRE(at() == "widget.cpp:3:5");
+
+  // `prev` walks back the way it came.
+  REQUIRE(e.cpp_definitions_jump_for_test(-1));
+  REQUIRE(at() == "widget.hpp:3:5");
+  REQUIRE(e.cpp_definitions_jump_for_test(-1));
+  REQUIRE(at() == "widget.cpp:3:5");
 }

@@ -802,8 +802,8 @@ bool Editor::execute_ex_command(const std::string &input_line)
   else if (lcmd == "cppcheck")
   {
     // The workspace-wide definition check, on demand: `on`/`off` also set the
-    // setting, anything else runs it now (and focuses the Problems list when it
-    // lands).
+    // setting, plain `:cppcheck` runs it now (and lands on the next finding when
+    // it does), and `next`/`prev` walk the findings the last scan left.
     const std::string mode = to_lower_copy(trim_copy(arg));
     if (mode == "on" || mode == "off")
     {
@@ -812,12 +812,34 @@ bool Editor::execute_ex_command(const std::string &input_line)
       apply_config_live();
       set_message(std::string("C++ definition checks ") + (mode == "on" ? "on" : "off"), true);
     }
+    else if (mode == "next" || mode == "prev")
+    {
+      const int direction = mode == "prev" ? -1 : 1;
+      if (!cpp_defs_enabled)
+      {
+        set_message("C++ definition checks are off (set cpp_definitions = true)", true);
+      }
+      else if (cpp_defs_scan_running || cpp_defs_scan_pending || cpp_defs_last_scan_ms == 0)
+      {
+        // The findings are being computed (or never have been): record which way
+        // to walk and let the scan that lands do it, rather than jumping against
+        // rows that are about to be replaced.
+        cpp_defs_pending_jump = direction;
+        request_cpp_definitions_scan(true);
+        set_message("Checking C++ definitions...", true);
+      }
+      else
+      {
+        goto_next_cpp_definition_issue(direction);
+      }
+    }
     else if (!cpp_defs_enabled)
     {
       set_message("C++ definition checks are off (set cpp_definitions = true)", true);
     }
     else
     {
+      cpp_defs_pending_jump = 1;
       request_cpp_definitions_scan(true);
       set_message("Checking C++ definitions...", true);
     }

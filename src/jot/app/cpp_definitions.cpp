@@ -150,6 +150,7 @@ void Editor::clear_cpp_definitions()
 {
   cpp_defs_scan_pending = false;
   cpp_defs_announce = false;
+  cpp_defs_pending_jump = 0;
   if (cpp_def_diags.empty())
   {
     return;
@@ -205,12 +206,23 @@ void Editor::apply_cpp_definitions(CppDefinitions::ScanResult result)
 
   if (announce)
   {
-    // `:cppcheck` asked to see the result: the list takes focus, and the summary
-    // is delivered as a toast -- `set_message` alone writes the statusline
-    // member, which the Lua status line no longer reads, so without the flag the
-    // command would look like it did nothing. It lives a little longer than a
-    // toast's default: there are two counts and a file tally to read.
+    // `:cppcheck` asked to see the result: the list opens on its findings, and
+    // the summary is delivered as a toast -- `set_message` alone writes the
+    // statusline member, which the Lua status line no longer reads, so without
+    // the flag the command would look like it did nothing. It lives a little
+    // longer than a toast's default: there are two counts and a file tally to
+    // read.
     show_problems_panel();
     set_transient_message(cpp_definitions_summary(), 6000, true);
+  }
+  // The command is also the way *to* the findings: land on the next one from the
+  // caret. The direction survives the wait -- a `:cppcheck next` typed while the
+  // scan was still running recorded its own -- and with no findings the summary
+  // (or the walk's own message) is the whole answer.
+  const int jump = cpp_defs_pending_jump;
+  cpp_defs_pending_jump = 0;
+  if (jump != 0 && !cpp_def_diags.empty())
+  {
+    goto_next_cpp_definition_issue(jump);
   }
 }

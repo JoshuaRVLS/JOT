@@ -86,6 +86,15 @@ private:
   void handle_workspace_symbols_result(const LSPDocumentSymbolResult &result);
   void show_workspace_diagnostics_picker();
   std::vector<QuickPickItem> workspace_diagnostic_quick_pick_items() const;
+  // The definition checks' findings alone, in the order a jump walks them (file,
+  // then line) rather than the panel's severity-first order.
+  std::vector<QuickPickItem> cpp_definition_quick_pick_items() const;
+  // Steps to the next (or previous) definition finding from the caret, opening
+  // its file; `:cppcheck next|prev`, and what an announced scan lands on.
+  bool goto_next_cpp_definition_issue(int direction);
+  // The Problems view's header row: the totals, the severity tally and how many
+  // findings each file holds, truncated to the panel's width.
+  std::string problems_summary_header(int max_width) const;
   void hide_lsp_completion();
   bool refresh_lsp_completion_filter();
   void update_lsp_completion_ghost();

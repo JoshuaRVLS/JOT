@@ -18,8 +18,8 @@ private:
   // Queues a workspace scan. A request that arrives while one is in flight only
   // marks another as wanted: the scan that lands runs it, so rapid saves do not
   // stack up scans. `announce` is the `:cppcheck` path -- the result is shown
-  // (Problems panel focused, summary in the status line) rather than only
-  // published.
+  // (the Problems list opens on its findings, the summary arrives as a toast,
+  // and the caret lands on the next finding) rather than only published.
   void request_cpp_definitions_scan(bool announce = false);
   // Landed a scan's result: rebuild the per-file diagnostics and refresh every
   // file whose diagnostics changed, open buffer or not.

@@ -4,11 +4,14 @@
 #include "tools/symbols/index.h"
 #include "tools/workspace/search.h"
 #include "ui/gui/gui.h"
+#include "ui/text.h"
 
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <map>
 #include <sstream>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -65,6 +68,61 @@ namespace
     default:
       return "Diagnostic";
     }
+  }
+
+  // Which finding a jump from the caret lands on: the next one in the same
+  // file, else the first one in a file that sorts after this one -- or, going
+  // back, the last one in a file that sorts before it -- wrapping around the
+  // list when there is none in that direction. Shared by `:diagnext` (the
+  // buffer's diagnostics) and the C++ definition checks (the workspace's), so
+  // both walk a list the same way.
+  //
+  // A template because `Editor::QuickPickItem` is private: the callers are
+  // members, so they can hand the type in without this helper naming it.
+  template <typename Item>
+  int finding_for_jump(const std::vector<Item> &items,
+                       const std::string &file,
+                       const Cursor &cursor,
+                       int direction)
+  {
+    int selected = -1;
+    if (direction >= 0)
+    {
+      for (int i = 0; i < (int)items.size(); i++)
+      {
+        const Item &item = items[(size_t)i];
+        if (same_path(item.filepath, file))
+        {
+          if (item.line > cursor.y || (item.line == cursor.y && item.col > cursor.x))
+          {
+            selected = i;
+            break;
+          }
+        }
+        else if (selected < 0 && item.filepath > file)
+        {
+          selected = i;
+        }
+      }
+      return selected < 0 ? 0 : selected;
+    }
+    for (int i = (int)items.size() - 1; i >= 0; i--)
+    {
+      const Item &item = items[(size_t)i];
+      if (same_path(item.filepath, file))
+      {
+        if (item.line < cursor.y || (item.line == cursor.y && item.col < cursor.x))
+        {
+          selected = i;
+          break;
+        }
+      }
+      else if (selected < 0 && item.filepath < file)
+      {
+        selected = i;
+      }
+    }
+    return selected < 0 ? (int)items.size() - 1 : selected;
   }
 
   int diagnostic_rank(int severity)
@@ -232,20 +290,24 @@ void Editor::accept_quick_pick()
   }
 
   close_quick_pick();
-  open_file(item.filepath);
-  if (current_buffer >= 0 && current_buffer < (int)buffers.size())
+
+  // Land the way every other jump does: arm the location, then open the file.
+  // Placing the cursor inline here only worked when the buffer already existed
+  // -- a file the worker thread still has to read comes back later, and by then
+  // the picker's target had been forgotten, so the file opened at line 1 (or
+  // wherever the previous buffer's cursor was). finish_open_file applies the
+  // armed jump for exactly that case.
+  JumpLocation loc;
+  loc.filepath = item.filepath;
+  loc.cursor = {item.col, item.line};
+  const bool landed = jump_to(loc);
+  set_message(get_filename(item.filepath) + ":" + std::to_string(std::max(0, item.line) + 1));
+  if (landed)
   {
-    auto &buf = buffers[(size_t)current_buffer];
-    if (same_path(buf.filepath, item.filepath) && buf.line_count() > 0)
-    {
-      buf.cursor.y = std::clamp(item.line, 0, std::max(0, (int)buf.line_count() - 1));
-      buf.cursor.x = std::clamp(item.col, 0, (int)buf.line(buf.cursor.y).size());
-      buf.preferred_x = buf.cursor.x;
-      clear_selection();
-      ensure_cursor_visible();
-      set_message(get_filename(buf.filepath) + ":" + std::to_string(buf.cursor.y + 1));
-      record_jump();
-    }
+    // A jump like any other: Ctrl+O comes back here. Only when it landed -- an
+    // armed jump that the file open will apply later leaves the cursor where it
+    // is, and recording that would file the place we never left.
+    record_jump();
   }
   needs_redraw = true;
 }
@@ -475,58 +537,176 @@ bool Editor::goto_next_diagnostic(int direction)
   }
 
   auto &buf = get_buffer();
-  int selected = -1;
-  if (direction >= 0)
-  {
-    for (int i = 0; i < (int)items.size(); i++)
-    {
-      const auto &item = items[(size_t)i];
-      if (same_path(item.filepath, buf.filepath))
-      {
-        if (item.line > buf.cursor.y || (item.line == buf.cursor.y && item.col > buf.cursor.x))
-        {
-          selected = i;
-          break;
-        }
-      }
-      else if (selected < 0 && item.filepath > buf.filepath)
-      {
-        selected = i;
-      }
-    }
-    if (selected < 0)
-    {
-      selected = 0;
-    }
-  }
-  else
-  {
-    for (int i = (int)items.size() - 1; i >= 0; i--)
-    {
-      const auto &item = items[(size_t)i];
-      if (same_path(item.filepath, buf.filepath))
-      {
-        if (item.line < buf.cursor.y || (item.line == buf.cursor.y && item.col < buf.cursor.x))
-        {
-          selected = i;
-          break;
-        }
-      }
-      else if (selected < 0 && item.filepath < buf.filepath)
-      {
-        selected = i;
-      }
-    }
-    if (selected < 0)
-    {
-      selected = (int)items.size() - 1;
-    }
-  }
+  const int selected = finding_for_jump(items, buf.filepath, buf.cursor, direction);
 
   open_quick_pick(QUICK_PICK_DIAGNOSTICS, "Diagnostics", std::move(items));
   quick_pick_selected = std::clamp(selected, 0, std::max(0, (int)quick_pick_items.size() - 1));
   accept_quick_pick();
   return true;
+}
+
+std::vector<Editor::QuickPickItem> Editor::cpp_definition_quick_pick_items() const
+{
+  // The definition checks' own rows, ordered the way a jump walks the
+  // workspace: by file, then line. `workspace_diagnostic_quick_pick_items`
+  // merges the servers in and sorts by severity, which is what the list wants
+  // and not what "next finding" means.
+  std::vector<QuickPickItem> items;
+  for (const auto &file_entry : cpp_def_diags)
+  {
+    for (const Diagnostic &diag : file_entry.second)
+    {
+      QuickPickItem item;
+      item.filepath = file_entry.first;
+      item.line = std::max(0, diag.line);
+      item.col = std::max(0, diag.col);
+      item.severity = diag.severity;
+      item.label = diagnostic_label(diag.severity) + ": " + diag.message;
+      item.detail = fs::path(file_entry.first).filename().string() + ":"
+                    + std::to_string(item.line + 1) + ":" + std::to_string(item.col + 1);
+      items.push_back(std::move(item));
+    }
+  }
+  std::stable_sort(items.begin(),
+                   items.end(),
+                   [](const QuickPickItem &a, const QuickPickItem &b)
+                   {
+                     if (a.filepath != b.filepath)
+                     {
+                       return a.filepath < b.filepath;
+                     }
+                     if (a.line != b.line)
+                     {
+                       return a.line < b.line;
+                     }
+                     return a.col < b.col;
+                   });
+  return items;
+}
+
+bool Editor::goto_next_cpp_definition_issue(int direction)
+{
+  std::vector<QuickPickItem> items = cpp_definition_quick_pick_items();
+  if (items.empty())
+  {
+    set_message("No C++ definition findings", true);
+    return false;
+  }
+
+  FileBuffer &buf = get_buffer();
+  const int selected = finding_for_jump(items, buf.filepath, buf.cursor, direction);
+  const QuickPickItem landed = items[(size_t)selected];
+
+  // Point the Problems list at the row that was jumped to, so opening the panel
+  // lands on what the editor is showing. The panel's list carries the servers'
+  // rows too and sorts by severity, so the row is found by what it points at
+  // rather than by index.
+  const std::vector<QuickPickItem> all = workspace_diagnostic_quick_pick_items();
+  for (int i = 0; i < (int)all.size(); i++)
+  {
+    if (same_path(all[(size_t)i].filepath, landed.filepath)
+        && all[(size_t)i].line == landed.line && all[(size_t)i].col == landed.col)
+    {
+      problems_selected = i;
+      break;
+    }
+  }
+
+  // Reuse the picker's accept path so opening the file and placing the cursor
+  // stays in one place; the picker is opened only to be accepted immediately.
+  open_quick_pick(QUICK_PICK_WORKSPACE_DIAGNOSTICS, "Workspace Diagnostics", std::move(items));
+  quick_pick_selected = selected;
+  accept_quick_pick();
+  focus_state = FOCUS_EDITOR;
+  needs_redraw = true;
+  return true;
+}
+
+std::string Editor::problems_summary_header(int max_width) const
+{
+  const std::vector<QuickPickItem> items = workspace_diagnostic_quick_pick_items();
+  if (items.empty() || max_width <= 0)
+  {
+    return std::string();
+  }
+
+  int errors = 0;
+  int warnings = 0;
+  int hints = 0;
+  std::map<std::string, int> per_file;
+  for (const QuickPickItem &item : items)
+  {
+    if (item.severity == 1)
+    {
+      errors++;
+    }
+    else if (item.severity == 2)
+    {
+      warnings++;
+    }
+    else
+    {
+      hints++;
+    }
+    per_file[fs::path(item.filepath).filename().string()]++;
+  }
+
+  auto plural = [](int count, const char *one, const char *many)
+  { return std::to_string(count) + " " + (count == 1 ? one : many); };
+
+  std::string severities;
+  auto add_severity = [&](int count, const char *one, const char *many)
+  {
+    if (count <= 0)
+    {
+      return;
+    }
+    if (!severities.empty())
+    {
+      severities += ", ";
+    }
+    severities += plural(count, one, many);
+  };
+  add_severity(errors, "error", "errors");
+  add_severity(warnings, "warning", "warnings");
+  add_severity(hints, "hint", "hints");
+
+  // Most-affected file first, then by name: the file with the most rows is the
+  // one worth opening, and the name breaks ties so the header does not shuffle
+  // between scans.
+  std::vector<std::pair<std::string, int>> files(per_file.begin(), per_file.end());
+  std::stable_sort(files.begin(),
+                   files.end(),
+                   [](const std::pair<std::string, int> &a, const std::pair<std::string, int> &b)
+                   {
+                     if (a.second != b.second)
+                     {
+                       return a.second > b.second;
+                     }
+                     return a.first < b.first;
+                   });
+  std::string tally;
+  for (const auto &entry : files)
+  {
+    if (!tally.empty())
+    {
+      tally += " \u00b7 ";
+    }
+    tally += entry.first + " " + std::to_string(entry.second);
+  }
+
+  std::string header =
+      "Problems \u00b7 " + plural((int)items.size(), "finding in ", "findings in ")
+      + plural((int)files.size(), "file", "files");
+  if (!severities.empty())
+  {
+    header += " \u00b7 " + severities;
+  }
+  if (!tally.empty())
+  {
+    header += " \u00b7 " + tally;
+  }
+  return ui_truncate_cells_ellipsis(header, max_width);
 }
 
 std::vector<Editor::QuickPickItem> Editor::diagnostic_quick_pick_items() const

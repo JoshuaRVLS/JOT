@@ -538,6 +538,14 @@ void Editor::refresh_command_palette()
         add_arg(opt, "Auto-save", "Set auto-save mode or interval", 110);
       }
     }
+    else if (lcmd == "cppcheck")
+    {
+      const std::vector<std::string> opts = {"on", "off", "next", "prev"};
+      for (const auto &opt : opts)
+      {
+        add_arg(opt, "C++ definitions", "Toggle the checks, or walk their findings", 110);
+      }
+    }
     else if (lcmd == "wincmd")
     {
       const std::vector<std::string> opts = {"h", "j", "k", "l", "left", "down", "up", "right"};

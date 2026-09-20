@@ -32,6 +32,12 @@ struct CppDefsState
   // The `:cppcheck` path wants the result shown (panel focused, summary in the
   // status line); a scan after a save only wants the diagnostics.
   bool cpp_defs_announce = false;
+  // Which way a landing scan should move the caret: 0 none, +1 the next finding,
+  // -1 the previous. `:cppcheck` leaves +1 behind, and `next`/`prev` issued
+  // while a scan is in flight record theirs instead of jumping against the stale
+  // rows -- so the jump the user asked for is what happens, once, when the scan
+  // that was already on its way lands.
+  int cpp_defs_pending_jump = 0;
   // Which scan a landing result belongs to: the epoch is bumped per request and
   // the root is the workspace it was started for, so a result that arrives after
   // a workspace switch (or after a newer scan) is dropped rather than published.

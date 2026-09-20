@@ -35,6 +35,9 @@ from pty_screen import run_in_pty  # noqa: E402
 PROBLEMS = b"\x1b[109;6u"
 PALETTE = b"\x1b[112;6u"
 ENTER = b"\r"
+# Backspace: the palette resumes its last query, so a second command has to
+# clear the box before typing.
+CLEAR_BOX = b"\x7f" * 32
 
 HEADER = """#pragma once
 
@@ -63,6 +66,27 @@ def write_workspace(root: str) -> None:
         fh.write(SOURCE)
     with open(os.path.join(root, "more.cpp"), "w") as fh:
         fh.write(OTHER)
+
+
+def marked_row(screen) -> str:
+    """The Problems finding row the list marks with its accent sliver.
+
+    The tab strip uses the same sliver for the active tab, so a finding row is
+    the one that carries a finding's text.
+    """
+    for line in screen.text().split("\n"):
+        if "\u258c" in line and ("No definition found" in line
+                                 or "defined more than once" in line):
+            return line.rstrip()
+    return ""
+
+
+def header_row(screen) -> str:
+    """The Problems list's header line (the one carrying the tally)."""
+    for line in screen.text().split("\n"):
+        if "findings in" in line:
+            return line.rstrip()
+    return ""
 
 
 def main() -> int:
@@ -102,6 +126,20 @@ def main() -> int:
     if '"implemented()" is defined more than once' in text:
         failures.append("a single definition was reported as repeated")
 
+    # The list leads with a per-file tally: totals, then severities, then the
+    # files that hold them -- this is what says whether the scan found one thing
+    # in one file or forty across the tree.
+    header = header_row(screen)
+    if not header:
+        failures.append("the Problems list has no per-file header")
+    else:
+        if "2 findings in 2 files" not in header:
+            failures.append(f"the header miscounts the findings: {header.strip()!r}")
+        if "1 error, 1 warning" not in header:
+            failures.append(f"the header does not tally the severities: {header.strip()!r}")
+        if "shapes.h 1" not in header or "shapes.cpp 1" not in header:
+            failures.append(f"the header does not tally the files: {header.strip()!r}")
+
     # Scene 2: `:cppcheck` -- the on-demand path, which also announces what it
     # found (a toast: the statusline message channel is silent under the Lua UI
     # kit) and focuses the Problems list. The scan lands asynchronously, so the
@@ -120,6 +158,36 @@ def main() -> int:
         failures.append("the announced summary does not carry both counts and the file tally")
     if 'No definition found for "missing_body()"' not in text:
         failures.append(":cppcheck did not focus the Problems list on its findings")
+    # The command is also the way *to* a finding: with nothing open, the jump
+    # lands on the first one the walk would visit (the repeated body in
+    # shapes.cpp), the status line says where it went, and the list's marker
+    # follows so opening the panel lands on the same row.
+    status = next((line for line in text.split("\n") if "cpp @" in line), "")
+    if "shapes.cpp" not in status or "5:5" not in status:
+        failures.append(f":cppcheck did not land on the first finding: {status.strip()!r}")
+    marked = marked_row(screen)
+    if "defined more than once" not in marked:
+        failures.append(f"the list did not mark the finding that was jumped to: {marked.strip()!r}")
+
+    # Scene 3: the walk itself -- the startup scan has landed by now, so two
+    # `next`s (a separate command each, and the palette resumes its last query,
+    # so the box is cleared first) step from the placeholder to the first finding
+    # and then to the header's declaration. The status line is the editor's own;
+    # the panel rows name the same files, so only it can say where the caret
+    # went.
+    screen = run_in_pty(binary, [root], PALETTE, settle=5.0, after=0.5, cols=150,
+                        rows=34, cfg="/tmp/jot_cpp_defs_probe_cfg_walk", cwd="/tmp",
+                        phases=[(0.6, b"cppcheck next"), (0.6, ENTER),
+                                (0.6, PALETTE), (0.6, CLEAR_BOX),
+                                (0.6, b"cppcheck next"), (0.6, ENTER), (0.6, b"")])
+    if dump:
+        print(screen.text())
+        print("-" * 70)
+    text = screen.text()
+
+    status = next((line for line in text.split("\n") if "cpp @" in line), "")
+    if "shapes.h" not in status or "3:5" not in status:
+        failures.append(f":cppcheck next did not walk to the header's finding: {status.strip()!r}")
 
     if failures:
         for failure in failures:

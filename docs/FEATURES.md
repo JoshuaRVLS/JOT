@@ -288,9 +288,17 @@ Install helpers also cover Rust, Go, Lua, and Bash.
   warning, and a signature implemented more than once becomes an error (the
   linker's `multiple definition of f`).
 - Runs on the worker thread when a workspace is opened and after every save, or
-  on demand with `:cppcheck` -- which also focuses the Problems list and
-  announces what it counted. `:cppcheck on|off` and the `cpp_definitions`
-  setting turn the checks off; turning them off drops their rows again.
+  on demand with `:cppcheck` -- which also focuses the Problems list, announces
+  what it counted, and lands the caret on the next finding. `:cppcheck next` and
+  `:cppcheck prev` step through the findings from the caret, opening each file as
+  they go and wrapping at either end; issued while a scan is still running they
+  record the direction and walk the rows that scan lands with. `:cppcheck on|off`
+  and the `cpp_definitions` setting turn the checks off; turning them off drops
+  their rows again.
+- The Problems view leads with a header row: the total, the severity tally, and
+  how many findings each file holds (most-affected file first), truncated to the
+  panel's width. The findings start under it, and a press on the header is inert
+  rather than opening the row that would have been there without it.
 - Findings publish as diagnostics in the same per-file store the language
   servers feed, so the Problems dock, the explorer's per-file badges, the
   workspace diagnostics picker (`:diagnostics`), the inline decorations and the
@@ -330,6 +338,9 @@ Install helpers also cover Rust, Go, Lua, and Bash.
 - The Problems list keeps every row on the panel's own background, colouring
   only the text by severity; the selected row is marked with an accent sliver
   instead of a selection fill, so a highlighted row's message stays readable.
+  Its first row is a header -- how many findings, of which severities, and how
+  many each file holds -- and the findings start under it, so the row a click
+  opens is the row under the pointer.
 - The panel owns its own rows and nothing else. A press, a drag or the wheel
   anywhere else goes to what is under the pointer -- the buffer, the explorer,
   a dock -- so a click in the code brings focus and the keys back to editing
@@ -738,7 +749,7 @@ it -- the buffer stays fully visible while you type.
 `:colorscheme` `:zen` `:help`
 
 **Workspace:** `:find` / `:ff [dir]` `:mkfile` `:mkdir` `:rename` `:rm`
-`:cpppair` `:cppimpl` `:cppcheck [on|off]`
+`:cpppair` `:cppimpl` `:cppcheck [on|off|next|prev]`
 
 **Search & edit:** `:search` `:grep` `:diagnostics` `:diagnext` `:symbols`
 `:outline` `:line` `:goto` `:format` `:trim` `:upper` `:lower`

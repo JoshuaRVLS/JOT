@@ -464,6 +464,70 @@ TEST_CASE("Bottom panel: Problems navigation clamps to the list", "[jot]")
   REQUIRE(e.problems_selected_for_test() == 2);
 }
 
+TEST_CASE("Bottom panel: the list leads with a per-file header", "[jot]")
+{
+  seed_config_home();
+  // The C++ definition checks supply the findings: they live in their own store
+  // (opening a file does not clear them the way a server's slice is dropped when
+  // the file has no client), and they are workspace-wide, which is what the
+  // header tallies. Real files, so a click's cursor lands on the finding's line.
+  char dir[] = "/tmp/jot_bp_header_XXXXXX";
+  REQUIRE(mkdtemp(dir) != nullptr);
+  const std::string root = dir;
+  {
+    std::ofstream out(root + "/widget.hpp");
+    out << "#pragma once\nvoid reset();\nint missing();\n";
+  }
+  {
+    std::ofstream out(root + "/widget.cpp");
+    out << "#include \"widget.hpp\"\nvoid reset() {}\nint twice() { return 1; }\n";
+  }
+  {
+    std::ofstream out(root + "/other.cpp");
+    out << "int twice() { return 2; }\n";
+  }
+  Editor e;
+  e.set_home_menu_visible(false);
+  e.open_workspace(root, false);
+  e.run_cpp_definitions_scan_for_test();
+  e.show_problems_panel_for_test();
+  e.request_redraw_for_test();
+  e.render_for_test();
+
+  auto row_text = [&](int y)
+  {
+    UI *ui = e.ui_for_test();
+    std::string row;
+    for (int x = 0; x < e.ui_width_for_test(); x++)
+    {
+      const UICell *cell = ui->cell_at(x, y);
+      row += cell ? cell->ch : " ";
+    }
+    return row;
+  };
+
+  // The header names the totals, the severities and the per-file tally.
+  const int header_y = e.bottom_panel_content_y_for_test();
+  const std::string header = row_text(header_y);
+  REQUIRE(header.find("Problems") != std::string::npos);
+  REQUIRE(header.find("2 findings in 2 files") != std::string::npos);
+  REQUIRE(header.find("1 error, 1 warning") != std::string::npos);
+  REQUIRE(header.find("widget.cpp 1") != std::string::npos);
+  // The rows follow, one per finding, in the list's order (the error first).
+  REQUIRE(row_text(header_y + 1).find("defined more than once") != std::string::npos);
+  REQUIRE(row_text(header_y + 2).find("No definition found") != std::string::npos);
+
+  // The header is text, not a finding: a press on it opens nothing, while the
+  // rows below it open the file at the finding (the accept path names the file
+  // and the line in the message).
+  REQUIRE(e.bottom_panel_mouse_for_test(2, header_y + 2, true));
+  REQUIRE(e.message_for_test() == "widget.hpp:3");
+  REQUIRE(e.bottom_panel_mouse_for_test(2, header_y, true));
+  REQUIRE(e.message_for_test() == "widget.hpp:3");
+  REQUIRE(e.bottom_panel_mouse_for_test(2, header_y + 1, true));
+  REQUIRE(e.message_for_test() == "widget.cpp:3");
+}
+
 TEST_CASE("Bottom panel: the list owns the keyboard while focused", "[jot]")
 {
   seed_config_home();
@@ -541,9 +605,10 @@ TEST_CASE("Bottom panel: a press on a list row still opens the file", "[jot]")
   e.seed_lsp_diagnostic_for_test("cpp|/tmp/bp_rows", path, 1, 1, "only one");
   e.show_problems_panel_for_test();
 
-  // The list's own rows are still the list's: the row under the strip opens
-  // the file behind it, through the same accept path the picker uses.
-  REQUIRE(e.bottom_panel_mouse_for_test(2, e.bottom_panel_content_y_for_test(), true));
+  // The list's own rows are still the list's: the first finding under the
+  // header row opens the file behind it, through the same accept path the
+  // picker uses.
+  REQUIRE(e.bottom_panel_mouse_for_test(2, e.bottom_panel_content_y_for_test() + 1, true));
   REQUIRE(e.buffer_for_test().filepath == path);
   REQUIRE(e.focus_state_for_test() == (int)FOCUS_EDITOR);
 }
@@ -589,7 +654,8 @@ TEST_CASE("Bottom panel: the Problems list keeps its text on the panel backgroun
   UI *ui = e.ui_for_test();
   const Theme &th = e.theme_for_test();
   const int panel_w = e.terminal_panel_w_for_test();
-  const int first_row = e.bottom_panel_content_y_for_test();
+  // The findings start under the header row, which the tally owns.
+  const int first_row = e.bottom_panel_content_y_for_test() + 1;
 
   // Otherwise the check below could pass on a theme whose selection color is
   // the panel's own background.

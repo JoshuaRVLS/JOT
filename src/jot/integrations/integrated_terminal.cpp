@@ -1279,8 +1279,13 @@ bool Editor::handle_bottom_panel_mouse(int x, int y, bool is_click)
     // under a short list): inert, but it still takes focus.
     return true;
   }
+  // The list starts under the header row, which is text and not a finding: a
+  // press up there computes a negative index and falls out below. Same rule the
+  // renderer lays the rows out by, so a press and the row it opens cannot drift.
+  const int content_w = std::max(0, integrated_terminal_panel_w() - 2);
+  const int header_rows = problems_summary_header(content_w).empty() ? 0 : 1;
   const std::vector<QuickPickItem> items = workspace_diagnostic_quick_pick_items();
-  const int index = problems_scroll + (y - content_y);
+  const int index = problems_scroll + (y - content_y - header_rows);
   if (index < 0 || index >= (int)items.size())
   {
     return true;
@@ -1354,19 +1359,31 @@ void Editor::render_problems_view(int x, int w)
     return;
   }
 
+  // The header row names the tally -- totals, severities, then how many findings
+  // each file holds -- and the findings start under it, so everything below is
+  // shifted by the one row it costs.
+  const std::string header = problems_summary_header(content_w);
+  const int header_rows = header.empty() ? 0 : 1;
+  if (header_rows != 0)
+  {
+    ui->draw_text(content_x, content_y, header, theme.fg_comment, theme.bg_terminal);
+  }
+  const int list_y = content_y + header_rows;
+  const int list_h = std::max(0, content_h - header_rows);
+
   // Keep the cursor on a row that exists, and the list scrolled to it.
   problems_selected = std::clamp(problems_selected, 0, total - 1);
   if (problems_selected < problems_scroll)
   {
     problems_scroll = problems_selected;
   }
-  if (problems_selected >= problems_scroll + content_h)
+  if (problems_selected >= problems_scroll + list_h)
   {
-    problems_scroll = problems_selected - content_h + 1;
+    problems_scroll = problems_selected - list_h + 1;
   }
-  problems_scroll = std::clamp(problems_scroll, 0, std::max(0, total - content_h));
+  problems_scroll = std::clamp(problems_scroll, 0, std::max(0, total - list_h));
 
-  for (int row = 0; row < content_h; row++)
+  for (int row = 0; row < list_h; row++)
   {
     const int index = problems_scroll + row;
     if (index >= total)
@@ -1419,7 +1436,7 @@ void Editor::render_problems_view(int x, int w)
       message = message.substr(0, (size_t)text_w);
     }
 
-    const int row_y = content_y + row;
+    const int row_y = list_y + row;
     ui->draw_text(content_x,
                   row_y,
                   selected ? "▌" : " ",
