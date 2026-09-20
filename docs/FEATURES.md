@@ -730,9 +730,18 @@ applies and `Esc` closes. In the file finder, `Backspace` on an empty query
 walks up a folder, but it floors at the workspace the picker opened in -- the
 workspace is the folder root, and `:find src` scopes the picker to a subfolder
 of it instead of a second way out. The typed characters light up in each item's
-label (nvim-cmp's abbr-match highlight), and the selected item's remaining
-insert text previews dimmed at the caret as ghost text
-(`lsp_completion_ghost_text` to disable).
+label (nvim-cmp's abbr-match highlight). While the popup is up, the selected
+item's remaining insert text previews dimmed at the caret as ghost text
+(`lsp_completion_ghost_text` to disable), with three rules that keep it from
+being noise while typing: only an item whose insert text really starts with
+what has been typed previews at all (a row that matched by fuzzy subsequence,
+or one left over from the previous keystroke's response, previews nothing); only
+the pane that owns the popup paints it, so a split does not draw the same word
+twice; and it is painted only where the caret owns the rest of the row -- so it
+never lands after a closing bracket the editor auto-closed (`printf(|)`) or over
+a trailing `;`, where it would sit past a character accepting would insert
+before. Snippets preview their first line, since the rest cannot be drawn
+inline.
 
 ## Command reference
 

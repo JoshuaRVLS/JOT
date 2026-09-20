@@ -46,12 +46,17 @@ class Screen:
         # bg is so a probe can read *which* cells carry an underline -- the
         # Ctrl+hover affordance, for one, is only visible this way.
         self.underline = [[0] * cols for _ in range(rows)]
+        # Italic per cell: the completion ghost text is the only buffer-pane
+        # text the renderer draws italic, and it shares its colour with the
+        # inline diagnostics, so the style is what tells the two apart on a row.
+        self.italic = [[False] * cols for _ in range(rows)]
         # Every byte read after the child started, for the checks that are about
         # the escape stream itself rather than the reconstructed screen (e.g. a
         # colour the theme only emits as 38;2 rather than a palette index).
         self.raw = bytearray()
         self.cur_bg = -1
         self.cur_underline = 0
+        self.cur_italic = False
         self.x = 0
         self.y = 0
         # DECSC/DECRC (ESC 7 / ESC 8): the editor parks the cursor far away to
@@ -143,6 +148,7 @@ class Screen:
                 self.cells[self.y][self.x] = ch
                 self.bg[self.y][self.x] = self.cur_bg
                 self.underline[self.y][self.x] = self.cur_underline
+                self.italic[self.y][self.x] = self.cur_italic
             self.x += 1
             i += length
 
@@ -161,26 +167,35 @@ class Screen:
         # The underline is handled in this walk and not by scanning the groups,
         # because "24" is both underline-off and the blue channel of a
         # truecolour background -- the consumption below is what tells them
-        # apart (48;2;30;27;24 must not read as a reset).
+        # apart (48;2;30;27;24 must not read as a reset). The colour runs are
+        # consumed for both foreground and background for the same reason: a
+        # palette triple like 38;5;3 holds a "3" that is not italic-on.
         k = 0
         while k < len(args):
             a = args[k]
             if a == 0:
                 self.cur_bg = -1
                 self.cur_underline = 0
+                self.cur_italic = False
+            elif a == 3:
+                self.cur_italic = True
+            elif a == 23:
+                self.cur_italic = False
             elif a == 24:
                 self.cur_underline = 0
             elif a == 4:
                 self.cur_underline = 1
             elif a == 49:
                 self.cur_bg = -1
-            elif a == 48 and k + 2 < len(args) and args[k + 1] == 5:
-                self.cur_bg = args[k + 2]
+            elif a in (38, 48) and k + 2 < len(args) and args[k + 1] == 5:
+                if a == 48:
+                    self.cur_bg = args[k + 2]
                 k += 2
-            elif a == 48 and k + 4 < len(args) and args[k + 1] == 2:
+            elif a in (38, 48) and k + 4 < len(args) and args[k + 1] == 2:
                 # Truecolour: keep the channels, tagged so it cannot be mistaken
                 # for a palette index.
-                self.cur_bg = 1000 + ((args[k + 2] << 16) | (args[k + 3] << 8) | args[k + 4])
+                if a == 48:
+                    self.cur_bg = 1000 + ((args[k + 2] << 16) | (args[k + 3] << 8) | args[k + 4])
                 k += 4
             k += 1
 
@@ -206,27 +221,48 @@ class Screen:
                 self.cells = [[" "] * self.cols for _ in range(self.rows)]
                 self.bg = [[-1] * self.cols for _ in range(self.rows)]
                 self.underline = [[0] * self.cols for _ in range(self.rows)]
+                self.italic = [[False] * self.cols for _ in range(self.rows)]
             elif mode == 0:
                 for cx in range(self.x, self.cols):
                     self.cells[self.y][cx] = " "
                     self.bg[self.y][cx] = self.cur_bg
                     self.underline[self.y][cx] = self.cur_underline
+                    self.italic[self.y][cx] = self.cur_italic
                 for cy in range(self.y + 1, self.rows):
                     self.cells[cy] = [" "] * self.cols
                     self.bg[cy] = [-1] * self.cols
                     self.underline[cy] = [0] * self.cols
+                    self.italic[cy] = [False] * self.cols
         elif final == "K":
             mode = args[0] if args else 0
             if mode == 0:
                 for cx in range(self.x, self.cols):
                     self.cells[self.y][cx] = " "
                     self.bg[self.y][cx] = self.cur_bg
+                    self.italic[self.y][cx] = self.cur_italic
             elif mode == 2:
                 self.cells[self.y] = [" "] * self.cols
                 self.bg[self.y] = [-1] * self.cols
+                self.italic[self.y] = [False] * self.cols
 
     def text(self) -> str:
         return "\n".join("".join(row).rstrip() for row in self.cells)
+
+    def italic_runs(self, row: int):
+        """[(start_col, end_col, text), ...] for the italic cells of a row."""
+        runs = []
+        col = 0
+        while col < self.cols:
+            if not self.italic[row][col]:
+                col += 1
+                continue
+            start = col
+            text = ""
+            while col < self.cols and self.italic[row][col]:
+                text += self.cells[row][col]
+                col += 1
+            runs.append((start, col, text.rstrip()))
+        return runs
 
     def underline_runs(self, row: int):
         """[(start_col, end_col, text), ...] for the underlined cells of a row."""

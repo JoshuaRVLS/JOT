@@ -69,6 +69,7 @@ add_executable(jot_tests
   test_lua_markdown.cpp
   test_lua_snippet.cpp
   test_completion_matching.cpp
+  test_completion_ghost.cpp
   test_gui_fit.cpp
   test_resize_sync.cpp
   test_key_decode.cpp

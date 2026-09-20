@@ -96,6 +96,12 @@ private:
   // findings each file holds, truncated to the panel's width.
   std::string problems_summary_header(int max_width) const;
   void hide_lsp_completion();
+  // Records the site a completion belongs to -- the identifier token under the
+  // caret that accepting will replace, the path, and the prefix as typed so far.
+  // The request path calls this before asking the server, and the filter reads
+  // the same fields back on every keystroke, so what is filtered against is what
+  // the request was made with.
+  void arm_lsp_completion(const std::string &filepath, bool manual);
   bool refresh_lsp_completion_filter();
   void update_lsp_completion_ghost();
   bool apply_selected_lsp_completion();

@@ -273,29 +273,48 @@ namespace
     return s.substr(i);
   }
 
-  // nvim-cmp ghost text: the insert text minus the already-typed prefix.
-  // The prefix is dropped only when it actually leads the text (case-
-  // insensitive), so mismatched prefixes keep the full preview.
+  // nvim-cmp ghost text: the insert text minus the already-typed prefix, so the
+  // preview reads as the rest of the word being typed.
+  //
+  // The preview is only a preview of *this* item when its text really does start
+  // with the prefix (case-insensitive). An item that matched another way -- the
+  // fuzzy subsequence pass, or the rows of the previous keystroke's response
+  // while the next one is in flight -- would otherwise be drawn as the
+  // continuation of a word it does not continue: the whole insert text lands at
+  // the caret, right when the user is typing something the server has nothing
+  // for. So no prefix, or a prefix the text does not start with, means nothing to
+  // preview, and a prefix that is the whole text means nothing is left of it.
+  //
+  // Snippets preview as their expanded plain text, and only its first line: a
+  // body spanning lines cannot be shown inline at the caret, and the newline's
+  // control byte (and every line after it) would paint as garbage on the row.
   std::string ghost_text_for(const LSPCompletionItem &item, const std::string &prefix)
   {
+    if (prefix.empty())
+    {
+      return "";
+    }
     std::string text = item.insert_text.empty() ? item.label : item.insert_text;
     if (item.insert_text_format == 2) // snippet: preview the expanded plain text
     {
       text = expand_lsp_snippet(text).text;
     }
-    if (text.empty() || prefix.empty())
+    if (text.size() <= prefix.size())
     {
-      return text;
+      return "";
     }
-    size_t i = 0;
-    while (i < prefix.size() && i < text.size()
-           && fold_ascii_char(prefix[i]) == fold_ascii_char(text[i]))
+    for (size_t i = 0; i < prefix.size(); i++)
     {
-      i++;
+      if (fold_ascii_char(prefix[i]) != fold_ascii_char(text[i]))
+      {
+        return "";
+      }
     }
-    if (i == prefix.size())
+    text = utf8_drop_prefix(text, utf8_char_count(prefix));
+    const size_t first_newline = text.find('\n');
+    if (first_newline != std::string::npos)
     {
-      text = utf8_drop_prefix(text, utf8_char_count(prefix));
+      text.resize(first_newline);
     }
     return text;
   }
@@ -410,6 +429,16 @@ void Editor::update_lsp_completion_ghost()
   }
 }
 
+void Editor::arm_lsp_completion(const std::string &filepath, bool manual)
+{
+  auto &buf = get_buffer();
+  lsp_completion_anchor = buf.cursor;
+  lsp_completion_replace_start = current_completion_start(buf);
+  lsp_completion_filepath = filepath;
+  lsp_completion_prefix = completion_prefix_from(buf, lsp_completion_replace_start);
+  lsp_completion_manual_request = manual;
+}
+
 void Editor::request_lsp_completion(bool manual, char trigger_character)
 {
   auto &buf = get_buffer();
@@ -454,18 +483,13 @@ void Editor::request_lsp_completion(bool manual, char trigger_character)
     }
   }
 
-  Cursor replace_start = current_completion_start(buf);
   bool has_builtin_html = false;
 
   if (lsp_internal::is_html_filepath(buf.filepath))
   {
     lsp_completion_all_items.clear();
     lsp_internal::append_html_builtin_completions(lsp_completion_all_items);
-    lsp_completion_anchor = buf.cursor;
-    lsp_completion_replace_start = replace_start;
-    lsp_completion_filepath = buf.filepath;
-    lsp_completion_prefix = completion_prefix_from(buf, replace_start);
-    lsp_completion_manual_request = manual;
+    arm_lsp_completion(buf.filepath, manual);
     has_builtin_html = refresh_lsp_completion_filter();
     if (has_builtin_html)
     {
@@ -505,11 +529,7 @@ void Editor::request_lsp_completion(bool manual, char trigger_character)
 
   if (!has_builtin_html)
   {
-    lsp_completion_anchor = buf.cursor;
-    lsp_completion_replace_start = replace_start;
-    lsp_completion_filepath = buf.filepath;
-    lsp_completion_prefix = completion_prefix_from(buf, replace_start);
-    lsp_completion_manual_request = manual;
+    arm_lsp_completion(buf.filepath, manual);
   }
 }
 

@@ -1395,8 +1395,33 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
       // starting one cell right would leave a visible gap (`std::co| ut`);
       // the ghost hugs the caret cell instead. A block caret fills its
       // cell, so the ghost still starts right of it.
-      if (line_idx == buf.cursor.y && !lsp_completion_ghost_text.empty()
+      //
+      // It is only painted in the pane that owns the popup, and only where the
+      // caret owns the line's tail: everything from the caret to the end of the
+      // line has to be blank. The preview is the rest of the word being typed,
+      // and accepting it inserts that word at the caret -- so inside a call the
+      // editor auto-closed (`printf(|)`) the text under the caret is the `)`
+      // itself, and before a `;` it is the `;`. Drawing there put the completion
+      // after a character it would land before, which is what made the preview
+      // read as the editor having eaten the bracket. The completion session
+      // belongs to the focused pane (render_lsp_completion anchors the popup
+      // there), so a split showing the same row -- its own caret included --
+      // must not draw the same word again.
+      bool tail_is_blank = false;
+      if (pane.active && line_idx == buf.cursor.y && !lsp_completion_ghost_text.empty()
           && config.get_bool("lsp_completion_ghost_text", true))
+      {
+        tail_is_blank = true;
+        for (int i = std::clamp(buf.cursor.x, 0, (int)line.size()); i < (int)line.size(); i++)
+        {
+          if (line[(size_t)i] != ' ' && line[(size_t)i] != '\t')
+          {
+            tail_is_blank = false;
+            break;
+          }
+        }
+      }
+      if (tail_is_blank)
       {
         const int ghost_vis =
             compute_visual_column(line, buf.cursor.x, tab_size)

@@ -274,6 +274,28 @@ public:
                                     int line,
                                     int severity,
                                     const std::string &message);
+  // Seeds the completion popup the way a landed server response does: the site
+  // (token under the caret, prefix as typed) is recorded through the same
+  // arm_lsp_completion a request uses, and `items` are filtered through the same
+  // pass a keystroke runs. Returns whether anything is left to show. This is how
+  // a case about what the caret previews while typing reaches the code path
+  // without a server.
+  bool seed_lsp_completion_for_test(std::vector<LSPCompletionItem> items)
+  {
+    arm_lsp_completion(get_buffer().filepath, false);
+    lsp_completion_all_items = std::move(items);
+    return refresh_lsp_completion_filter();
+  }
+  // The preview the caret would paint: the selected item's insert text with the
+  // typed prefix taken off its front (see update_lsp_completion_ghost).
+  std::string lsp_completion_ghost_for_test() const
+  {
+    return lsp_completion_ghost_text;
+  }
+  std::string lsp_completion_prefix_for_test() const
+  {
+    return lsp_completion_prefix;
+  }
   std::vector<QuickPickItem> workspace_diagnostics_for_test() const
   {
     return workspace_diagnostic_quick_pick_items();

@@ -74,8 +74,10 @@ struct LspUiState
   // completion popup to pick per-server label presentation.
   std::string lsp_completion_server;
   std::string lsp_completion_prefix;
-  // nvim-cmp-style ghost text: the selected item's insert text minus the
-  // typed prefix, previewed dimmed at the cursor while the popup is open.
+  // nvim-cmp-style ghost text: the selected item's insert text minus the typed
+  // prefix, previewed dimmed at the cursor while the popup is open. Only the
+  // items that really continue what is typed produce one (ghost_text_for), and
+  // the painter only draws it where the caret owns the rest of the row.
   std::string lsp_completion_ghost_text;
   std::vector<LSPCompletionItem> lsp_completion_all_items;
   std::vector<LSPCompletionItem> lsp_completion_items;
