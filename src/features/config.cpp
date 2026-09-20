@@ -165,6 +165,10 @@ void Config::load_defaults()
   // count as defined when deciding (features/cpp_inactive.lua).
   settings["cpp_dim_inactive"] = "true";
   settings["cpp_defined_macros"] = "";
+  // Check the workspace's C++ for declarations with no implementation and
+  // signatures with more than one: a workspace scan per open and per save,
+  // published as diagnostics (features/cpp_definitions.*).
+  settings["cpp_definitions"] = "true";
   // jot's own theme (warm charcoal, amber keywords, teal functions) is what a
   // fresh install opens in; jot-light is the same ink on warm paper.
   settings["color_scheme"] = "jot-dark";

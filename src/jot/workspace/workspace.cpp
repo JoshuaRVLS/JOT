@@ -234,6 +234,11 @@ void Editor::open_workspace(const std::string &path, bool restore_session)
     set_message("Workspace: " + root_dir);
   }
   refresh_git_status(true);
+  // The C++ definition checks read the whole workspace, so a new root means a
+  // new scan (the previous workspace's diagnostics are dropped with the buffers
+  // above).
+  clear_cpp_definitions();
+  request_cpp_definitions_scan(false);
   needs_redraw = true;
   if (lua_api)
     lua_api->fire_autocmd("WorkspaceEnter", normalized, -1);

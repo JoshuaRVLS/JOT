@@ -278,6 +278,49 @@ public:
   {
     return workspace_diagnostic_quick_pick_items();
   }
+  // The C++ definition checks normally run on the worker thread; a case runs the
+  // same job on the calling thread and lands it through the same apply path, so
+  // what it asserts is what a real scan publishes.
+  void run_cpp_definitions_scan_for_test()
+  {
+    apply_cpp_definitions(CppDefinitions::scan_workspace(root_dir));
+  }
+  int cpp_definitions_missing_for_test() const
+  {
+    return cpp_defs_stats.missing;
+  }
+  int cpp_definitions_duplicates_for_test() const
+  {
+    return cpp_defs_stats.duplicates;
+  }
+  int cpp_definitions_files_for_test() const
+  {
+    return cpp_defs_stats.files_scanned;
+  }
+  std::string cpp_definitions_summary_for_test() const
+  {
+    return cpp_definitions_summary();
+  }
+  // What a file's diagnostics hold after the merge (LSP slices + the definition
+  // checks), read through the same store the gutter and the picker read.
+  std::size_t diagnostics_count_for_test(const std::string &path) const
+  {
+    std::error_code ec;
+    for (const auto &buf : buffers)
+    {
+      const bool same = buf.filepath == path
+                        || (!buf.filepath.empty() && !path.empty()
+                            && std::filesystem::exists(buf.filepath, ec)
+                            && std::filesystem::exists(path, ec)
+                            && std::filesystem::equivalent(buf.filepath, path, ec));
+      if (same)
+      {
+        return buf.diagnostics.size();
+      }
+    }
+    const auto it = cpp_def_diags.find(path);
+    return it == cpp_def_diags.end() ? 0 : it->second.size();
+  }
   // --- bottom panel: view switching and the Problems list (test) ---
   void set_bottom_panel_view_for_test(int view)
   {

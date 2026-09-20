@@ -133,6 +133,16 @@ void Editor::run()
 {
   task_queue_ = std::make_unique<TaskQueue>(&event_loop_);
 
+  // The workspace main() opens is opened before this queue exists, so its C++
+  // definition scan is still waiting to start (see app/cpp_definitions.cpp).
+  // Nothing else requests one at startup, so this is the first and last time
+  // the deferred flag has to be looked at here.
+  if (cpp_defs_scan_pending)
+  {
+    cpp_defs_scan_pending = false;
+    request_cpp_definitions_scan(false);
+  }
+
   event_loop_.prepare();
 
   // Re-probe terminal size immediately before the first frame. The size

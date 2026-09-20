@@ -799,6 +799,29 @@ bool Editor::execute_ex_command(const std::string &input_line)
       }
     }
   }
+  else if (lcmd == "cppcheck")
+  {
+    // The workspace-wide definition check, on demand: `on`/`off` also set the
+    // setting, anything else runs it now (and focuses the Problems list when it
+    // lands).
+    const std::string mode = to_lower_copy(trim_copy(arg));
+    if (mode == "on" || mode == "off")
+    {
+      config.set("cpp_definitions", mode == "on" ? "true" : "false");
+      config.save();
+      apply_config_live();
+      set_message(std::string("C++ definition checks ") + (mode == "on" ? "on" : "off"), true);
+    }
+    else if (!cpp_defs_enabled)
+    {
+      set_message("C++ definition checks are off (set cpp_definitions = true)", true);
+    }
+    else
+    {
+      request_cpp_definitions_scan(true);
+      set_message("Checking C++ definitions...", true);
+    }
+  }
   else if (lcmd == "mkdir")
   {
     if (arg.empty())

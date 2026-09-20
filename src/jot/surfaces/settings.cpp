@@ -60,6 +60,7 @@ const KnownSetting kKnownSettings[] = {
     {"decorations_inline_diagnostics", "Inline diagnostics", SettingsEntry::Type::Bool},
     {"diagnostics_virtual_text", "Diagnostic messages inline", SettingsEntry::Type::Bool},
     {"cpp_dim_inactive", "Dim inactive #ifdef branches", SettingsEntry::Type::Bool},
+    {"cpp_definitions", "C++ definition checks", SettingsEntry::Type::Bool},
     {"discord_rpc", "Discord presence", SettingsEntry::Type::Bool},
     {"discord_app_id", "Discord app id", SettingsEntry::Type::String},
     {"discord_details_editing", "Discord details (editing)", SettingsEntry::Type::String},

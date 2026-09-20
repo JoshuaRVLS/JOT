@@ -5,6 +5,7 @@ set(JOT_ENGINE_SOURCES
   jot/app/editor.cpp
   jot/app/auto_save.cpp
   jot/app/buffers.cpp
+  jot/app/cpp_definitions.cpp
   jot/app/file.cpp
   jot/app/fold_state.cpp
   jot/app/jumplist.cpp

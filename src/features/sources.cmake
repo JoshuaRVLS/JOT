@@ -10,6 +10,8 @@ set(JOT_FEATURES_SOURCES
   features/color_terminal_codes.cpp
   features/config.cpp
   features/cpp_assist.cpp
+  features/cpp_definitions.cpp
+  features/cpp_definitions_analysis.cpp
   features/folding.cpp
   features/text_features.cpp
   features/textobjects.cpp

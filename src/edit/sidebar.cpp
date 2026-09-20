@@ -410,28 +410,37 @@ void Editor::rebuild_sidebar_diagnostics_cache()
 
   // Numeric file badges count errors and warnings per file. The per-server
   // slices are the source refresh_lsp_diagnostics_for merges from, so open and
-  // unopened files are counted alike.
+  // unopened files are counted alike; the C++ definition checks publish in the
+  // same per-file shape and are counted with them.
+  auto tally_file = [&](const std::string &path, const std::vector<Diagnostic> &diagnostics)
+  {
+    const std::string normalized = normalize_sidebar_path(path);
+    if (normalized.empty())
+      return;
+    const auto row_it = sidebar_render_cache_.path_to_row.find(normalized);
+    if (row_it == sidebar_render_cache_.path_to_row.end())
+      return;
+    auto &row = sidebar_render_cache_.rows[(size_t)row_it->second];
+    if (row.is_dir)
+      return;
+    for (const auto &d : diagnostics)
+    {
+      if (d.severity == 1)
+        row.diagnostic_errors++;
+      else if (d.severity == 2)
+        row.diagnostic_warnings++;
+    }
+  };
   for (const auto &by_client : lsp_diag_slices_)
   {
     for (const auto &file_entry : by_client.second)
     {
-      const std::string normalized = normalize_sidebar_path(file_entry.first);
-      if (normalized.empty())
-        continue;
-      const auto row_it = sidebar_render_cache_.path_to_row.find(normalized);
-      if (row_it == sidebar_render_cache_.path_to_row.end())
-        continue;
-      auto &row = sidebar_render_cache_.rows[(size_t)row_it->second];
-      if (row.is_dir)
-        continue;
-      for (const auto &d : file_entry.second)
-      {
-        if (d.severity == 1)
-          row.diagnostic_errors++;
-        else if (d.severity == 2)
-          row.diagnostic_warnings++;
-      }
+      tally_file(file_entry.first, file_entry.second);
     }
+  }
+  for (const auto &file_entry : cpp_def_diags)
+  {
+    tally_file(file_entry.first, file_entry.second);
   }
 
   sidebar_render_cache_.diagnostics_dirty = false;

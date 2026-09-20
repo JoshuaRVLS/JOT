@@ -280,6 +280,36 @@ Default servers: `pylsp` (Python), `typescript-language-server --stdio`
 (JS/TS), `vscode-html-language-server --stdio` (HTML), `clangd` (C/C++).
 Install helpers also cover Rust, Go, Lua, and Bash.
 
+### C++ definition checks
+
+- A workspace-wide scan pairs every function declaration with its bodies, so
+  the two mistakes a compiler only reports at link time show up while editing:
+  a function declared in a header with no implementation anywhere becomes a
+  warning, and a signature implemented more than once becomes an error (the
+  linker's `multiple definition of f`).
+- Runs on the worker thread when a workspace is opened and after every save, or
+  on demand with `:cppcheck` -- which also focuses the Problems list and
+  announces what it counted. `:cppcheck on|off` and the `cpp_definitions`
+  setting turn the checks off; turning them off drops their rows again.
+- Findings publish as diagnostics in the same per-file store the language
+  servers feed, so the Problems dock, the explorer's per-file badges, the
+  workspace diagnostics picker (`:diagnostics`), the inline decorations and the
+  gutter all show them with no extra wiring. A declaration's row sits on the
+  declaration itself, so the header is where you fix it.
+- The rules are C++'s own: `= 0`, `= delete` and `= default` need no body, and
+  a class-body, `inline`, `constexpr`, template or `static`/anonymous-namespace
+  body is allowed to repeat (a `static` one is private to its file). The same
+  signature under two `#ifdef`/`#else` branches is an ordinary way to write one
+  implementation, so conditional bodies never count as duplicates of each
+  other. Files the build system chooses between by name -- `foo_win32.cpp` and
+  `foo_unix.cpp` -- are alternatives, not duplicates, and a body in a header
+  that is *not* inline is reported as a hint: the same link error, waiting for
+  its second translation unit.
+- What it deliberately does not do is type checking: return types are not part
+  of the match key (a wrong return type still counts as implementing the
+  declaration), and reachability -- whether the definition is seen where the
+  call is -- is left to clangd.
+
 ### Integrated terminal and tasks
 
 - A bottom terminal panel backed by a real PTY, with multiple tabs that stay
@@ -708,7 +738,7 @@ it -- the buffer stays fully visible while you type.
 `:colorscheme` `:zen` `:help`
 
 **Workspace:** `:find` / `:ff [dir]` `:mkfile` `:mkdir` `:rename` `:rm`
-`:cpppair` `:cppimpl`
+`:cpppair` `:cppimpl` `:cppcheck [on|off]`
 
 **Search & edit:** `:search` `:grep` `:diagnostics` `:diagnext` `:symbols`
 `:outline` `:line` `:goto` `:format` `:trim` `:upper` `:lower`
@@ -787,7 +817,8 @@ Built-in defaults include `explorer_width=25`, `minimap_width=15`,
 `tab_size=2`, `show_line_numbers=true`, `relative_line_numbers=true`,
 `cursor_style=block`, `cursor_blink_ms=500`, `render_fps=120`, `idle_fps=60`,
 `auto_save=false`, `auto_save_interval_ms=2000`, `lsp_change_debounce_ms=120`,
-`lsp_inlay_hints=true`, `lsp_inlay_type_hints=true`, `terminal_height=10`, and
+`lsp_inlay_hints=true`, `lsp_inlay_type_hints=true`, `cpp_definitions=true`
+(the C++ declaration/definition checks), `terminal_height=10`, and
 `debugger_height=12`. The colour preview adds `colorizer=true`,
 `colorizer_mode=background`, `colorizer_hex=true`, `colorizer_hex_alpha=false`,
 `colorizer_hex_qml=false`, `colorizer_hex_no_hash=false`,

@@ -137,6 +137,7 @@ namespace CommandLineUtils
                                                       "rm",
                                                       "cppimpl",
                                                       "cpppair",
+                                                      "cppcheck",
                                                       "format",
                                                       "trim",
                                                       "upper",
@@ -288,7 +289,8 @@ namespace CommandLineUtils
            || lc == "searchall" || lc == "debug" || lc == "debuggdb" || lc == "debuglldb"
            || lc == "debugconfig" || lc == "debugattach" || lc == "debugmemory"
            || lc == "debugdisasm" || lc == "mkfile" || lc == "mkdir" || lc == "rename" || lc == "rm"
-           || lc == "cppimpl" || lc == "cpppair" || lc == "tsinstall" || lc == "treesitterinstall"
+           || lc == "cppimpl" || lc == "cpppair" || lc == "cppcheck" || lc == "tsinstall"
+           || lc == "treesitterinstall"
            || lc == "replace" || lc == "replacei" || lc == "replaceword" || lc == "replacere"
            || lc == "surround";
   }

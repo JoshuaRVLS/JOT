@@ -1,5 +1,6 @@
-// Editor-side LSP diagnostics: merging per-server slices into per-buffer
-// diagnostics and dropping a server's contributions when it goes away.
+// Editor-side diagnostics: merging per-server slices -- and the C++ definition
+// checks, which publish in the same per-file shape -- into per-buffer
+// diagnostics, and dropping a server's contributions when it goes away.
 #include "editor.h"
 #include "jot/integrations/lsp/common.h"
 #include <string>
@@ -21,6 +22,18 @@ void Editor::refresh_lsp_diagnostics_for(const std::string &filepath)
       continue;
     }
     for (const auto &diag : it->second)
+    {
+      merged.push_back(diag);
+    }
+  }
+  // The C++ definition checks are not a language server, but their rows live in
+  // the same list: a declaration with no body is as real a diagnostic as a
+  // compiler's, and the Problems list, the explorer's badges and the gutter all
+  // read this one merge.
+  const auto cpp = cpp_def_diags.find(filepath);
+  if (cpp != cpp_def_diags.end())
+  {
+    for (const auto &diag : cpp->second)
     {
       merged.push_back(diag);
     }

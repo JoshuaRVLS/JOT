@@ -785,48 +785,56 @@ void Editor::show_workspace_diagnostics_picker()
 
 std::vector<Editor::QuickPickItem> Editor::workspace_diagnostic_quick_pick_items() const
 {
-  // Straight from the per-server diagnostics store rather than from the open
-  // buffers: a workspace view is supposed to include the files the servers have
-  // reported on, whether or not they are open right now.
+  // Straight from the diagnostics stores rather than from the open buffers: a
+  // workspace view is supposed to include the files the servers (and the C++
+  // definition checks, which publish in the same per-file shape) have reported
+  // on, whether or not they are open right now.
   std::vector<QuickPickItem> items;
   std::set<std::string> seen;
+  auto push_file = [&](const std::string &path, const std::vector<Diagnostic> &diagnostics)
+  {
+    for (const auto &diag : diagnostics)
+    {
+      // Two servers can report the same problem for one file; the key is the
+      // whole visible row.
+      const std::string key = path + "|" + std::to_string(diag.line) + "|"
+                              + std::to_string(diag.col) + "|" + std::to_string(diag.severity)
+                              + "|" + diag.message;
+      if (!seen.insert(key).second)
+      {
+        continue;
+      }
+      QuickPickItem item;
+      item.filepath = path;
+      item.line = std::max(0, diag.line);
+      item.col = std::max(0, diag.col);
+      item.severity = diag.severity;
+      item.label = diagnostic_label(diag.severity) + ": " + diag.message;
+      item.detail = fs::path(path).filename().string() + ":" + std::to_string(item.line + 1) + ":"
+                    + std::to_string(item.col + 1);
+      // The source line for an open buffer; a closed file would mean reading it
+      // from disk on every item, so those rows go without a preview.
+      for (const auto &buf : buffers)
+      {
+        if (same_path(buf.filepath, path) && item.line < (int)buf.line_count())
+        {
+          item.preview = trim_preview(buf.line(item.line));
+          break;
+        }
+      }
+      items.push_back(std::move(item));
+    }
+  };
   for (const auto &by_client : lsp_diag_slices_)
   {
     for (const auto &file_entry : by_client.second)
     {
-      const std::string &path = file_entry.first;
-      for (const auto &diag : file_entry.second)
-      {
-        // Two servers can report the same problem for one file; the key is the
-        // whole visible row.
-        const std::string key = path + "|" + std::to_string(diag.line) + "|"
-                                + std::to_string(diag.col) + "|" + std::to_string(diag.severity)
-                                + "|" + diag.message;
-        if (!seen.insert(key).second)
-        {
-          continue;
-        }
-        QuickPickItem item;
-        item.filepath = path;
-        item.line = std::max(0, diag.line);
-        item.col = std::max(0, diag.col);
-        item.severity = diag.severity;
-        item.label = diagnostic_label(diag.severity) + ": " + diag.message;
-        item.detail = fs::path(path).filename().string() + ":" + std::to_string(item.line + 1) + ":"
-                      + std::to_string(item.col + 1);
-        // The source line for an open buffer; a closed file would mean reading it
-        // from disk on every item, so those rows go without a preview.
-        for (const auto &buf : buffers)
-        {
-          if (same_path(buf.filepath, path) && item.line < (int)buf.line_count())
-          {
-            item.preview = trim_preview(buf.line(item.line));
-            break;
-          }
-        }
-        items.push_back(std::move(item));
-      }
+      push_file(file_entry.first, file_entry.second);
     }
+  }
+  for (const auto &file_entry : cpp_def_diags)
+  {
+    push_file(file_entry.first, file_entry.second);
   }
   std::stable_sort(items.begin(),
                    items.end(),

@@ -118,6 +118,23 @@ void Editor::apply_config_live()
   debugger_panel_height = std::clamp(config.get_int("debugger_height", 12), 6, 24);
   right_panel_width = std::clamp(config.get_int("right_panel_width", 42), 28, 80);
   image_viewer.configure_backend(config.get("image_viewer_backend", "auto"));
+  // The C++ definition checks: turning them off drops the diagnostics they had
+  // published, turning them back on re-checks the workspace.
+  {
+    const bool cpp_defs_wanted = config.get_bool("cpp_definitions", true);
+    if (cpp_defs_wanted != cpp_defs_enabled)
+    {
+      cpp_defs_enabled = cpp_defs_wanted;
+      if (cpp_defs_enabled)
+      {
+        request_cpp_definitions_scan(false);
+      }
+      else
+      {
+        clear_cpp_definitions();
+      }
+    }
+  }
 #ifdef JOT_GUI
   // The GUI font family is reconciled here so every path that writes the
   // setting takes effect the same way: the settings menu, :font, a Lua

@@ -804,6 +804,7 @@ bool Editor::save_buffer_at(int index, bool announce)
             notify_lsp_save(b.filepath);
           }
           refresh_git_status(true);
+          request_cpp_definitions_scan(false);
         });
     buf.modified = false;
     buf.is_placeholder = false;
@@ -850,6 +851,10 @@ bool Editor::save_buffer_at(int index, bool announce)
     notify_lsp_save(buf.filepath);
   }
   refresh_git_status(true);
+  // A save is exactly when a declaration and its definition can fall out of
+  // step, so the workspace is re-checked (coalesced: a scan already running just
+  // marks another as wanted).
+  request_cpp_definitions_scan(false);
   return true;
 }
 void Editor::save_file_as()

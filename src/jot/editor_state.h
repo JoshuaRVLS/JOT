@@ -19,6 +19,7 @@
 //   state/panel_state.h       bottom/right docks, minimap, terminal selection
 //   state/surface_state.h     palette, pickers, prompts, menus, popup
 //   state/lsp_state.h         clients, diagnostics, completion/hover/inlay
+//   state/cpp_defs_state.h    the C++ definition checks and their diagnostics
 //   state/input_state.h       mouse selection, click/hover, keystroke bookkeeping
 //   state/view_state.h        layout metrics, theme, paint caches, message line
 //   state/navigation_state.h  jump history and the armed jump
@@ -27,6 +28,7 @@
 // New code that needs one slice is encouraged to include that header directly
 // (the groups are independent: no group includes another).
 
+#include "jot/state/cpp_defs_state.h"
 #include "jot/state/engine_state.h"
 #include "jot/state/input_state.h"
 #include "jot/state/lsp_state.h"
@@ -39,7 +41,8 @@
 #include "jot/state/winbar_state.h"
 #include "jot/state/workspace_state.h"
 
-struct EditorState : EngineState,
+struct EditorState : CppDefsState,
+                     EngineState,
                      InputState,
                      LspUiState,
                      NavigationState,

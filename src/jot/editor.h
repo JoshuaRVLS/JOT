@@ -13,6 +13,7 @@
 //   api/paint.h          render entry points, GUI per-pane scratch
 //   api/runtime.h        smooth scroll, timers/pollers, LSP lifecycle
 //   api/lsp_ui.h         pickers, completion/signature/hover, navigation
+//   api/cpp.h            the C++ definition checks (`:cppcheck`)
 //   api/editing.h        syntax/decorations, input dispatch, edit commands
 //   api/public_api.h     the public command surface
 //   api/explorer.h       file tree, sidebar caches and resize
@@ -329,6 +330,7 @@ private:
 
 #include "jot/editor/api/paint.h"
 #include "jot/editor/api/runtime.h"
+#include "jot/editor/api/cpp.h"
 #include "jot/editor/api/lsp_ui.h"
 #include "jot/editor/api/editing.h"
 

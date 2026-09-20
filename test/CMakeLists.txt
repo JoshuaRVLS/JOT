@@ -5,6 +5,7 @@ add_executable(jot_tests
   test_fold_click.cpp
   test_features.cpp
   test_cpp_assist.cpp
+  test_cpp_definitions.cpp
   test_cursor.cpp
   test_cursor_blink.cpp
   test_cursor_blink_wiring.cpp
