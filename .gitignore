@@ -50,6 +50,7 @@ PLANS.md
 .cursor/
 .gemini/
 .copilot/
+.commandcode/
 
 # Temp
 tmp/
