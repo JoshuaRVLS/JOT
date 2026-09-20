@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
-"""End-to-end check: where the inline completion preview is allowed to paint.
+"""End-to-end check: when the inline completion preview is allowed to paint.
 
 The ghost text previews the selected completion's remaining insert text at the
-caret. It is an inline completion *of what is being typed*, so it only belongs
-where the caret can own the rest of the row. Inside a call the editor
-auto-closed (`printf(|)`) the preview was painted past the `)`, which splits the
-preview from the text it completes -- and when the tail is a bracket or a `;`,
-the preview reads as the editor having covered it.
+caret. It is a preview of *the word being typed*, so it only belongs where the
+caret owns the rest of the row, on a row whose word really continues into the
+selected item, and after the typing has paused.
 
-Two scenes, one per side of the rule, driven against a real clangd:
+Four scenes, one per rule, driven against a real clangd:
 
   * `printf(p);` with the caret between the typed text and the `)`: the bracket
     owns the rest of the row, so nothing may be painted there. The completion
     popup is asserted to be up for the same typed prefix, so the case cannot
     pass by the preview never having existed.
   * `w.` at the end of a line, where `wi` completes to the member `width`: the
-    caret owns the row's tail, so the preview belongs there. (Two characters:
-    one after a `.` is below the automatic trigger's minimum prefix, so the
-    member list is only asked for once the word is really under way.)
+    caret owns the row's tail and the typing has stopped, so the preview belongs
+    there -- and it can only appear if the frame that ends the typing pause was
+    asked for, since nothing is typed after the two characters.
+  * `wih` at the same site, one character of typing after the popup has settled
+    on `wi`: the popup goes away as soon as the word stops leading into what the
+    server answered (the `width` row is still in hand, and no response has
+    arrived for `wih`), and the preview goes with it -- the probe reads the whole
+    run's timeline of italic runs, so a preview that only survived a frame or two
+    would still be caught.
+  * `wi` with `lsp_completion_ghost_delay_ms` set to five seconds: the popup
+    lists `width` and the row is left alone, which is the pause the preview
+    waits for.
 
 The preview is the row's italic run. The buffer painter draws it italic (the
 inlay hints are the only other italic text), which is what tells it apart from
@@ -38,9 +45,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pty_screen import run_in_pty  # noqa: E402
 
-# The two sites sit a few rows into the pane: the signature and completion
-# popups hang above the caret, and a caret near the pane's top gets a popup
-# clamped down over its own row, which would hide the very cells under test.
+# The sites sit a few rows into the pane: the signature and completion popups
+# hang above the caret, and a caret near the pane's top gets a popup clamped
+# down over its own row, which would hide the very cells under test.
 SOURCE = """#include <cstdio>
 
 struct Widget { int width; };
@@ -68,9 +75,17 @@ POPUP_FOOTER = re.compile(r"\d+/\d+")
 
 CFG_PARENS = "/tmp/jot_completion_ghost_cfg_parens"
 CFG_EOL = "/tmp/jot_completion_ghost_cfg_eol"
+CFG_TYPED = "/tmp/jot_completion_ghost_cfg_typed"
+CFG_SLOW = "/tmp/jot_completion_ghost_cfg_slow"
+
+# The wait the preview does (lsp_completion_ghost_delay_ms), and how long this
+# probe drains after the keystrokes. The slow scene's drain has to end well
+# inside the wait for its case to mean anything.
+PAUSE_MS = 5000
+PAUSE_DRAIN = 2.0
 
 
-def seed_config(cfg: str) -> None:
+def seed_config(cfg: str, extra: dict | None = None) -> None:
     """Takes the end-of-line diagnostic message off the row under test.
 
     It is painted from the end of the line, which is exactly where a spilled
@@ -86,6 +101,8 @@ def seed_config(cfg: str) -> None:
     # than into the fallback path next to it.
     with open(os.path.join(cfg, "configs", "settings.conf"), "w") as fh:
         fh.write("diagnostics_virtual_text = false\n")
+        for key, value in (extra or {}).items():
+            fh.write(f"{key} = {value}\n")
 
 
 def rows(screen):
@@ -109,6 +126,17 @@ def ghost_runs(screen):
     return runs
 
 
+def popup_for(screen, prefix: str):
+    """The popup's footer rows on screen for `prefix`: [(row, text), ...].
+
+    The footer reads `1/5  pri` -- the selected index over the listed total,
+    then the prefix being filtered on -- so seeing the typed word there is what
+    says the popup is (still) up for it.
+    """
+    return [(row, text) for row, text in enumerate(rows(screen))
+            if POPUP_FOOTER.search(text) and prefix in text]
+
+
 def main() -> int:
     binary = sys.argv[1] if len(sys.argv) > 1 else "build/apps/jot/jot"
     if not os.path.exists(binary):
@@ -123,8 +151,10 @@ def main() -> int:
     path = os.path.join(work, "probe.cpp")
     with open(path, "w") as fh:
         fh.write(SOURCE)
-    for cfg in (CFG_PARENS, CFG_EOL):
-        seed_config(cfg)
+    seed_config(CFG_PARENS)
+    seed_config(CFG_EOL)
+    seed_config(CFG_TYPED)
+    seed_config(CFG_SLOW, {"lsp_completion_ghost_delay_ms": str(PAUSE_MS)})
 
     dump = bool(os.environ.get("JOT_PROBE_DUMP"))
     failures: list[str] = []
@@ -156,9 +186,7 @@ def main() -> int:
         # Non-vacuity: the popup lists something for this prefix, so a preview
         # exists to be suppressed. Without this the case would pass even if the
         # completion had stopped working entirely.
-        listed = any(POPUP_FOOTER.search(text) and "prin" in text
-                     for other, text in enumerate(rows(screen)) if other != row)
-        if not listed:
+        if not popup_for(screen, "prin"):
             failures.append("the popup never listed anything for the typed prefix")
         # The bracket owns everything past the caret, so nothing may preview
         # there. Italic text *inside* the call would be the inlay hint clangd
@@ -171,8 +199,9 @@ def main() -> int:
 
     # Scene 2: the same completion kind at the end of a row, where the preview
     # has the rest of it to itself. One Up from the last line reaches `w.`, End
-    # puts the caret after it, and `wi` asks for the member `width`, previewed
-    # as `dth`.
+    # puts the caret after it, and `wi` asks for the member `width`, previewed as
+    # `dth`. Nothing is typed after those two characters, so the preview landing
+    # at all means the frame that ends the typing pause was asked for.
     screen = run_in_pty(binary,
                         [path],
                         END_OF_FILE + UP + END + b"wi",
@@ -199,6 +228,78 @@ def main() -> int:
                 f"the preview was painted on a row other than the text it completes: {line.strip()!r}")
         if text != "dth":
             failures.append(f"the preview is not the completion's remainder: {text!r}")
+
+    # Scene 3: typing on past what the server answered. The phases are what make
+    # this the real case: `wi` is left to settle so its response (the member
+    # `width`) is in hand *and* the row is listed, then `h` takes the word to
+    # `wih` -- which `width` does not lead into, while still being a subsequence
+    # of it (h is in the middle), the shape that a fuzzy pass keeps and that used
+    # to preview the whole identifier for the frame or two before the response for
+    # the new word arrives. So the row has to go on the keystroke, and the
+    # timeline of inset screens is what can see a preview that only lasted a
+    # frame: `italic_log` collects every italic run the screen carried.
+    screen = run_in_pty(binary,
+                        [path],
+                        END_OF_FILE + UP + END + b"wi",
+                        settle=6.0,
+                        after=1.5,
+                        cols=120,
+                        rows=34,
+                        cfg=CFG_TYPED,
+                        cwd="/tmp",
+                        phases=[(1.5, b"h")])
+    if dump:
+        print(screen.text())
+        print("-" * 70)
+
+    if find_row(screen, "w.wih") < 0:
+        failures.append("the typed characters never reached the member site")
+    stale = popup_for(screen, "wih")
+    if stale:
+        failures.append(f"the popup outlived the word it answered: {stale!r}")
+    if ghost_runs(screen):
+        failures.append(f"a preview was painted for a word nothing completes: "
+                        f"{ghost_runs(screen)!r}")
+    if dump:
+        print("italic log:", screen.italic_log)
+    # The whole identifier is never the remainder of a typed prefix (with nothing
+    # typed there is no preview at all), so seeing it as an italic run anywhere in
+    # the timeline is the flash this rule removes.
+    flashed = [(row, text) for row, text in screen.italic_log if text == "width"]
+    if flashed:
+        failures.append(f"the whole identifier was previewed while typing: {flashed!r}")
+
+    # Scene 4: the pause itself. The same `wi` as scene 2, with the wait long
+    # enough to outlast this probe's drain: the popup answers (the member is
+    # listed) and the row is left alone, because the typing has not paused yet.
+    screen = run_in_pty(binary,
+                        [path],
+                        END_OF_FILE + UP + END + b"wi",
+                        settle=6.0,
+                        after=PAUSE_DRAIN,
+                        cols=120,
+                        rows=34,
+                        cfg=CFG_SLOW,
+                        cwd="/tmp")
+    if dump:
+        print(screen.text())
+        print("-" * 70)
+
+    row = find_row(screen, "w.wi")
+    if row < 0:
+        failures.append("the typed characters never reached the member site")
+    else:
+        line = rows(screen)[row].rstrip()
+        # The preview of `width` is its remainder, so its absence is what the
+        # wait means -- and the popup below is what says there was one to draw.
+        if "dth" in line:
+            failures.append(f"the preview was painted before the typing paused: "
+                            f"{line.strip()!r}")
+        if not popup_for(screen, "wi"):
+            failures.append("the popup never listed the member, so the wait was vacuous")
+    if ghost_runs(screen):
+        failures.append(f"a preview was painted before the typing paused: "
+                        f"{ghost_runs(screen)!r}")
 
     if failures:
         for failure in failures:

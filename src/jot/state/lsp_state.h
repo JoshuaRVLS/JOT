@@ -76,9 +76,17 @@ struct LspUiState
   std::string lsp_completion_prefix;
   // nvim-cmp-style ghost text: the selected item's insert text minus the typed
   // prefix, previewed dimmed at the cursor while the popup is open. Only the
-  // items that really continue what is typed produce one (ghost_text_for), and
-  // the painter only draws it where the caret owns the rest of the row.
+  // items that really continue what is typed produce one (ghost_text_for), the
+  // painter only draws it where the caret owns the rest of the row, and only once
+  // the typing has paused (lsp_completion_typing_ms, below).
   std::string lsp_completion_ghost_text;
+  // Steady-clock ms of the last keystroke that changed the word being completed:
+  // the preview lands `lsp_completion_ghost_delay_ms` after it, so it never
+  // flickers along with the typing that keeps resetting it. The frame loop
+  // carries the other half of that -- whether the last frame withheld it -- so
+  // that the frame which reveals it is asked for (preview_due_soon).
+  long long lsp_completion_typing_ms = 0;
+  bool lsp_completion_preview_was_withheld = false;
   std::vector<LSPCompletionItem> lsp_completion_all_items;
   std::vector<LSPCompletionItem> lsp_completion_items;
 

@@ -87,6 +87,7 @@ const KnownSetting kKnownSettings[] = {
     {"idle_fps", "Idle FPS", SettingsEntry::Type::Int},
     {"image_viewer_backend", "Image viewer backend", SettingsEntry::Type::String},
     {"lsp_change_debounce_ms", "LSP change debounce (ms)", SettingsEntry::Type::Int},
+    {"lsp_completion_ghost_delay_ms", "LSP ghost text delay (ms)", SettingsEntry::Type::Int},
     {"lsp_completion_ghost_text", "LSP ghost text", SettingsEntry::Type::Bool},
     {"lsp_completion_max_items", "LSP completion max items", SettingsEntry::Type::Int},
     {"lsp_completion_nerd_icons", "LSP completion icons", SettingsEntry::Type::Bool},

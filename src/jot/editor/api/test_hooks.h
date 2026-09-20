@@ -296,6 +296,28 @@ public:
   {
     return lsp_completion_prefix;
   }
+  bool lsp_completion_visible_for_test() const
+  {
+    return lsp_completion_visible;
+  }
+  // What the insert path does on every keystroke before the frame paints: the
+  // held items are filtered against the word the caret now sits in.
+  void refresh_lsp_completion_for_test()
+  {
+    refresh_lsp_completion_filter();
+  }
+  // The preview is there but the typing has not paused yet, so the painter is
+  // leaving the caret's row alone until the clock passes the delay.
+  bool lsp_completion_preview_withheld_for_test() const
+  {
+    return lsp_completion_preview_withheld();
+  }
+  // Ages that clock by `ms`, the way a pause would -- the preview lands once it
+  // is older than `lsp_completion_ghost_delay_ms`.
+  void age_lsp_completion_typing_for_test(int ms)
+  {
+    lsp_completion_typing_ms -= ms;
+  }
   std::vector<QuickPickItem> workspace_diagnostics_for_test() const
   {
     return workspace_diagnostic_quick_pick_items();

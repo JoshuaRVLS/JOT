@@ -730,13 +730,20 @@ applies and `Esc` closes. In the file finder, `Backspace` on an empty query
 walks up a folder, but it floors at the workspace the picker opened in -- the
 workspace is the folder root, and `:find src` scopes the picker to a subfolder
 of it instead of a second way out. The typed characters light up in each item's
-label (nvim-cmp's abbr-match highlight). While the popup is up, the selected
-item's remaining insert text previews dimmed at the caret as ghost text
-(`lsp_completion_ghost_text` to disable), with three rules that keep it from
-being noise while typing: only an item whose insert text really starts with
-what has been typed previews at all (a row that matched by fuzzy subsequence,
-or one left over from the previous keystroke's response, previews nothing); only
-the pane that owns the popup paints it, so a split does not draw the same word
+label (nvim-cmp's abbr-match highlight). The popup lists only the items the
+typed word leads into (filter text, else insert text, else label -- nvim-cmp's
+order); the server answers fuzzily on its own, and the previous keystroke's rows
+are still in hand while the next request is in flight, so without that rule the
+list carries identifiers the word has nothing to do with, and a word neither the
+server nor the held rows lead into shows no popup at all. While the popup is up,
+the selected item's remaining insert text previews dimmed at the caret as ghost
+text (`lsp_completion_ghost_text` to disable), which waits
+`lsp_completion_ghost_delay_ms` (default 150, 0 for at once) after the last
+keystroke that changed the word: a preview that redrew with every keystroke is a
+flicker, and the wait costs one frame at the pause, not a repaint per frame
+while typing. Three rules keep it from being noise on top of that: only an item
+whose insert text really continues the typed word previews anything; only the
+pane that owns the popup paints it, so a split does not draw the same word
 twice; and it is painted only where the caret owns the rest of the row -- so it
 never lands after a closing bracket the editor auto-closed (`printf(|)`) or over
 a trailing `;`, where it would sit past a character accepting would insert

@@ -47,21 +47,45 @@ namespace
     return line.substr((size_t)prefix_start, (size_t)(cursor - prefix_start));
   }
 
-  bool is_subsequence_case_insensitive(const std::string &needle, const std::string &haystack)
+  char fold_ascii_char(char c)
   {
-    if (needle.empty())
+    return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
+  }
+
+  // The string the typed word is matched against, in nvim-cmp's order: the text
+  // the server asked to be filtered on, else what accepting would insert, else
+  // the label.
+  const std::string &completion_match_text(const LSPCompletionItem &item)
+  {
+    if (!item.filter_text.empty())
     {
-      return true;
+      return item.filter_text;
     }
-    size_t j = 0;
-    for (size_t i = 0; i < haystack.size() && j < needle.size(); i++)
+    if (!item.insert_text.empty())
     {
-      if (std::tolower((unsigned char)haystack[i]) == std::tolower((unsigned char)needle[j]))
+      return item.insert_text;
+    }
+    return item.label;
+  }
+
+  // Whether `text` leads with `prefix`, case-insensitively -- the one test a
+  // typed word has to pass for an item to be a completion *of that word*. The
+  // list and the preview read it the same way: what is listed is what could be
+  // typed to its end, and what is previewed is the rest of it.
+  bool text_leads_with(const std::string &text, const std::string &prefix)
+  {
+    if (prefix.size() > text.size())
+    {
+      return false;
+    }
+    for (size_t i = 0; i < prefix.size(); i++)
+    {
+      if (fold_ascii_char(prefix[i]) != fold_ascii_char(text[i]))
       {
-        j++;
+        return false;
       }
     }
-    return j == needle.size();
+    return true;
   }
 
   int completion_match_score(const std::string &query, const LSPCompletionItem &item)
@@ -70,8 +94,7 @@ namespace
 
     const std::string q = lsp_internal::to_lower_copy(query);
     const std::string label = lsp_internal::to_lower_copy(item.label);
-    const std::string filter =
-        lsp_internal::to_lower_copy(item.filter_text.empty() ? item.label : item.filter_text);
+    const std::string filter = lsp_internal::to_lower_copy(completion_match_text(item));
     const std::string insert = lsp_internal::to_lower_copy(item.insert_text);
 
     if (!query.empty())
@@ -80,25 +103,9 @@ namespace
       {
         score = 10000;
       }
-      else if (label.rfind(q, 0) == 0 || filter.rfind(q, 0) == 0 || insert.rfind(q, 0) == 0)
+      else if (text_leads_with(completion_match_text(item), query))
       {
         score = 7000 - (int)label.size();
-      }
-      else
-      {
-        size_t label_pos = label.find(q);
-        size_t filter_pos = filter.find(q);
-        size_t insert_pos = insert.find(q);
-        size_t best_pos = std::min(label_pos, std::min(filter_pos, insert_pos));
-        if (best_pos != std::string::npos)
-        {
-          score = 4000 - (int)best_pos;
-        }
-        else if (is_subsequence_case_insensitive(q, label)
-                 || is_subsequence_case_insensitive(q, filter))
-        {
-          score = 1500;
-        }
       }
     }
     if (score <= 0)
@@ -240,11 +247,6 @@ namespace
     return expansion;
   }
 
-  char fold_ascii_char(char c)
-  {
-    return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
-  }
-
   size_t utf8_char_count(const std::string &s)
   {
     size_t n = 0;
@@ -276,14 +278,13 @@ namespace
   // nvim-cmp ghost text: the insert text minus the already-typed prefix, so the
   // preview reads as the rest of the word being typed.
   //
-  // The preview is only a preview of *this* item when its text really does start
-  // with the prefix (case-insensitive). An item that matched another way -- the
-  // fuzzy subsequence pass, or the rows of the previous keystroke's response
-  // while the next one is in flight -- would otherwise be drawn as the
-  // continuation of a word it does not continue: the whole insert text lands at
-  // the caret, right when the user is typing something the server has nothing
-  // for. So no prefix, or a prefix the text does not start with, means nothing to
-  // preview, and a prefix that is the whole text means nothing is left of it.
+  // The list already holds only items the typed word leads into, but the text
+  // previewed is the insert text, and the two are not always the same string:
+  // an item the server asked us to filter by a *different* name (a snippet whose
+  // filter text is the name it matched, say) can be listed and still have no
+  // remainder to show. So the preview asks the same question of its own text, and
+  // a prefix it does not lead -- or a prefix that is the whole text, leaving no
+  // remainder -- previews nothing rather than the whole identifier.
   //
   // Snippets preview as their expanded plain text, and only its first line: a
   // body spanning lines cannot be shown inline at the caret, and the newline's
@@ -299,16 +300,12 @@ namespace
     {
       text = expand_lsp_snippet(text).text;
     }
-    if (text.size() <= prefix.size())
+    // The same test the list uses, on the text accepting would insert: what is
+    // left of the word after the prefix is the remainder -- and a text the prefix
+    // does not lead is not the word being typed at all.
+    if (!text_leads_with(text, prefix))
     {
       return "";
-    }
-    for (size_t i = 0; i < prefix.size(); i++)
-    {
-      if (fold_ascii_char(prefix[i]) != fold_ascii_char(text[i]))
-      {
-        return "";
-      }
     }
     text = utf8_drop_prefix(text, utf8_char_count(prefix));
     const size_t first_newline = text.find('\n');
@@ -356,6 +353,13 @@ bool Editor::refresh_lsp_completion_filter()
   }
 
   std::string query = completion_prefix_from(buf, lsp_completion_replace_start);
+  if (query != lsp_completion_prefix)
+  {
+    // The word being completed just changed with a keystroke. The preview draws
+    // from this clock, so it lands on the pause instead of on every keystroke
+    // (see lsp_completion_preview_withheld).
+    lsp_completion_typing_ms = lsp_internal::now_ms();
+  }
   std::string selected_label;
   if (lsp_completion_selected >= 0 && lsp_completion_selected < (int)lsp_completion_items.size())
   {
@@ -366,6 +370,15 @@ bool Editor::refresh_lsp_completion_filter()
   ranked.reserve(lsp_completion_all_items.size());
   for (const auto &item : lsp_completion_all_items)
   {
+    // Only an item the typed word leads into is a completion of it. The server
+    // answers fuzzily on its own, and the previous keystroke's rows are still in
+    // hand while the next request is in flight, so without this the popup lists
+    // identifiers the word being typed has nothing to do with -- the noise that
+    // made typing a wrong keyword feel like the editor was guessing.
+    if (!query.empty() && !text_leads_with(completion_match_text(item), query))
+    {
+      continue;
+    }
     int score = completion_match_score(query, item);
     if (query.empty() || score > 0)
     {
@@ -429,6 +442,45 @@ void Editor::update_lsp_completion_ghost()
   }
 }
 
+// The preview waits for the typing to pause. A preview is the rest of a word
+// being typed, so it is worth reading exactly when the user has stopped to look
+// at it, and drawing on every keystroke is the flicker that made it noise. The
+// clock is the last keystroke that changed the word (set where the query is
+// recomputed), so browsing the list with Up/Down after a pause moves the preview
+// at once -- only typing restarts the wait.
+int Editor::lsp_completion_preview_delay_ms() const
+{
+  return std::clamp(config.get_int("lsp_completion_ghost_delay_ms", 150), 0, 5000);
+}
+
+bool Editor::lsp_completion_preview_withheld() const
+{
+  const int delay_ms = lsp_completion_preview_delay_ms();
+  if (delay_ms <= 0 || lsp_completion_ghost_text.empty())
+  {
+    return false;
+  }
+  return lsp_internal::now_ms() < lsp_completion_typing_ms + delay_ms;
+}
+
+// Nothing else asks for the frame that ends the wait, so the frame loop does, and
+// this is the query for it: the preview was withheld on an earlier frame and is
+// due now. A deadline *window* would not do -- frames do not tick while the
+// editor is busy, so the wait can end with the window already behind it, and the
+// preview would then stay hidden until the next keystroke. Asking once, on the
+// first sight of the clock past the delay, cannot be missed however late that
+// sight is; and asking only when the last frame really did withhold it (rather
+// than whenever the preview is not on screen) means a preview the painter
+// declines for another reason -- the caret is before a bracket, the pane is not
+// the focused one -- does not ask for frames forever.
+bool Editor::lsp_completion_preview_due_soon()
+{
+  const bool withheld = lsp_completion_preview_withheld();
+  const bool due = !withheld && lsp_completion_preview_was_withheld;
+  lsp_completion_preview_was_withheld = withheld;
+  return due;
+}
+
 void Editor::arm_lsp_completion(const std::string &filepath, bool manual)
 {
   auto &buf = get_buffer();
@@ -437,6 +489,15 @@ void Editor::arm_lsp_completion(const std::string &filepath, bool manual)
   lsp_completion_filepath = filepath;
   lsp_completion_prefix = completion_prefix_from(buf, lsp_completion_replace_start);
   lsp_completion_manual_request = manual;
+  if (!manual)
+  {
+    // This request went out for a word a keystroke just moved on, and the first
+    // response of that word has no other place to say so (refresh_lsp_completion_filter
+    // only sees a changed query): the preview waits for the pause from here too,
+    // so it never flashes the moment the server answers. A manual request asked
+    // for the list on purpose, so its preview is not a flicker.
+    lsp_completion_typing_ms = lsp_internal::now_ms();
+  }
 }
 
 void Editor::request_lsp_completion(bool manual, char trigger_character)

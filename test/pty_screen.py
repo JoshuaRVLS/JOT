@@ -50,6 +50,13 @@ class Screen:
         # text the renderer draws italic, and it shares its colour with the
         # inline diagnostics, so the style is what tells the two apart on a row.
         self.italic = [[False] * cols for _ in range(rows)]
+        # Every italic run this screen has carried -- [(row, text), ...], one
+        # sample per painted frame (the ?2026l that closes it) and one per read
+        # (see sample_italic). Text that appears for a frame or two and is gone by
+        # the end of the run -- a preview painted between a keystroke and the
+        # response that supersedes it, say -- is invisible in the final screen and
+        # only shows up in this timeline.
+        self.italic_log = []
         # Every byte read after the child started, for the checks that are about
         # the escape stream itself rather than the reconstructed screen (e.g. a
         # colour the theme only emits as 38;2 rather than a palette index).
@@ -203,6 +210,15 @@ class Screen:
         if final == "m":
             self._sgr(params)
             return
+        if final in ("h", "l"):
+            # Mode set/reset never touches the grid, but the synchronized-output
+            # pair frames the paints: the editor wraps every frame in ?2026h /
+            # ?2026l, so that reset is the end of a painted frame -- the finest
+            # moment a probe can sample at, and the only way to see text that
+            # survived a single frame (see sample_italic).
+            if final == "l" and "2026" in params:
+                self.sample_italic()
+            return
         args = [int(p) for p in params.split(";") if p.isdigit()] if params else []
         if final in ("H", "f"):
             self.y = max(0, (args[0] if args else 1) - 1)
@@ -247,6 +263,13 @@ class Screen:
 
     def text(self) -> str:
         return "\n".join("".join(row).rstrip() for row in self.cells)
+
+    def sample_italic(self) -> None:
+        """Records this screen state's italic runs in `italic_log`."""
+        for row in range(self.rows):
+            for _start, _end, text in self.italic_runs(row):
+                if text:
+                    self.italic_log.append((row, text))
 
     def italic_runs(self, row: int):
         """[(start_col, end_col, text), ...] for the italic cells of a row."""
@@ -333,6 +356,7 @@ def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float
         if not data:
             break
         screen.feed(data)
+        screen.sample_italic()
     def drain(seconds: float) -> None:
         end = time.time() + seconds
         while time.time() < end:
@@ -346,6 +370,7 @@ def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float
             if not data:
                 return
             screen.feed(data)
+            screen.sample_italic()
 
     try:
         os.write(fd, keys)

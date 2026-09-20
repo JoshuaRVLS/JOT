@@ -102,24 +102,24 @@ TEST_CASE("Completion ghost: the preview is the insert text minus what is typed"
   REQUIRE(e.lsp_completion_ghost_for_test() == "ntf(const char *format, ...)");
 }
 
-TEST_CASE("Completion ghost: a fuzzy match is not previewed", "[jot]")
+TEST_CASE("Completion ghost: what accepting would insert is what is previewed", "[jot]")
 {
   seed_config_home();
   Editor e;
   e.set_home_menu_visible(false);
-  open_with_caret(e, "int main() {\n  wdt\n}\n", 1, 5);
+  open_with_caret(e, "int main() {\n  wid\n}\n", 1, 5);
 
-  // `Widget` matches `wdt` as a subsequence, so the popup lists it -- but
-  // `wdt` is not how `Widget` starts, so there is no continuation to preview.
-  // Drawing the whole identifier there is the noise this rule is about.
+  // The server asked us to filter by `Widget`, and the typed `wid` leads into
+  // that -- so the row is listed -- but what accepting actually inserts is the
+  // qualified name, which the caret is not in the middle of typing. The preview
+  // asks its own question of the text it would type.
+  REQUIRE(e.seed_lsp_completion_for_test({item("Widget", "ns::Widget")}));
+  REQUIRE(e.lsp_completion_visible_for_test());
+  REQUIRE(e.lsp_completion_ghost_for_test().empty());
+
+  // The same item with nothing qualified about it previews its remainder.
   REQUIRE(e.seed_lsp_completion_for_test({item("Widget", "Widget")}));
-  REQUIRE(e.lsp_completion_ghost_for_test().empty());
-
-  // A row from the previous keystroke's response behaves the same way: it is
-  // in the popup (it matches `wdt` as a subsequence too), and it is still not
-  // what the caret is typing.
-  REQUIRE(e.seed_lsp_completion_for_test({item("WidgetFactory", "WidgetFactory(w)")}));
-  REQUIRE(e.lsp_completion_ghost_for_test().empty());
+  REQUIRE(e.lsp_completion_ghost_for_test() == "get");
 }
 
 TEST_CASE("Completion ghost: nothing typed and nothing left to type preview nothing", "[jot]")
@@ -181,6 +181,8 @@ TEST_CASE("Completion ghost: nothing is painted inside an auto-closed call", "[j
   REQUIRE(e.lsp_completion_prefix_for_test() == "p");
   REQUIRE(e.lsp_completion_ghost_for_test() == "rintf(format)");
 
+  // Past the typing pause, so the clock is not what is being asserted here.
+  e.age_lsp_completion_typing_for_test(1000);
   e.request_redraw_for_test();
   e.render_for_test();
   const std::vector<std::string> painted = italic_rows(e.ui_for_test());
@@ -216,6 +218,7 @@ TEST_CASE("Completion ghost: it is painted where the caret owns the row", "[jot]
   REQUIRE(e.seed_lsp_completion_for_test({item("printf", "printf(format)")}));
   REQUIRE(e.lsp_completion_ghost_for_test() == "ntf(format)");
 
+  e.age_lsp_completion_typing_for_test(1000);
   e.request_redraw_for_test();
   e.render_for_test();
   const std::vector<std::string> painted = italic_rows(e.ui_for_test());
@@ -237,10 +240,129 @@ TEST_CASE("Completion ghost: only the pane that owns the popup previews", "[jot]
   // same row. The popup -- and so the preview -- belongs to the focused pane
   // (render_lsp_completion anchors there), so the second pane must not draw the
   // same word at its own caret: two carets, one preview.
+  e.age_lsp_completion_typing_for_test(1000);
   e.split_pane_for_test(true);
   e.request_redraw_for_test();
   e.render_for_test();
   const std::vector<std::string> painted = italic_rows(e.ui_for_test());
   REQUIRE(painted.size() == 1);
   REQUIRE(painted.front() == "ntf(format)");
+}
+
+TEST_CASE("Completion ghost: the preview waits for the typing to pause", "[jot]")
+{
+  seed_config_home();
+  Editor e;
+  e.set_home_menu_visible(false);
+  open_with_caret(e, "int main() {\n  pri\n}\n", 1, 5);
+  // Long enough that no part of this case can outlast the wait on its own: the
+  // clock is moved with the hook below, never by waiting.
+  e.config_set_for_test("lsp_completion_ghost_delay_ms", "2000");
+
+  REQUIRE(e.seed_lsp_completion_for_test({item("printf", "printf(format)")}));
+  REQUIRE(e.lsp_completion_ghost_for_test() == "ntf(format)");
+  REQUIRE(e.lsp_completion_preview_withheld_for_test());
+
+  // Typing: the word just changed, so the frame paints the row without it.
+  e.request_redraw_for_test();
+  e.render_for_test();
+  const std::vector<std::string> early = italic_rows(e.ui_for_test());
+  REQUIRE(early.empty());
+
+  // Still waiting, a frame later: nothing to reveal yet, and the frame loop now
+  // knows the wait is what is holding the preview back.
+  e.age_lsp_completion_typing_for_test(1000);
+  REQUIRE(e.lsp_completion_preview_withheld_for_test());
+  e.render_frame_for_test();
+  REQUIRE(italic_rows(e.ui_for_test()).empty());
+
+  // The pause: the frame loop is what reveals it -- nothing is typed from here on
+  // and nothing else requests a paint, so the preview can only appear if the
+  // frame that ends the wait was asked for (main_loop's preview_due_soon), and
+  // the one after that drew it.
+  e.age_lsp_completion_typing_for_test(1100);
+  REQUIRE_FALSE(e.lsp_completion_preview_withheld_for_test());
+  e.render_frame_for_test();
+  e.render_frame_for_test();
+  const std::vector<std::string> painted = italic_rows(e.ui_for_test());
+  REQUIRE(painted.size() == 1);
+  REQUIRE(painted.front() == "ntf(format)");
+}
+
+TEST_CASE("Completion ghost: the delay can be switched off", "[jot]")
+{
+  seed_config_home();
+  Editor e;
+  e.set_home_menu_visible(false);
+  open_with_caret(e, "int main() {\n  pri\n}\n", 1, 5);
+  e.config_set_for_test("lsp_completion_ghost_delay_ms", "0");
+
+  REQUIRE(e.seed_lsp_completion_for_test({item("printf", "printf(format)")}));
+  REQUIRE_FALSE(e.lsp_completion_preview_withheld_for_test());
+
+  e.request_redraw_for_test();
+  e.render_for_test();
+  const std::vector<std::string> painted = italic_rows(e.ui_for_test());
+  REQUIRE(painted.size() == 1);
+  REQUIRE(painted.front() == "ntf(format)");
+}
+
+TEST_CASE("Completion list: only the words the typed word leads into are listed", "[jot]")
+{
+  seed_config_home();
+  Editor e;
+  e.set_home_menu_visible(false);
+
+  // `wdt` is a subsequence of both, which is how a fuzzy matcher would find
+  // them -- and is exactly why neither belongs in the list: accepting either
+  // would replace the word with an identifier it has nothing to do with.
+  open_with_caret(e, "int main() {\n  wdt\n}\n", 1, 5);
+  REQUIRE_FALSE(e.seed_lsp_completion_for_test({item("Widget", "Widget"),
+                                                item("WidgetFactory", "WidgetFactory(w)")}));
+  REQUIRE_FALSE(e.lsp_completion_visible_for_test());
+  REQUIRE(e.lsp_completion_ghost_for_test().empty());
+
+  e.age_lsp_completion_typing_for_test(1000);
+  e.request_redraw_for_test();
+  e.render_for_test();
+  REQUIRE(italic_rows(e.ui_for_test()).empty());
+
+  // The same item is listed -- and previewed -- the moment the word leads into
+  // it. `Widget` is 6 chars, so the remainder is `get`.
+  open_with_caret(e, "int main() {\n  Wid\n}\n", 1, 5);
+  REQUIRE(e.seed_lsp_completion_for_test({item("Widget", "Widget")}));
+  REQUIRE(e.lsp_completion_visible_for_test());
+  REQUIRE(e.lsp_completion_ghost_for_test() == "get");
+}
+
+TEST_CASE("Completion list: rows the next keystroke stops leading into drop out", "[jot]")
+{
+  seed_config_home();
+  Editor e;
+  e.set_home_menu_visible(false);
+  // One word holding both prefixes: the caret at 4 has typed `wi` (which `widen`
+  // leads into), the caret at 7 has typed `width` (which it does not).
+  open_with_caret(e, "int main() {\n  width\n}\n", 1, 4);
+
+  REQUIRE(e.seed_lsp_completion_for_test({item("widen", "widen")}));
+  REQUIRE(e.lsp_completion_visible_for_test());
+  REQUIRE(e.lsp_completion_ghost_for_test() == "den");
+
+  // The next keystroke lands the caret past the word the response answered: the
+  // rows are still in hand (no response has arrived for the new prefix), and
+  // none of them leads into it, so the popup goes away instead of listing them
+  // -- and with it the preview, which is the flicker this rule is about.
+  e.scroll_cursor_to_for_test(1, 7);
+  e.age_lsp_completion_typing_for_test(1000);
+  // What a keystroke does before the frame: re-filter against the word the caret
+  // now sits in (the insert path's refresh_lsp_completion_filter), so the frame
+  // that follows paints the new answer rather than the previous one.
+  e.refresh_lsp_completion_for_test();
+  e.request_redraw_for_test();
+  e.render_for_test();
+  REQUIRE(e.lsp_completion_prefix_for_test() == "width");
+  REQUIRE_FALSE(e.lsp_completion_visible_for_test());
+  REQUIRE(e.lsp_completion_ghost_for_test().empty());
+  const std::vector<std::string> painted = italic_rows(e.ui_for_test());
+  REQUIRE(painted.empty());
 }

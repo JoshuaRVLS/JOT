@@ -127,6 +127,15 @@ void Editor::render_frame()
   {
     render();
   }
+  // The completion preview appears once the typing pauses, and the frame clock is
+  // what reveals it: when the wait that withheld it is over, ask for the frame
+  // that draws it. Deliberately after the paint above -- the frame bought here is
+  // the next one, which is the first that can draw the preview. A wait that is
+  // still running asks for nothing, so typing does not repaint at the frame rate.
+  if (lsp_completion_preview_due_soon())
+  {
+    needs_redraw = true;
+  }
 }
 
 void Editor::run()

@@ -104,6 +104,17 @@ private:
   void arm_lsp_completion(const std::string &filepath, bool manual);
   bool refresh_lsp_completion_filter();
   void update_lsp_completion_ghost();
+  // How long a keystroke keeps the completion preview off screen
+  // (`lsp_completion_ghost_delay_ms`; 0 previews at once).
+  int lsp_completion_preview_delay_ms() const;
+  // The preview is there, but the typing that would flicker it has not paused
+  // yet: the painter leaves the caret's row alone and the frame loop waits for
+  // the deadline.
+  bool lsp_completion_preview_withheld() const;
+  // The last frame withheld the preview and the wait is over, so the frame that
+  // reveals it has to be asked for. Carries the "was withheld" half of that
+  // state, so it is called once per frame (never from the painter).
+  bool lsp_completion_preview_due_soon();
   bool apply_selected_lsp_completion();
   void accept_telescope_selection();
   void render_lsp_completion();

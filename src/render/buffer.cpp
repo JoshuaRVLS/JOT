@@ -1396,20 +1396,24 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
       // the ghost hugs the caret cell instead. A block caret fills its
       // cell, so the ghost still starts right of it.
       //
-      // It is only painted in the pane that owns the popup, and only where the
-      // caret owns the line's tail: everything from the caret to the end of the
-      // line has to be blank. The preview is the rest of the word being typed,
-      // and accepting it inserts that word at the caret -- so inside a call the
-      // editor auto-closed (`printf(|)`) the text under the caret is the `)`
-      // itself, and before a `;` it is the `;`. Drawing there put the completion
-      // after a character it would land before, which is what made the preview
-      // read as the editor having eaten the bracket. The completion session
-      // belongs to the focused pane (render_lsp_completion anchors the popup
-      // there), so a split showing the same row -- its own caret included --
-      // must not draw the same word again.
+      // It is painted in the pane that owns the popup, once the typing has
+      // paused, and only where the caret owns the line's tail: everything from
+      // the caret to the end of the line has to be blank. The preview is the rest
+      // of the word being typed, and accepting it inserts that word at the caret
+      // -- so inside a call the editor auto-closed (`printf(|)`) the text under
+      // the caret is the `)` itself, and before a `;` it is the `;`. Drawing there
+      // put the completion after a character it would land before, which is what
+      // made the preview read as the editor having eaten the bracket. The
+      // completion session belongs to the focused pane (render_lsp_completion
+      // anchors the popup there), so a split showing the same row -- its own caret
+      // included -- must not draw the same word again. The clock is the third
+      // gate: a preview that appears on every keystroke is a flicker, not a
+      // preview, so it lands on the pause (lsp_completion_preview_withheld, and
+      // lsp_completion_preview_due_soon for the frame that reveals it).
       bool tail_is_blank = false;
       if (pane.active && line_idx == buf.cursor.y && !lsp_completion_ghost_text.empty()
-          && config.get_bool("lsp_completion_ghost_text", true))
+          && config.get_bool("lsp_completion_ghost_text", true)
+          && !lsp_completion_preview_withheld())
       {
         tail_is_blank = true;
         for (int i = std::clamp(buf.cursor.x, 0, (int)line.size()); i < (int)line.size(); i++)

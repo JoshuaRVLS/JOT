@@ -156,6 +156,9 @@ void Config::load_defaults()
   settings["lsp_completion_max_items"] = "8";
   settings["lsp_completion_nerd_icons"] = "true";
   settings["lsp_completion_ghost_text"] = "true";
+  // How long the typing has to pause before that preview shows. A preview that
+  // redraws with every keystroke is a flicker; 0 previews at once.
+  settings["lsp_completion_ghost_delay_ms"] = "150";
   settings["lsp_inlay_hints"] = "true";
   settings["lsp_inlay_type_hints"] = "true";
   settings["decorations_inline_diagnostics"] = "true";
