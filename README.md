@@ -2,7 +2,7 @@
 
 **VS Code, but in your terminal.**
 <img width="2533" height="1372" alt="image" src="https://github.com/user-attachments/assets/b77080c2-8370-42ab-89f5-dac1c1de6e3c" />
-Just try it.
+Just try it. **Still in development**.
 
 ## Install
 
