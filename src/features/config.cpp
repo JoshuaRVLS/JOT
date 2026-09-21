@@ -181,8 +181,9 @@ void Config::load_defaults()
   // signatures with more than one: a workspace scan per open and per save,
   // published as diagnostics (features/cpp_definitions.*).
   settings["cpp_definitions"] = "true";
-  // jot's own theme (deep plum night, sakura keywords, mint strings) is what a
-  // fresh install opens in; jot-light is the same ink on warm paper.
+  // jot's own theme ("yoru ramune": indigo night, neon sakura keywords, mint
+  // strings) is what a fresh install opens in; jot-light is the same ink as jam
+  // and matcha on warm paper.
   settings["color_scheme"] = "jot-dark";
   // The workspace tab strip (row 0): shown by default, hidden once there are
   // this many buffers or fewer (0 = never hide), and where a buffer the strip

@@ -48,10 +48,10 @@ def truecolour(rgb: int) -> int:
 # line. Both themes name exact 24-bit colours, so what has to arrive on the wire
 # is a 48;2 sequence -- the themes are the one place a palette index would be a
 # silent downgrade of the whole scheme.
-JOT_DARK_BODY = truecolour(0x191521)
-JOT_DARK_STATUS = truecolour(0x241D33)
-JOT_LIGHT_BODY = truecolour(0xFDF2F4)
-JOT_LIGHT_STATUS = truecolour(0xF8E7EC)
+JOT_DARK_BODY = truecolour(0x131024)
+JOT_DARK_STATUS = truecolour(0x1A1630)
+JOT_LIGHT_BODY = truecolour(0xFFFAF4)
+JOT_LIGHT_STATUS = truecolour(0xFBE9E7)
 # The ported Flexoki pair: `black` and `base-950` for the dark editor, `paper`
 # and `base-50` for the light one (see .configs/configs/colors/flexoki-*.json).
 FLEXOKI_DARK_BODY = truecolour(0x100F0F)
@@ -60,8 +60,8 @@ FLEXOKI_LIGHT_BODY = truecolour(0xFFFCF0)
 FLEXOKI_LIGHT_STATUS = truecolour(0xF2F0E5)
 # The accent each theme inks its active pane border with, as it must appear in
 # the escape stream: 38;2;r;g;b, never 38;5;n.
-JOT_DARK_ACCENT = b"\x1b[38;2;255;138;184m"  # #ff8ab8
-JOT_LIGHT_ACCENT = b"\x1b[38;2;209;66;126m"  # #d1427e
+JOT_DARK_ACCENT = b"\x1b[38;2;255;121;192m"  # #ff79c0
+JOT_LIGHT_ACCENT = b"\x1b[38;2;217;42;118m"  # #d92a76
 FLEXOKI_DARK_ACCENT = b"\x1b[38;2;58;169;159m"  # #3aa99f, cyan-400
 FLEXOKI_LIGHT_ACCENT = b"\x1b[38;2;36;131;123m"  # #24837b, cyan-600
 # A decoration's underline colour as SGR 58's 24-bit colon form.

@@ -7,15 +7,37 @@ jot ships four themes: its own pair, and a port of kepano's Flexoki.
 
 | Theme | Look |
 |---|---|
-| `jot-dark` (default) | deep plum night (`#191521`), lavender-white ink, sakura-pink keywords, mint strings, lavender types |
-| `jot-light` | the same inks on blush paper (`#fdf2f4`) |
+| `jot-dark` (default) — *yoru ramune* | indigo night (`#131024`) under neon sakura-pink keywords, mint-ramune strings, soda-cyan functions and tangerine numbers |
+| `jot-light` — *mochi milk* | the same inks as strawberry jam, matcha and ramune blue on warm cream paper (`#fffaf4`) |
 | `flexoki-dark` | Flexoki's ink palette: black (`#100f0f`) paper, base-200 text, green keywords, cyan strings |
 | `flexoki-light` | the same scheme on Flexoki paper (`#fffcf0`) with the 600-step accents |
 
-The sakura-pink accent is the jot palette's signature: keywords, tags, the
+### jot-dark — "yoru ramune" (night soda)
+
+A deep indigo night — not the usual neutral `#1c1c1c`, and not a grey-blue
+terminal default — lit by a candy-stand palette: neon **sakura pink**
+(`#ff79c0`) for keywords, tags and every accent; **mint ramune** (`#79e8bd`)
+for strings; **soda cyan** (`#63d9ff`) for functions and builtins;
+**tangerine** (`#ff9f6e`) for numbers and constants; **dango gold**
+(`#ffd479`) for escapes, search hits and warnings; **taro purple**
+(`#c09bff`) for types, namespaces and the explorer's folders. Every piece of
+chrome is the same night sky lifted one step — sidebar `#181430`, status line
+`#1a1630`, raised rows `#282147` — so the panels feel like rooms in one house
+instead of three unrelated widgets.
+
+### jot-light — "mochi milk"
+
+Warm milk paper (`#fffaf4`) with the dark theme's inks re-pitched for daylight:
+**strawberry jam** (`#d92a76`) keywords, **matcha** (`#0e8a6f`) strings,
+**ramune blue** (`#1b7fb5`) functions, **taro** (`#7b4bd1`) types and
+**persimmon** (`#c95a2b`) numbers. The surfaces (sidebar `#fdf1f2`, status line
+`#fbe9e7`, selection `#f8d8e3`) are blush tints of the same cream, so the whole
+window reads as one pastel confection rather than white boxes on white.
+
+The sakura/strawberry accent is the jot palette's signature: keywords, tags, the
 active pane border, the cursor, the cursor line number and the focused terminal
-tab all carry it, set against mint strings and lavender types on a plum (or
-blush, on paper) ground. The chrome reads as jot's own pastel scheme rather than
+tab all carry it, set against mint strings and taro types on the indigo (or
+cream, on paper) ground. The chrome reads as jot's own pastel scheme rather than
 a neutral grey editor with a blue border.
 
 The Flexoki pair is [Flexoki](https://stephango.com/flexoki) by kepano (MIT
@@ -37,7 +59,7 @@ the change keeps working. Any other name now needs a file of its own.
 Apply with `:colorscheme jot-light` or from Lua:
 
 ```lua
-set_hl("Normal", { fg = "#ece4f2", bg = "#191521" })
+set_hl("Normal", { fg = "#e9e5fb", bg = "#131024" })
 set_hl("Keyword", { fg = 215 }) -- an xterm index still works
 ```
 
@@ -50,9 +72,9 @@ is neither is ignored, leaving the slot at whatever it inherited. Use `-1` or
 
 ```json
 {
-  "Normal": {"fg": "#ece4f2", "bg": "#191521"},
-  "Comment": {"fg": "#8d7f9e", "bg": "#191521"},
-  "Keyword": {"fg": "#ff8ab8", "bg": "#191521"},
+  "Normal": {"fg": "#e9e5fb", "bg": "#131024"},
+  "Comment": {"fg": "#8b83b0", "bg": "#131024"},
+  "Keyword": {"fg": "#ff79c0", "bg": "#131024"},
   "Visual": {"fg": 231, "bg": 240}
 }
 ```
@@ -186,19 +208,19 @@ A minimal annotated theme:
 
 ```json
 {
-  "Normal": {"fg": "#d7d0c4", "bg": "#191521"},         // plain text / editor background
-  "Comment": {"fg": "#8d7f9e", "bg": "#191521"},        // comments
-  "keyword": {"fg": "#d7afd7", "bg": "#191521"},        // all keywords
-  "keyword.control": {"fg": "#af87d7", "bg": "#191521"}, // if/for/while - override control
-  "string": {"fg": "#8ee0c0", "bg": "#191521"},         // string literals
-  "number": {"fg": "#ffb08a", "bg": "#191521"},         // numbers, constants fall back here
-  "function": {"fg": "#7fd4e8", "bg": "#191521"},       // function names
-  "function.method": {"fg": "#7fd4e8", "bg": "#191521"}, // method names (optional: keep = function)
-  "type": {"fg": "#c9a6ff", "bg": "#191521"},           // type identifiers
-  "property": {"fg": "#a8e0b8", "bg": "#191521"},       // obj.field members
-  "punctuation": {"fg": "#9a8fad", "bg": "#191521"},    // dim the brackets/semicolons
-  "tag": {"fg": "#ff8ab8", "bg": "#191521"},            // HTML/JSX tags
-  "attribute": {"fg": "#ffc48a", "bg": "#191521"}       // HTML/JSX tag attributes
+  "Normal": {"fg": "#d7d0c4", "bg": "#131024"},         // plain text / editor background
+  "Comment": {"fg": "#8b83b0", "bg": "#131024"},        // comments
+  "keyword": {"fg": "#d7afd7", "bg": "#131024"},        // all keywords
+  "keyword.control": {"fg": "#af87d7", "bg": "#131024"}, // if/for/while - override control
+  "string": {"fg": "#79e8bd", "bg": "#131024"},         // string literals
+  "number": {"fg": "#ff9f6e", "bg": "#131024"},         // numbers, constants fall back here
+  "function": {"fg": "#63d9ff", "bg": "#131024"},       // function names
+  "function.method": {"fg": "#63d9ff", "bg": "#131024"}, // method names (optional: keep = function)
+  "type": {"fg": "#c09bff", "bg": "#131024"},           // type identifiers
+  "property": {"fg": "#a3e084", "bg": "#131024"},       // obj.field members
+  "punctuation": {"fg": "#8f86b8", "bg": "#131024"},    // dim the brackets/semicolons
+  "tag": {"fg": "#ff79c0", "bg": "#131024"},            // HTML/JSX tags
+  "attribute": {"fg": "#ffb877", "bg": "#131024"}       // HTML/JSX tag attributes
 }
 ```
 
