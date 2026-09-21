@@ -7,15 +7,16 @@ jot ships four themes: its own pair, and a port of kepano's Flexoki.
 
 | Theme | Look |
 |---|---|
-| `jot-dark` (default) | warm charcoal (`#1e1b18`), cream ink, amber keywords, soft teal functions |
-| `jot-light` | the same ink on warm paper (`#f9f4ea`) |
+| `jot-dark` (default) | deep plum night (`#191521`), lavender-white ink, sakura-pink keywords, mint strings, lavender types |
+| `jot-light` | the same inks on blush paper (`#fdf2f4`) |
 | `flexoki-dark` | Flexoki's ink palette: black (`#100f0f`) paper, base-200 text, green keywords, cyan strings |
 | `flexoki-light` | the same scheme on Flexoki paper (`#fffcf0`) with the 600-step accents |
 
-The amber/teal pair is the jot palette's signature: keywords, the active pane
-border, the cursor line number and the search highlight all carry the accent,
-so the chrome reads as jot's own scheme rather than a neutral grey editor with
-a blue border.
+The sakura-pink accent is the jot palette's signature: keywords, tags, the
+active pane border, the cursor, the cursor line number and the focused terminal
+tab all carry it, set against mint strings and lavender types on a plum (or
+blush, on paper) ground. The chrome reads as jot's own pastel scheme rather than
+a neutral grey editor with a blue border.
 
 The Flexoki pair is [Flexoki](https://stephango.com/flexoki) by kepano (MIT
 licensed), ported slot by slot from the official VS Code and Helix themes: the
@@ -36,7 +37,7 @@ the change keeps working. Any other name now needs a file of its own.
 Apply with `:colorscheme jot-light` or from Lua:
 
 ```lua
-set_hl("Normal", { fg = "#e8ddcc", bg = "#1e1b18" })
+set_hl("Normal", { fg = "#ece4f2", bg = "#191521" })
 set_hl("Keyword", { fg = 215 }) -- an xterm index still works
 ```
 
@@ -49,9 +50,9 @@ is neither is ignored, leaving the slot at whatever it inherited. Use `-1` or
 
 ```json
 {
-  "Normal": {"fg": "#e8ddcc", "bg": "#1e1b18"},
-  "Comment": {"fg": "#8b8178", "bg": "#1e1b18"},
-  "Keyword": {"fg": "#f5b06b", "bg": "#1e1b18"},
+  "Normal": {"fg": "#ece4f2", "bg": "#191521"},
+  "Comment": {"fg": "#8d7f9e", "bg": "#191521"},
+  "Keyword": {"fg": "#ff8ab8", "bg": "#191521"},
   "Visual": {"fg": 231, "bg": 240}
 }
 ```
@@ -185,19 +186,19 @@ A minimal annotated theme:
 
 ```json
 {
-  "Normal": {"fg": "#d7d0c4", "bg": "#1e1b18"},         // plain text / editor background
-  "Comment": {"fg": "#8b8178", "bg": "#1e1b18"},        // comments
-  "keyword": {"fg": "#d7afd7", "bg": "#1e1b18"},        // all keywords
-  "keyword.control": {"fg": "#af87d7", "bg": "#1e1b18"}, // if/for/while - override control
-  "string": {"fg": "#a9d3b0", "bg": "#1e1b18"},         // string literals
-  "number": {"fg": "#f0a884", "bg": "#1e1b18"},         // numbers, constants fall back here
-  "function": {"fg": "#e8ddcc", "bg": "#1e1b18"},       // function names
-  "function.method": {"fg": "#d9b68e", "bg": "#1e1b18"}, // method names (optional: keep = function)
-  "type": {"fg": "#9fc7e0", "bg": "#1e1b18"},           // type identifiers
-  "property": {"fg": "#b8d8c8", "bg": "#1e1b18"},       // obj.field members
-  "punctuation": {"fg": "#9a9188", "bg": "#1e1b18"},    // dim the brackets/semicolons
-  "tag": {"fg": "#ef7d96", "bg": "#1e1b18"},            // HTML/JSX tags
-  "attribute": {"fg": "#f0a884", "bg": "#1e1b18"}       // HTML/JSX tag attributes
+  "Normal": {"fg": "#d7d0c4", "bg": "#191521"},         // plain text / editor background
+  "Comment": {"fg": "#8d7f9e", "bg": "#191521"},        // comments
+  "keyword": {"fg": "#d7afd7", "bg": "#191521"},        // all keywords
+  "keyword.control": {"fg": "#af87d7", "bg": "#191521"}, // if/for/while - override control
+  "string": {"fg": "#8ee0c0", "bg": "#191521"},         // string literals
+  "number": {"fg": "#ffb08a", "bg": "#191521"},         // numbers, constants fall back here
+  "function": {"fg": "#7fd4e8", "bg": "#191521"},       // function names
+  "function.method": {"fg": "#7fd4e8", "bg": "#191521"}, // method names (optional: keep = function)
+  "type": {"fg": "#c9a6ff", "bg": "#191521"},           // type identifiers
+  "property": {"fg": "#a8e0b8", "bg": "#191521"},       // obj.field members
+  "punctuation": {"fg": "#9a8fad", "bg": "#191521"},    // dim the brackets/semicolons
+  "tag": {"fg": "#ff8ab8", "bg": "#191521"},            // HTML/JSX tags
+  "attribute": {"fg": "#ffc48a", "bg": "#191521"}       // HTML/JSX tag attributes
 }
 ```
 

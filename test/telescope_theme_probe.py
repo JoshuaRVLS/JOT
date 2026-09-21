@@ -9,7 +9,7 @@ on both render paths -- a later change that fills both boxes with one colour,
 or drops the selection band back to a caret, fails here.
 
 The theme is jot-light, where the four slots are four distinct colours
-(#f1eadd list, #e2d8c6 selection, #f9f4ea view, #f9f4ea query), so "which slot
+(#fbe9ee list, #f4dbe3 selection, #fdf2f4 view, #fdf2f4 query), so "which slot
 is this cell using" is a decidable question. The file view's background is also
 required to be the editor's own Normal background: the right box is meant to
 read as a normal editor, not as a preview pane in a different palette.

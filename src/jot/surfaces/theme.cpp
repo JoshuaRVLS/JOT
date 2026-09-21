@@ -6,8 +6,9 @@
 
 namespace
 {
-  // jot ships its own pair -- `jot-dark` (warm charcoal, amber keywords, teal
-  // functions) and `jot-light` (the same ink on warm paper) -- plus the flexoki
+  // jot ships its own pair -- `jot-dark` (deep plum night, sakura-pink keywords,
+  // mint strings, lavender types) and `jot-light` (the same inks on blush paper)
+  // -- plus the flexoki
   // pair ported from kepano's Flexoki palette (flexoki-dark / flexoki-light, MIT
   // licensed, https://stephango.com/flexoki). The names the two jot themes
   // replaced -- `dark` and `light`, which the whole bundled catalog used to be
