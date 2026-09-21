@@ -81,3 +81,27 @@ records, shared helpers).
 - `test/*_probe.py` -- real-pty probes that boot the binary and assert on the
   painted screen; `test/pty_screen.py` is the shared harness.
 - `benchmarks/` -- the frame and fold-index benchmarks.
+- `tools/leak_check.sh [build-dir] [filter]` -- builds the `JOT_SANITIZE=ON`
+  tree and runs the suite under AddressSanitizer + LeakSanitizer, failing if
+  anything leaks. It runs the suite as one process, not through ctest: leaks
+  are reported at process exit, so a per-case run would hide them. The
+  sanitizer tree is unoptimised, which trips the clock-sensitive
+  "A slower period blinks more slowly" case; the script checks the leak
+  report, not the suite's exit status.
+
+## Owning native resources
+
+Two ownership rules that no compiler enforces, and that the leak check above
+is what verifies:
+
+- A `FileBuffer` owns its tree-sitter tree and parser. They are raw pointers,
+  so every path that drops a buffer -- `close_buffer`, a workspace switch, and
+  `~Editor` -- has to call `FileBuffer::release_syntax()`. Clearing the buffer
+  vector (or letting `~Editor` run) without it leaks the whole tree of every
+  open file, which is where session-sized leaks came from.
+- `EventLoop::~EventLoop` closes its handles and then has to pump the loop
+  once more: `stop()` leaves libuv's stop flag set, so the close callbacks
+  `close_all_handles()` queues never run, `uv_loop_close()` fails with EBUSY,
+  and libuv's allocations plus every handle wrapper are left behind. The pump
+  is non-blocking (`UV_RUN_NOWAIT`) because other code, such as the markdown
+  preview server, puts its own handles on this loop.

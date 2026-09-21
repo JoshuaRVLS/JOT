@@ -281,6 +281,16 @@ struct FileBuffer
   bool ts_tree_in_sync = true;
   bool ts_edit_base_valid = false;
   std::string ts_edit_base;
+
+  // Drops this buffer's parse tree and parser. They are raw pointers into
+  // tree-sitter memory that nothing else owns, so every path that discards a
+  // buffer -- close, workspace switch, editor teardown -- has to go through
+  // here; skipping it is a silent leak of the whole tree (tens of MB for a
+  // large file). Defined in integrations/syntax.cpp, which has the
+  // tree-sitter headers this header only forward-declares. Bookkeeping fields
+  // are left to the caller, which knows whether the buffer is being
+  // re-initialised or dropped.
+  void release_syntax();
 #endif
 
   // Line accessor methods

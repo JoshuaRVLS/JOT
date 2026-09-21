@@ -192,16 +192,7 @@ void Editor::reload_tree_sitter()
 #ifdef JOT_TREESITTER
   for (auto &buf : buffers)
   {
-    if (buf.ts_tree)
-    {
-      ts_tree_delete(buf.ts_tree);
-      buf.ts_tree = nullptr;
-    }
-    if (buf.ts_parser)
-    {
-      ts_parser_delete(buf.ts_parser);
-      buf.ts_parser = nullptr;
-    }
+    buf.release_syntax();
     buf.ts_language_id.clear();
     invalidate_syntax_cache(buf);
   }

@@ -509,7 +509,11 @@ public:
   // than fail on a machine with no grammar installed.
   bool syntax_tree_ready_for_test()
   {
+#ifdef JOT_TREESITTER
     return get_buffer().ts_tree != nullptr;
+#else
+    return false; // no tree-sitter in this build, so no buffer ever has a tree
+#endif
   }
   // Runs an ex command line the way the palette does, so command plumbing can
   // be asserted without typing into a prompt.

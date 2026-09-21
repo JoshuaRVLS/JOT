@@ -35,19 +35,7 @@ void Editor::close_buffer_at(int index)
   invalidate_sidebar_diagnostics_cache();
 
 #ifdef JOT_TREESITTER
-  {
-    FileBuffer &mut_buf = buffers[index];
-    if (mut_buf.ts_tree)
-    {
-      ts_tree_delete(mut_buf.ts_tree);
-      mut_buf.ts_tree = nullptr;
-    }
-    if (mut_buf.ts_parser)
-    {
-      ts_parser_delete(mut_buf.ts_parser);
-      mut_buf.ts_parser = nullptr;
-    }
-  }
+  buffers[index].release_syntax();
 #endif
 
   if (closed_buffer_history.size() >= kMaxClosedBufferHistory)
@@ -100,16 +88,7 @@ void Editor::close_buffer_at(int index)
     buf.fold_ranges.clear();
     invalidate_sidebar_diagnostics_cache();
 #ifdef JOT_TREESITTER
-    if (buf.ts_tree)
-    {
-      ts_tree_delete(buf.ts_tree);
-      buf.ts_tree = nullptr;
-    }
-    if (buf.ts_parser)
-    {
-      ts_parser_delete(buf.ts_parser);
-      buf.ts_parser = nullptr;
-    }
+    buf.release_syntax();
 #endif
     current_buffer = 0;
     tab_scroll_index = 0;

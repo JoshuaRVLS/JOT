@@ -198,6 +198,14 @@ void Editor::open_workspace(const std::string &path, bool restore_session)
   // Reset editor buffers when entering a workspace so sessions do not mix.
   stop_all_lsp_clients();
   lsp_disabled_servers.clear();
+#ifdef JOT_TREESITTER
+  // Clearing the vector alone would drop each buffer's parse tree on the
+  // floor: they are raw pointers nothing else owns.
+  for (auto &buf : buffers)
+  {
+    buf.release_syntax();
+  }
+#endif
   buffers.clear();
   workspace_diagnostic_severity.clear();
   invalidate_sidebar_diagnostics_cache();
@@ -538,6 +546,9 @@ bool Editor::restore_workspace_session()
 
   if (buffers.size() == 1 && is_empty_scratch_buffer(buffers[0]))
   {
+#ifdef JOT_TREESITTER
+    buffers[0].release_syntax();
+#endif
     buffers.clear();
     current_buffer = 0;
     for (auto &pane : panes)

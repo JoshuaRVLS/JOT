@@ -419,6 +419,14 @@ bool LuaAPI::float_mouse(int x,
 }
 void LuaAPI::attach_test_ui(UI *ui)
 {
+  // The editor owns its UI (the destructor deletes it) and the caller hands
+  // this one over in the same spirit, so release the grid the editor built for
+  // the real terminal before taking the new one; otherwise that UI and its
+  // cell buffers are unreachable but never freed.
+  if (editor->ui && editor->ui != ui)
+  {
+    delete editor->ui;
+  }
   editor->ui = ui;
 }
 

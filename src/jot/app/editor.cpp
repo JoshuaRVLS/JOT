@@ -619,6 +619,16 @@ Editor::~Editor()
   }
   delete ui;
   terminal.cleanup();
+#ifdef JOT_TREESITTER
+  // Last, so nothing above can be looking at a tree: every still-open buffer
+  // owns a parse tree and parser as raw pointers, and only the close and
+  // workspace-switch paths ever free them. Without this, whatever is open when
+  // the editor goes away -- the session, for the app -- leaks its trees.
+  for (auto &buf : buffers)
+  {
+    buf.release_syntax();
+  }
+#endif
 }
 
 void Editor::set_message(const std::string &msg, bool toast)

@@ -428,7 +428,10 @@ TEST_CASE("Lua float rendering paints buffer lines into the editor grid")
   // toast body) must be painted inside the inset — this is the path the user
   // reported as missing (empty toast box).
   Terminal term; // inert until init(); safe to render into
-  UI *ui = new UI(&term); // Editor's destructor deletes its ui
+  // A known 120x40 grid swapped in for the editor's own terminal-sized one:
+  // attach_test_ui releases that grid and hands ownership of this one to the
+  // editor, which deletes it in its destructor.
+  UI *ui = new UI(&term);
   Editor e;
   LuaAPI api(&e);
   api.attach_test_ui(ui);

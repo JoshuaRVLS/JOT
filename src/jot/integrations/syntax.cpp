@@ -242,6 +242,20 @@ namespace
 } // namespace
 
 #ifdef JOT_TREESITTER
+void FileBuffer::release_syntax()
+{
+  if (ts_tree)
+  {
+    ts_tree_delete(ts_tree);
+    ts_tree = nullptr;
+  }
+  if (ts_parser)
+  {
+    ts_parser_delete(ts_parser);
+    ts_parser = nullptr;
+  }
+}
+
 void Editor::ts_begin_edit(FileBuffer &buf)
 {
   // Only the first edit after a rebuild needs a snapshot: later edits in the
@@ -314,16 +328,7 @@ void Editor::init_ts_for_buffer(FileBuffer &buf)
   std::string language_id = ts_manager_.language_id_for_extension(ext);
   if (language_id.empty())
   {
-    if (buf.ts_tree)
-    {
-      ts_tree_delete(buf.ts_tree);
-      buf.ts_tree = nullptr;
-    }
-    if (buf.ts_parser)
-    {
-      ts_parser_delete(buf.ts_parser);
-      buf.ts_parser = nullptr;
-    }
+    buf.release_syntax();
     buf.ts_language_id.clear();
     buf.ts_edit_base_valid = false;
     buf.ts_edit_base.clear();
@@ -342,16 +347,7 @@ void Editor::init_ts_for_buffer(FileBuffer &buf)
     return;
   }
 
-  if (buf.ts_tree)
-  {
-    ts_tree_delete(buf.ts_tree);
-    buf.ts_tree = nullptr;
-  }
-  if (buf.ts_parser)
-  {
-    ts_parser_delete(buf.ts_parser);
-    buf.ts_parser = nullptr;
-  }
+  buf.release_syntax();
   buf.ts_language_id.clear();
   buf.ts_edit_base_valid = false;
   buf.ts_edit_base.clear();

@@ -32,7 +32,22 @@ EventLoop::~EventLoop()
   close_all_handles();
   if (loop_initialized_)
   {
-    uv_run(&loop_, UV_RUN_DEFAULT);
+    // stop() left the loop's stop flag set, which makes a uv_run() call return
+    // immediately -- without running the close callbacks close_all_handles()
+    // just queued. uv_loop_close() then fails with EBUSY, so libuv's own
+    // allocations and every closing handle wrapper (FdWatcherHandle /
+    // TimerHandle / FsEventHandle, whose close callbacks are what delete them)
+    // are never released. uv_run clears the flag on the way out, so a second
+    // pass runs those callbacks and the loop reports itself empty.
+    //
+    // UV_RUN_NOWAIT, not UV_RUN_DEFAULT: other code (the markdown preview
+    // server) puts its own handles on this loop, and a blocking run would
+    // wait on any that is still active instead of just collecting the
+    // closes. Close callbacks run in every pass of every mode, so a bounded
+    // non-blocking pump is enough and cannot hang the exit.
+    for (int pass = 0; pass < 8 && uv_run(&loop_, UV_RUN_NOWAIT) != 0; ++pass)
+    {
+    }
     uv_loop_close(&loop_);
     loop_initialized_ = false;
   }
