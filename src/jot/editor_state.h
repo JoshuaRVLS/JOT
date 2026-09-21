@@ -24,6 +24,7 @@
 //   state/view_state.h        layout metrics, theme, paint caches, message line
 //   state/navigation_state.h  jump history and the armed jump
 //   state/engine_state.h      config, terminals, debugger, UI, Lua host
+//   state/web_index_state.h   the workspace's CSS vocabulary, for completions
 //
 // New code that needs one slice is encouraged to include that header directly
 // (the groups are independent: no group includes another).
@@ -38,6 +39,7 @@
 #include "jot/state/surface_state.h"
 #include "jot/state/tabline_state.h"
 #include "jot/state/view_state.h"
+#include "jot/state/web_index_state.h"
 #include "jot/state/winbar_state.h"
 #include "jot/state/workspace_state.h"
 
@@ -51,6 +53,7 @@ struct EditorState : CppDefsState,
                      SurfaceState,
                      TablineState,
                      ViewState,
+                     WebIndexState,
                      WinbarState,
                      WorkspaceState
 {

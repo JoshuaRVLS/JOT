@@ -303,9 +303,9 @@ namespace lsp_internal
     }
     if (language == "html" || language == "json" || language == "css")
     {
-      const char *bin = language == "html"    ? "vscode-html-language-server"
-                        : language == "json"  ? "vscode-json-language-server"
-                                               : "vscode-css-language-server";
+      const char *bin = language == "html"   ? "vscode-html-language-server"
+                        : language == "json" ? "vscode-json-language-server"
+                                             : "vscode-css-language-server";
       return {resolve_lsp_bin(bin), "--stdio"};
     }
     if (language == "yaml")
@@ -415,6 +415,20 @@ namespace lsp_internal
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
     return (lower.size() >= 5 && lower.substr(lower.size() - 5) == ".html")
            || (lower.size() >= 4 && lower.substr(lower.size() - 4) == ".htm");
+  }
+
+  // A style sheet: the file type whose completions the workspace's own CSS
+  // vocabulary serves (`class="..."` names aside -- see
+  // features/web_completion.h). A style sheet usually has no server attached at
+  // all, so this is also the type the request path seeds from the index before
+  // it asks anyone.
+  inline bool is_style_lsp_filepath(const std::string &filepath)
+  {
+    std::string lower = filepath;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    return ends_with(lower, ".css") || ends_with(lower, ".scss") || ends_with(lower, ".less")
+           || ends_with(lower, ".sass") || ends_with(lower, ".pcss") || ends_with(lower, ".styl")
+           || ends_with(lower, ".stylus");
   }
 
   inline bool is_script_lsp_filepath(const std::string &filepath)

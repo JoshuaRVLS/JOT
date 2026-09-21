@@ -161,6 +161,11 @@ void Editor::run()
     cpp_defs_scan_pending = false;
     request_cpp_definitions_scan(false);
   }
+  if (web_index_scan_pending)
+  {
+    web_index_scan_pending = false;
+    request_web_index_scan();
+  }
 
   event_loop_.prepare();
 

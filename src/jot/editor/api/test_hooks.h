@@ -301,6 +301,30 @@ public:
     lsp_completion_all_items = std::move(items);
     return refresh_lsp_completion_filter();
   }
+  // The workspace's CSS vocabulary (features/web_completion.h) as the editor
+  // holds it, so a case can complete against a workspace without scanning one.
+  void set_web_index_for_test(WebCompletion::Index index)
+  {
+    apply_web_index(std::move(index));
+  }
+  // The labels the index contributes for the caret's context -- the half of the
+  // request-time list append_web_index_completions is responsible for. Empty
+  // when the caret is somewhere a name does not belong.
+  std::vector<std::string> web_index_completions_for_test()
+  {
+    std::vector<std::string> labels;
+    std::vector<LSPCompletionItem> items;
+    if (!append_web_index_completions(items))
+    {
+      return labels;
+    }
+    labels.reserve(items.size());
+    for (const LSPCompletionItem &item : items)
+    {
+      labels.push_back(item.label);
+    }
+    return labels;
+  }
   // The preview the caret would paint: the selected item's insert text with the
   // typed prefix taken off its front (see update_lsp_completion_ghost).
   std::string lsp_completion_ghost_for_test() const

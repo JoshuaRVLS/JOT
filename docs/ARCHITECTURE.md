@@ -44,9 +44,18 @@ exactly as it was when this was one 500-line struct.
 | `state/view_state.h` | layout metrics, theme, paint caches, message line |
 | `state/navigation_state.h` | jump history and the armed jump |
 | `state/engine_state.h` | config, terminals, debugger, UI, Lua host |
+| `state/web_index_state.h` | the workspace's CSS vocabulary and its scan's bookkeeping |
 
 The groups are independent: no group includes another, so a translation unit
 that only needs one slice can include it directly.
+
+Two of the groups hold the state around a workspace-wide scan that runs on the
+worker queue: `cpp_defs_state.h` (declarations with no body, and signatures with
+two) and `web_index_state.h` (the class names and custom properties the tree
+declares). Both follow the same shape -- a running flag, a pending flag, and the
+root plus an epoch that decide whether a landing result is still wanted -- and
+both have their scan spelled out as a pure function in `src/features/` and their
+editor half in `src/jot/app/` (`cpp_definitions.cpp`, `web_index.cpp`).
 
 ## Collaborators
 

@@ -46,7 +46,8 @@ namespace
   // every test target has: "<repo>/runtime/lua".
   fs::path bundled_themes_dir()
   {
-    return fs::path(JOT_LUA_SOURCE_DIR).parent_path().parent_path() / ".configs" / "configs" / "colors";
+    return fs::path(JOT_LUA_SOURCE_DIR).parent_path().parent_path() / ".configs" / "configs"
+           / "colors";
   }
 
   // Every scheme jot ships, in the order the chooser lists them. The cases below
@@ -112,7 +113,8 @@ namespace
         break;
       const std::string name = text.substr(pos + 1, name_end - pos - 1);
       const size_t body_start = text.find('{', name_end);
-      const size_t body_end = body_start == std::string::npos ? std::string::npos : text.find('}', body_start);
+      const size_t body_end =
+          body_start == std::string::npos ? std::string::npos : text.find('}', body_start);
       if (body_start == std::string::npos || body_end == std::string::npos)
         break;
       const std::string body = text.substr(body_start, body_end - body_start);
@@ -166,7 +168,8 @@ namespace
       fs::create_directories(colors);
       for (const std::string &name : bundled_theme_files())
       {
-        fs::copy_file(bundled_themes_dir() / name, colors / name, fs::copy_options::overwrite_existing);
+        fs::copy_file(
+            bundled_themes_dir() / name, colors / name, fs::copy_options::overwrite_existing);
       }
       seeded = true;
     }
@@ -258,12 +261,12 @@ TEST_CASE("flexoki carries kepano's palette, not an approximation", "[jot][theme
   {
     const Theme &t = e.theme_for_test();
     REQUIRE(jot_ui::is_exact_color(t.bg_default));
-    REQUIRE(rgb_of(t.fg_default) == 0xCECDC3); // base-200 ink
-    REQUIRE(rgb_of(t.bg_default) == 0x100F0F); // black
-    REQUIRE(rgb_of(t.fg_comment) == 0x878580); // base-500
-    REQUIRE(rgb_of(t.fg_keyword) == 0x879A39); // green-400
-    REQUIRE(rgb_of(t.fg_string) == 0x3AA99F);  // cyan-400
-    REQUIRE(rgb_of(t.fg_number) == 0x8B7EC8);  // purple-400
+    REQUIRE(rgb_of(t.fg_default) == 0xCECDC3);  // base-200 ink
+    REQUIRE(rgb_of(t.bg_default) == 0x100F0F);  // black
+    REQUIRE(rgb_of(t.fg_comment) == 0x878580);  // base-500
+    REQUIRE(rgb_of(t.fg_keyword) == 0x879A39);  // green-400
+    REQUIRE(rgb_of(t.fg_string) == 0x3AA99F);   // cyan-400
+    REQUIRE(rgb_of(t.fg_number) == 0x8B7EC8);   // purple-400
     REQUIRE(rgb_of(t.fg_function) == 0xDA702C); // orange-400
     REQUIRE(rgb_of(t.fg_type) == 0xD0A215);     // yellow-400
     // The surfaces the chrome reads: base-950 float over black, base-850 for
@@ -275,12 +278,12 @@ TEST_CASE("flexoki carries kepano's palette, not an approximation", "[jot][theme
   REQUIRE(e.theme_name_for_test() == "flexoki-light");
   {
     const Theme &t = e.theme_for_test();
-    REQUIRE(rgb_of(t.fg_default) == 0x100F0F); // black ink
-    REQUIRE(rgb_of(t.bg_default) == 0xFFFCF0); // paper
-    REQUIRE(rgb_of(t.fg_comment) == 0x6F6E69); // base-600
-    REQUIRE(rgb_of(t.fg_keyword) == 0x66800B); // green-600
-    REQUIRE(rgb_of(t.fg_string) == 0x24837B);  // cyan-600
-    REQUIRE(rgb_of(t.fg_number) == 0x5E409D);  // purple-600
+    REQUIRE(rgb_of(t.fg_default) == 0x100F0F);  // black ink
+    REQUIRE(rgb_of(t.bg_default) == 0xFFFCF0);  // paper
+    REQUIRE(rgb_of(t.fg_comment) == 0x6F6E69);  // base-600
+    REQUIRE(rgb_of(t.fg_keyword) == 0x66800B);  // green-600
+    REQUIRE(rgb_of(t.fg_string) == 0x24837B);   // cyan-600
+    REQUIRE(rgb_of(t.fg_number) == 0x5E409D);   // purple-600
     REQUIRE(rgb_of(t.fg_function) == 0xBC5215); // orange-600
     REQUIRE(rgb_of(t.fg_type) == 0xAD8301);     // yellow-600
     REQUIRE(rgb_of(t.bg_tab_hover) == 0xDAD8CE);
@@ -294,17 +297,16 @@ TEST_CASE("Hex theme colours accept every documented form", "[jot][theme]")
   // parse must leave the slot alone -- painting it black (or leaving the
   // previous theme's colour) is the failure this guards.
   Editor &e = probe_editor();
-  const UserThemeFile theme(
-      "hex_forms",
-      "{\n"
-      "  \"extends\": \"jot-dark\",\n"
-      "  \"Normal\": {\"fg\": \"#abc\", \"bg\": \"#010203\"},\n"
-      "  \"Keyword\": {\"fg\": \"#A0B0C0FF\"},\n"
-      "  \"Comment\": {\"fg\": \"#12345\"},\n"
-      "  \"String\": {\"fg\": \"chartreuse\"},\n"
-      "  \"Number\": {\"fg\": \"#gggggg\"},\n"
-      "  \"Cursor\": {\"fg\": \"  #0f0  \"}\n"
-      "}\n");
+  const UserThemeFile theme("hex_forms",
+                            "{\n"
+                            "  \"extends\": \"jot-dark\",\n"
+                            "  \"Normal\": {\"fg\": \"#abc\", \"bg\": \"#010203\"},\n"
+                            "  \"Keyword\": {\"fg\": \"#A0B0C0FF\"},\n"
+                            "  \"Comment\": {\"fg\": \"#12345\"},\n"
+                            "  \"String\": {\"fg\": \"chartreuse\"},\n"
+                            "  \"Number\": {\"fg\": \"#gggggg\"},\n"
+                            "  \"Cursor\": {\"fg\": \"  #0f0  \"}\n"
+                            "}\n");
 
   REQUIRE(e.apply_theme_for_test(theme.name()));
   const Theme &t = e.theme_for_test();
@@ -448,8 +450,16 @@ TEST_CASE("The chooser lists the schemes jot bundles and nothing else", "[jot][t
 
   // None of the names the removed catalog was keyed on is listed, including the
   // two that still resolve as aliases: a stale name must not look selectable.
-  for (const char *gone : {"dark", "light", "gruvbox", "tokyonight", "catppuccin",
-                           "onedark", "monokai", "solarized", "dracula", "nord"})
+  for (const char *gone : {"dark",
+                           "light",
+                           "gruvbox",
+                           "tokyonight",
+                           "catppuccin",
+                           "onedark",
+                           "monokai",
+                           "solarized",
+                           "dracula",
+                           "nord"})
   {
     INFO("removed theme still listed: " << gone);
     REQUIRE(std::find(themes.begin(), themes.end(), gone) == themes.end());

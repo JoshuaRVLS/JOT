@@ -2,9 +2,9 @@
 // fans results out to the feature modules, fd watching, and stop / restart /
 // enable / disable.
 #include "editor.h"
+#include "jot/integrations/lsp/common.h"
 #include "jot/lua/api.h"
 #include "lsp/client.h"
-#include "jot/integrations/lsp/common.h"
 #include <algorithm>
 #include <string>
 #include <utility>
@@ -88,8 +88,7 @@ void Editor::poll_lsp_clients()
     auto published = client->consume_published_diagnostics();
     if (!published.empty())
     {
-      const std::string client_key =
-          client->get_language() + "|" + client->get_root_path();
+      const std::string client_key = client->get_language() + "|" + client->get_root_path();
       for (auto &entry : published)
       {
         lsp_diag_slices_[client_key][entry.first] = std::move(entry.second);
@@ -149,6 +148,13 @@ void Editor::poll_lsp_clients()
       if (lsp_internal::is_html_filepath(entry.first))
       {
         lsp_internal::append_html_builtin_completions(lsp_completion_all_items);
+      }
+      if (WebCompletion::is_scanned_path(entry.first))
+      {
+        // The workspace's own vocabulary, alongside whatever the server
+        // answered: a server that indexes one project file still does not know
+        // the class names the rest of the tree uses.
+        append_web_index_completions(lsp_completion_all_items);
       }
 
       lsp_completion_filepath = entry.first;

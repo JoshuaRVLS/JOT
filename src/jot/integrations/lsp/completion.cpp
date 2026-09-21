@@ -1,9 +1,9 @@
 // Editor-side LSP completion: request triggering, client-side filtering and
 // ranking, and applying the selected item (including snippet expansion).
 #include "editor.h"
+#include "jot/integrations/lsp/common.h"
 #include "jot/lua/api.h"
 #include "lsp/client.h"
-#include "jot/integrations/lsp/common.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -370,7 +370,8 @@ bool Editor::refresh_lsp_completion_filter()
   }
 
   auto &buf = get_buffer();
-  if (!lsp_completion_filepath.empty() && !lsp_internal::same_path(lsp_completion_filepath, buf.filepath))
+  if (!lsp_completion_filepath.empty()
+      && !lsp_internal::same_path(lsp_completion_filepath, buf.filepath))
   {
     hide_lsp_completion();
     return false;
@@ -564,10 +565,15 @@ void Editor::request_lsp_completion(bool manual, char trigger_character)
     }
     bool html_file = lsp_internal::is_html_filepath(buf.filepath);
     bool script_file = lsp_internal::is_script_lsp_filepath(buf.filepath);
+    bool style_file = lsp_internal::is_style_lsp_filepath(buf.filepath);
+    // A custom property is typed `--name`, and `-` is not an identifier
+    // character: without its own trigger the second dash would ask for nothing
+    // and the name would quietly never be offered.
     bool punctuation_trigger = trigger_character == '.' || trigger_character == ':'
                                || trigger_character == '>' || trigger_character == '<'
-                               || trigger_character == '/';
-    int min_prefix = (html_file || script_file) ? 1 : 2;
+                               || trigger_character == '/'
+                               || (style_file && trigger_character == '-');
+    int min_prefix = (html_file || script_file || style_file) ? 1 : 2;
     if (!punctuation_trigger && prefix_len < min_prefix)
     {
       return;
@@ -576,10 +582,23 @@ void Editor::request_lsp_completion(bool manual, char trigger_character)
 
   bool has_builtin_html = false;
 
-  if (lsp_internal::is_html_filepath(buf.filepath))
+  // The list a web file starts from, before any server answers: the tags
+  // (markup only) plus the workspace's own class names and custom properties.
+  // It is seeded only where no server is expected -- a markup or style sheet
+  // file -- because for a JavaScript/TypeScript buffer a server does answer and
+  // clearing the previous response out from under the popup would blink it
+  // empty on every request. When a server does answer for one of these files,
+  // the response path appends the index to its items the same way it appends
+  // the tags (lifecycle.cpp).
+  if (lsp_internal::is_html_filepath(buf.filepath)
+      || lsp_internal::is_style_lsp_filepath(buf.filepath))
   {
     lsp_completion_all_items.clear();
-    lsp_internal::append_html_builtin_completions(lsp_completion_all_items);
+    if (lsp_internal::is_html_filepath(buf.filepath))
+    {
+      lsp_internal::append_html_builtin_completions(lsp_completion_all_items);
+    }
+    append_web_index_completions(lsp_completion_all_items);
     arm_lsp_completion(buf.filepath, manual);
     has_builtin_html = refresh_lsp_completion_filter();
     if (has_builtin_html)
@@ -715,11 +734,8 @@ bool Editor::apply_selected_lsp_completion()
   // mirrors and nested snippets, which a plain-text expansion cannot express.
   // 1-based line/column, end-exclusive, matching jot.buffer.apply_edit.
   if (item.insert_text_format == 2 && lua_api
-      && lua_api->run_lsp_snippet_handler(raw_snippet_text,
-                                          buf.cursor.y + 1,
-                                          start + 1,
-                                          buf.cursor.y + 1,
-                                          end + 1))
+      && lua_api->run_lsp_snippet_handler(
+          raw_snippet_text, buf.cursor.y + 1, start + 1, buf.cursor.y + 1, end + 1))
   {
     apply_additional_edits(start);
     hide_lsp_completion();

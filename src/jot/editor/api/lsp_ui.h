@@ -103,6 +103,18 @@ private:
   // the request was made with.
   void arm_lsp_completion(const std::string &filepath, bool manual);
   bool refresh_lsp_completion_filter();
+  // The workspace's own CSS vocabulary (features/web_completion.h): the class
+  // names and custom properties every file in the tree declares, offered inside
+  // `class="..."` and `var(--)`. The scan runs on the worker queue and its
+  // result is applied on the main thread; a request that arrives before the
+  // queue exists (a workspace opened during startup) is remembered and started
+  // with the first frame.
+  void request_web_index_scan();
+  void apply_web_index(WebCompletion::Index index);
+  // Appends the half of the index the caret's context calls for. Returns true
+  // when anything was added, which is what tells the caller the popup has rows
+  // even if no server answers.
+  bool append_web_index_completions(std::vector<LSPCompletionItem> &items);
   void update_lsp_completion_ghost();
   // How long a keystroke keeps the completion preview off screen
   // (`lsp_completion_ghost_delay_ms`; 0 previews at once).

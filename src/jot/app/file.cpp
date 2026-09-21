@@ -805,6 +805,7 @@ bool Editor::save_buffer_at(int index, bool announce)
           }
           refresh_git_status(true);
           request_cpp_definitions_scan(false);
+          request_web_index_scan();
         });
     buf.modified = false;
     buf.is_placeholder = false;
@@ -853,8 +854,10 @@ bool Editor::save_buffer_at(int index, bool announce)
   refresh_git_status(true);
   // A save is exactly when a declaration and its definition can fall out of
   // step, so the workspace is re-checked (coalesced: a scan already running just
-  // marks another as wanted).
+  // marks another as wanted). It is also when a new class name or custom
+  // property joins the workspace's own vocabulary, so that index follows too.
   request_cpp_definitions_scan(false);
+  request_web_index_scan();
   return true;
 }
 void Editor::save_file_as()

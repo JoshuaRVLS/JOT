@@ -50,10 +50,11 @@ std::vector<std::string> Editor::list_available_themes()
             [](const std::string &a, const std::string &b)
             { return string_util::lower_copy(a) < string_util::lower_copy(b); });
 
-  auto unique_end = std::unique(themes.begin(),
-                                themes.end(),
-                                [](const std::string &a, const std::string &b)
-                                { return string_util::lower_copy(a) == string_util::lower_copy(b); });
+  auto unique_end =
+      std::unique(themes.begin(),
+                  themes.end(),
+                  [](const std::string &a, const std::string &b)
+                  { return string_util::lower_copy(a) == string_util::lower_copy(b); });
   themes.erase(unique_end, themes.end());
   return themes;
 }

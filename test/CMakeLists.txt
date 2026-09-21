@@ -7,6 +7,7 @@ add_executable(jot_tests
   test_features.cpp
   test_markup_tags.cpp
   test_emmet.cpp
+  test_web_completion.cpp
   test_cpp_assist.cpp
   test_cpp_definitions.cpp
   test_cursor.cpp

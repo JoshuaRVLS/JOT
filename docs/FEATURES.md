@@ -93,6 +93,13 @@ an explicit font file.
   retyped from empty — carries the partner tag along with it.
 - Emmet abbreviations on Tab (`div.card>ul>li*3`, `m10-20`), in markup and
   style sheets (see the `emmet` setting below).
+- The workspace's own CSS vocabulary, offered as you type: every class name the
+  tree's markup and style sheets use, completed inside `class="..."` /
+  `className="..."`, and every custom property they declare, completed inside
+  `var(--)`. The scan runs on a worker thread once per workspace open and again
+  on every save; the names are filtered by the same fuzzy pass as an LSP response
+  and are offered *alongside* whatever a server answers, so a plain HTML/CSS
+  project gets completions for its own vocabulary with no server installed.
 - Line helpers: duplicate, delete, move up/down, join; trim trailing
   whitespace or blank lines; uppercase/lowercase; sort/reverse/deduplicate/
   shuffle selected lines.
@@ -968,6 +975,37 @@ property shorthands (`m`, `p`, `w`, `h`, `d`, `pos`, `bg`, `fz`, `ta`, `jc`,
 `ai`, `bdr`, `bxz`, …) and value keywords (`d:f` is `flex`, `pos:a` is
 `absolute`, `ta:c` is `center`), takes a bare number as the property's own unit
 (`10` is `10px`, `10p` is `10%`, `z10` is `10`), and `!` for `!important`.
+
+### The workspace's CSS vocabulary
+
+The class names a project uses and the custom properties it declares are spread
+across every file in the tree, which is exactly what a language server attached
+to one file cannot see — and what plain HTML and CSS have no server for at all.
+jot reads the tree itself: once when a workspace opens, and again after every
+save. The result is offered where the names belong, and nowhere else.
+
+```html
+<div class="▏">           <!-- every class name in the workspace -->
+```
+
+```css
+.card { color: var(--▏); }  /* every custom property in the workspace */
+```
+
+What is read: `class="..."`, `class='...'` and `className="..."` in markup
+(`.html`, `.htm`, `.jsx`, `.tsx`, `.vue`, `.svelte`, `.astro`, and the usual
+templating extensions), every `.name` in a selector position in a style sheet
+(`.css`, `.scss`, `.sass`, `.less`), and every `--name:` declaration. What is
+skipped: `node_modules`, `build`, `dist`, `target`, `vendor` and the other
+directories a generated name lives in, attributes that are commented out,
+templated values (`class={x}`, `{{ loop.index }}`), and any dotted word — a
+class name has no `.` in it, and skipping the dot is what keeps `icon.svg` and
+`a.b` out of the list.
+
+The names are filtered by the same pass as a server's response, so a typed
+prefix narrows them the way any completion does, and they join whatever a server
+answered rather than replacing it: in a React project `ts_ls` supplies the
+symbols and jot supplies the class names the server's own file scope missed.
 
 See [THEMES.md](THEMES.md) for authoring colorschemes and
 [LUA_API.md](LUA_API.md) for the scripting API.
