@@ -633,6 +633,10 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   lua_pop(L, 1);
   REQUIRE(g.open_count == 7);
   REQUIRE(g.lines_count == 1);
+  // The panel has no title, so the row has to carry the keys: "quit anyway?"
+  // alone leaves the answer unguessable (and the native painter, which is the
+  // other rendering of this same prompt, spells them out).
+  REQUIRE(g.lines[0].find("(y/n)") != std::string::npos);
 
   push_module_field(L, 1, "quit_prompt");
   lua_pushnil(L);

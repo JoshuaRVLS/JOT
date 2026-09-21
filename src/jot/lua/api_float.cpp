@@ -237,11 +237,15 @@ namespace
   // it. A float opened by one of these handlers focuses a modal, not chrome:
   // it opens on LuaAPI::kModalFloatZindex so the background floats -- which are
   // recreated every frame and would otherwise out-rank it by creation order --
-  // cannot repaint their rectangles over the panel.
+  // cannot repaint their rectangles over the panel. The save / rename / quit
+  // prompts are modals too: their panel is small, but the screen behind it is
+  // dimmed (Editor::render_prompt_modal), so the chrome under the scrim has to
+  // lose its input and get the scrim re-applied over it like any other modal.
   bool is_modal_surface(const std::string &name)
   {
     return name == "quick_pick" || name == "popup" || name == "tree_sitter_status"
-           || name == "lsp_status" || name == "telescope" || name == "settings";
+           || name == "lsp_status" || name == "telescope" || name == "settings"
+           || name == "save_prompt" || name == "rename_prompt" || name == "quit_prompt";
   }
 } // namespace
 
@@ -250,9 +254,10 @@ bool LuaAPI::modal_surface_open() const
   if (!editor)
     return false;
   return editor->show_quick_pick
-      || (editor->popup.visible && editor->popup.presentation == POPUP_MODAL)
-      || editor->show_tree_sitter_status_modal || editor->show_lsp_status_modal
-      || editor->telescope.is_active() || editor->show_settings_menu;
+         || (editor->popup.visible && editor->popup.presentation == POPUP_MODAL)
+         || editor->show_tree_sitter_status_modal || editor->show_lsp_status_modal
+         || editor->telescope.is_active() || editor->show_settings_menu || editor->show_save_prompt
+         || editor->show_rename_prompt || editor->show_quit_prompt;
 }
 
 int LuaAPI::open_float(int buffer, bool enter, lua_State *L, int ti)
@@ -471,11 +476,14 @@ void LuaAPI::render_float_layer(int min_zindex, int max_zindex)
   const auto modal_surface_open = [&](const std::string &s) -> bool
   {
     return (s == "quick_pick" && editor->show_quick_pick)
-        || (s == "popup" && editor->popup.visible && editor->popup.presentation == POPUP_MODAL)
-        || (s == "tree_sitter_status" && editor->show_tree_sitter_status_modal)
-        || (s == "lsp_status" && editor->show_lsp_status_modal)
-        || (s == "telescope" && editor->telescope.is_active())
-        || (s == "settings" && editor->show_settings_menu);
+           || (s == "popup" && editor->popup.visible && editor->popup.presentation == POPUP_MODAL)
+           || (s == "tree_sitter_status" && editor->show_tree_sitter_status_modal)
+           || (s == "lsp_status" && editor->show_lsp_status_modal)
+           || (s == "telescope" && editor->telescope.is_active())
+           || (s == "settings" && editor->show_settings_menu)
+           || (s == "save_prompt" && editor->show_save_prompt)
+           || (s == "rename_prompt" && editor->show_rename_prompt)
+           || (s == "quit_prompt" && editor->show_quit_prompt);
   };
   int rw = editor->ui->get_render_width(),
       rh = std::max(1, editor->ui->get_height() - editor->status_height);

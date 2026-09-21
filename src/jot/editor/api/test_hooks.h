@@ -66,6 +66,13 @@ public:
   // the real handle_mouse path (pane hit-test, selection, edge-panning).
   void mouse_event_for_test(int x, int y, int bstate);
   void mouse_event_for_test(int x, int y, int bstate, bool ctrl);
+  // The wheel's own entry point (handle_mouse_input), which the terminal
+  // backend calls for a scroll notch -- a separate path from the clicks above,
+  // so a modal that swallows the pointer has to be pinned on both.
+  void wheel_event_for_test(int x, int y, bool up, bool down)
+  {
+    handle_mouse_input(x, y, false, up, down);
+  }
   void create_new_buffer_for_test();
   void move_to_line_start_for_test();
   void render_for_test();
@@ -541,6 +548,28 @@ public:
   bool rename_prompt_visible_for_test() const
   {
     return show_rename_prompt;
+  }
+  // The save / quit prompts: the file menu and Ctrl+Q raise them when a buffer
+  // is dirty. A test drives the flag instead of dirtying a buffer first, so the
+  // modal's frame can be rendered on its own.
+  void open_quit_prompt_for_test()
+  {
+    show_quit_prompt = true;
+    needs_redraw = true;
+  }
+  void open_save_prompt_for_test()
+  {
+    show_save_prompt = true;
+    needs_redraw = true;
+  }
+  bool quit_prompt_visible_for_test() const
+  {
+    return show_quit_prompt;
+  }
+  void dismiss_quit_prompt_for_test()
+  {
+    show_quit_prompt = false;
+    needs_redraw = true;
   }
   const std::string &rename_prompt_text_for_test() const
   {

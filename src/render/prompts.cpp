@@ -132,6 +132,37 @@ void Editor::render_quit_prompt()
   ui->draw_text(x, y, prompt, theme.fg_command, panel_theme.bg_command);
 }
 
+void Editor::render_prompt_modal()
+{
+  if (!show_save_prompt && !show_rename_prompt && !show_quit_prompt)
+  {
+    return;
+  }
+  // The same two steps every other modal here takes (the pickers, the modal
+  // popup): dim what is already on the grid, then paint the panel over it. So
+  // the buffer the prompt is about stays visible behind the panel instead of
+  // being replaced by an empty grid, and the dim covers the whole screen -- the
+  // sidebar and the status line included -- rather than looking like a scrim
+  // that stopped at the pane edge.
+  //
+  // When a Lua handler owns the panel, render_*_prompt() only opens its float:
+  // the panel lands in the float pass that follows this call, undimmed, because
+  // a prompt surface is in the modal set (lua/api_float.cpp) and only the modal
+  // surface's own float is spared the pass's re-dim.
+  ui->dim_rect({0, 0, ui->get_render_width(), ui->get_height()});
+  if (show_save_prompt)
+  {
+    render_save_prompt();
+  }
+  else if (show_rename_prompt)
+  {
+    render_rename_prompt();
+  }
+  else
+  {
+    render_quit_prompt();
+  }
+}
 
 void Editor::render_rename_prompt()
 {

@@ -15,6 +15,14 @@ void Editor::handle_mouse_input(int x,
                                   bool is_scroll_left,
                                   bool is_scroll_right)
 {
+  // The other half of the prompt gate in handle_mouse: this is the wheel's
+  // entry point, and the panel has nothing to scroll -- a wheel over it would
+  // scroll the buffer behind it instead.
+  if (show_save_prompt || show_rename_prompt || show_quit_prompt)
+  {
+    return;
+  }
+
   if (is_click || is_scroll_up || is_scroll_down || is_scroll_left || is_scroll_right)
   {
     clear_debugger_breakpoint_hover();

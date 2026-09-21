@@ -980,11 +980,13 @@ void UIGui::paint_float_overlays(float dt)
 
   // Modal surfaces (match api_float.cpp's modal_surface_open set, plus the
   // settings menu): their own panel draws on top of the scrim; everything
-  // else is background and sits under it.
+  // else is background and sits under it. The three prompts are in here for the
+  // same reason: render_prompt_modal dims the window for them too.
   const auto is_modal_float = [](const std::string &s) -> bool
   {
-    return s == "quick_pick" || s == "popup" || s == "tree_sitter_status"
-           || s == "lsp_status" || s == "telescope" || s == "settings";
+    return s == "quick_pick" || s == "popup" || s == "tree_sitter_status" || s == "lsp_status"
+           || s == "telescope" || s == "settings" || s == "save_prompt" || s == "rename_prompt"
+           || s == "quit_prompt";
   };
   for (const FloatOverlay &ov : float_overlays)
   {

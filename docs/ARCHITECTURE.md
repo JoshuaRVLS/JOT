@@ -68,6 +68,33 @@ which is what keeps the ~200 files that call `Editor` unchanged.
 Add to a fragment by opening the one whose banner names the subsystem; the map
 is at the top of `editor.h`.
 
+## Modal panels
+
+A modal is one shape, whichever surface it is: the frame paints as usual, a
+scrim (`UI::dim_rect`) covers the whole grid, and the panel paints over it --
+natively, or as a Lua float in the pass that follows. `Editor::render_prompt_modal`
+is the shared entry point for the save / rename / quit prompts (called from the
+frame's tail and from the home screen's early return, which can raise the same
+panel); the pickers take the same two steps one at a time.
+
+Adding one is a multi-place change because the surface's *name* is what ties the
+scrim to the panel:
+
+- `is_modal_surface` / `modal_surface_open` in `jot/lua/api_float.cpp`: the
+  float opens on `kModalFloatZindex` (above the chrome floats, which are
+  recreated every frame and would otherwise out-rank it by creation order) and
+  the background floats lose their input.
+- The `modal_surface_open` lambda inside `LuaAPI::render_float_layer`, which is
+  the same predicate again for the re-dim: floats repaint their own rectangles
+  with `dim = false`, so without it the sidebar and status line would wipe the
+  scrim over themselves every frame.
+- `UIGui::paint_float_overlays`'s `is_modal_float` in `ui/gui/gui_render.cpp`:
+  the GUI draws the scrim as a quad between two float layers, so its copy of the
+  set decides what stays bright.
+- The native input paths do not consult the set (they gate per surface): a
+  prompt that should own the pointer while it is up says so in
+  `input/mouse/dispatcher.cpp` and `input/mouse/panels.cpp`.
+
 ## Lua API surface
 
 `src/jot/lua/api.h` keeps the `LuaAPI` class; the view structs it hands to Lua

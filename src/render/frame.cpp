@@ -176,7 +176,11 @@ void Editor::render()
       return;
     }
 
-    if (show_command_palette || search.visible() || show_save_prompt || show_quit_prompt)
+    // show_rename_prompt belongs in the guard as much as its two siblings:
+    // without it a focused rename prompt fell through to the editor's own caret
+    // placement below and drew a second cursor in the buffer.
+    if (show_command_palette || search.visible() || show_save_prompt || show_rename_prompt
+        || show_quit_prompt)
     {
       if (show_command_palette)
       {
@@ -267,6 +271,9 @@ void Editor::render()
     }
     render_tabline();
     render_status_line();
+    // The home screen returns before the shared tail, so its prompts take the
+    // scrim here (quitting from the home menu raises the same panel).
+    render_prompt_modal();
     if (lua_api)
     {
       // A registered home_screen handler paints its float on this early path.
@@ -342,40 +349,30 @@ void Editor::render()
   }
   else
   {
-    if (show_save_prompt)
+    // The chrome and the panes paint under the save / rename / quit prompt too
+    // -- those are modal *panels*, and the screen behind one stays on it, dimmed
+    // (render_prompt_modal, further down, once the status line is on the grid).
+    // This used to be one branch per prompt that painted nothing else, so the
+    // buffer the prompt was asking about vanished behind it.
+    if (show_sidebar && !terminal_zoom_active)
     {
-      render_save_prompt();
+      render_sidebar();
     }
-    else if (show_rename_prompt)
+    render_panes();
+    if (!terminal_zoom_active)
     {
-      render_rename_prompt();
+      render_collapsed_sidebar_handle();
     }
-    else if (show_quit_prompt)
+    render_lsp_completion();
+    render_lsp_signature();
+    render_integrated_terminal();
+    if (!terminal_zoom_active)
     {
-      render_quit_prompt();
-    }
-    else
-    {
-      if (show_sidebar && !terminal_zoom_active)
-      {
-        render_sidebar();
-      }
-      render_panes();
-      if (!terminal_zoom_active)
-      {
-        render_collapsed_sidebar_handle();
-      }
-      render_lsp_completion();
-      render_lsp_signature();
-      render_integrated_terminal();
-      if (!terminal_zoom_active)
-      {
-        render_debugger_panel();
-        render_git_panel();
-        render_git_diff_panel();
-        render_outline_panel();
-        render_plugin_panel();
-      }
+      render_debugger_panel();
+      render_git_panel();
+      render_git_diff_panel();
+      render_outline_panel();
+      render_plugin_panel();
     }
 
     // The picture is drawn inside its pane, so the viewer is only "open" while
@@ -435,6 +432,12 @@ void Editor::render()
       }
       render_popup();
     }
+
+    // Last before the floats: the save / rename / quit panel. The scrim lands
+    // on a frame that is fully painted (status line included) and the panel's
+    // own float, painted by the pass below, is the one rect the float pass does
+    // not re-dim.
+    render_prompt_modal();
 
     if (lua_api)
     {

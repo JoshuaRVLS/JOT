@@ -164,6 +164,11 @@ private:
   void place_rename_prompt_cursor();
   void place_save_prompt_cursor();
   void render_quit_prompt();
+  // The save / rename / quit prompt as a modal: the screen is dimmed and the
+  // panel paints over it. One entry point so the frame's shared tail and its
+  // home-screen early return (which raises the same panel from the home menu)
+  // treat the three prompts identically.
+  void render_prompt_modal();
   void render_popup();
   void render_home_menu();
   // Cell-based settings menu (:settings / Ctrl+, in GUI mode): a quick-

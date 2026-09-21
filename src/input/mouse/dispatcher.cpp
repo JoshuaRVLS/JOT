@@ -398,6 +398,17 @@ void Editor::handle_mouse(void *event_ptr)
     }
   }
 
+  // A save / rename / quit prompt is a modal panel over the dimmed frame: while
+  // it is up the pointer belongs to it, the way it does to the pickers further
+  // down. The panel has no clickable rows (the answer is a key), so these
+  // events are dropped rather than routed -- before this it covered a live
+  // explorer and a live buffer, so a click on the dimmed sidebar opened a file
+  // from under a question that had not been answered yet.
+  if (show_save_prompt || show_rename_prompt || show_quit_prompt)
+  {
+    return;
+  }
+
   // Row 0 is the workspace tab strip, not a pane row: it sees the event first
   // so a press, a close, a middle click or a drag can never fall through to the
   // text underneath.

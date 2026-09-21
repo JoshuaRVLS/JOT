@@ -86,8 +86,15 @@ local function quit_prompt(p)
   local fg = colors.fg or 7
   local bg = colors.panel_bg or colors.bg or 0
   local inner_w = math.max(1, p.w - 2)
+  -- The keys, spelled out: the panel has no title and the answer is not
+  -- guessable from "quit anyway?" alone. This is the same sentence the native
+  -- painter uses (render/prompts.cpp), so the two renderings agree.
   local rows = {
-    { text = pad(truncate(" Unsaved changes! Quit anyway?", inner_w), inner_w), fg = fg, bg = bg },
+    {
+      text = pad(truncate(" Unsaved changes! Quit anyway? (y/n)", inner_w), inner_w),
+      fg = fg,
+      bg = bg,
+    },
   }
   return present_panel("quit_prompt", p, rows, {})
 end

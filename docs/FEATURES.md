@@ -105,7 +105,10 @@ an explicit font file.
   own drop-down, and a folder row opens the folder's listing beside it as a
   cascade (`winbar` = `off` / `auto` / `on`).
 - Open, save, save-as, close, quit (with force variants), and autosave with a
-  configurable interval.
+  configurable interval. The save-as, rename and quit prompts are modal panels
+  over the dimmed editor: the buffer behind one stays visible (dimmed) while the
+  panel owns the keyboard and the pointer, and the quit panel spells out its
+  keys (`(y/n)`).
 
 ### Workspace and sidebar
 

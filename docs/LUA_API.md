@@ -667,11 +667,13 @@ query text highlighted inside labels (`PageUp`/`PageDown`/`Home`/`End` page
 and jump the selection).
 
 All floating modals — the command palette, quick picks, the tree-sitter
-status modal, popups, and the LSP manager — use one design language driven
-by theme slots: the editor behind the dialog is dimmed (faint attribute),
-and the panel surface, border, and title row all come from the theme's
+status modal, popups, the LSP manager, and the save / rename / quit prompts —
+use one design language driven by theme slots: the editor behind the dialog is
+dimmed, and the panel surface, border, and title row all come from the theme's
 `bg_panel_border` slot, so switching colorschemes restyles every dialog at
-once.
+once. A prompt is one of these: `quit_prompt` gets the rect and the colors and
+paints its own row (the native painter, which runs when no handler is
+registered, writes the same sentence).
 
 Events currently include `BufOpen`, `BufChange`, `BufSave`, `BufClose`,
 `CursorMoved`, `WorkspaceEnter`, `UIResize`, `DiagnosticChanged`, and
