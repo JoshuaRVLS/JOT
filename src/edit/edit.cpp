@@ -94,6 +94,41 @@ namespace
   }
 } // namespace
 
+void Editor::sync_markup_tag_name()
+{
+  auto &buf = get_buffer();
+  if (!HtmlFeatures::is_markup_tag_extension(buf.filepath))
+    return;
+  if (buf.is_lazy())
+    buf.materialize();
+
+  HtmlFeatures::MarkupTagPair pair;
+  if (!HtmlFeatures::find_tag_pair(buf.lines, buf.cursor.y, buf.cursor.x, pair))
+    return;
+  if (pair.partner == pair.name)
+    return;
+  if (pair.partner_line < 0 || pair.partner_line >= (int)buf.lines.size())
+    return;
+
+  std::string &partner_line = buf.line_mut(pair.partner_line);
+  if (pair.partner_col < 0
+      || pair.partner_col + (int)pair.partner.size() > (int)partner_line.size())
+    return;
+
+  const int delta = (int)pair.name.size() - (int)pair.partner.size();
+  partner_line.replace(pair.partner_col, pair.partner.size(), pair.name);
+
+  // The partner is ahead of the cursor except when the cursor is in the closing
+  // tag of a pair on one line, and then the caret has to follow the text that
+  // moved under it. On another line only that line's length changed, so the
+  // column is already right.
+  if (pair.partner_line == buf.cursor.y && pair.partner_col < buf.cursor.x)
+    buf.cursor.x = std::max(0, buf.cursor.x + delta);
+
+  buf.modified = true;
+  needs_redraw = true;
+}
+
 bool Editor::insert_char(char c)
 {
   save_state();
@@ -278,6 +313,8 @@ bool Editor::insert_char(char c)
         buf.line_mut(buf.cursor.y).insert(buf.cursor.x, 1, closing);
       }
     }
+
+    sync_markup_tag_name();
   }
 
   buf.modified = true;
@@ -417,6 +454,9 @@ void Editor::delete_char(bool forward)
       buf.lines.erase(buf.lines.begin() + buf.cursor.y + 1);
       buf.modified = true;
     }
+
+    // Backspacing a tag name shrinks the partner with it.
+    sync_markup_tag_name();
   }
   clamp_cursor(get_pane().buffer_id);
   ensure_cursor_visible();

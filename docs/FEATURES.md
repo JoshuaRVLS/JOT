@@ -87,6 +87,10 @@ an explicit font file.
 - Smart multi-line paste that re-indents to the cursor.
 - Auto-indent, auto-closing brackets, bracket matching and jumping, rainbow
   bracket colors, and an active bracket guide.
+- Markup tags (`.html`, `.htm`, `.jsx`, `.tsx`): typing `>` on an opening tag
+  writes the closing tag for you, Enter between a pair splits it onto three
+  indented lines, and renaming a tag — from either end, including a name being
+  retyped from empty — carries the partner tag along with it.
 - Line helpers: duplicate, delete, move up/down, join; trim trailing
   whitespace or blank lines; uppercase/lowercase; sort/reverse/deduplicate/
   shuffle selected lines.

@@ -118,6 +118,11 @@ private:
 
   void move_cursor(int dx, int dy, bool extend_selection = false);
   bool insert_char(char c);
+  // Carries the partner of the markup tag name the cursor sits in along with the
+  // edit that just landed, so an opening tag and its closing tag rename together
+  // (see HtmlFeatures::find_tag_pair). A no-op outside markup buffers, and
+  // whenever the cursor is not inside a tag name.
+  void sync_markup_tag_name();
   void insert_string(const std::string &str);
   void delete_char(bool forward = true);
   // Deletes at every caret: the main cursor (point when no primary
