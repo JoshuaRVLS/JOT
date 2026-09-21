@@ -180,9 +180,14 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
     return;
   }
 
-  // The bottom panel owns its keys while it has focus, so the shell is never
-  // handed j/k/Enter and the buffer underneath never sees them either.
-  if (show_integrated_terminal && focus_state == FOCUS_BOTTOM_PANEL)
+  // The bottom panel owns its *plain* keys while it has focus, so the shell is
+  // never handed j/k/Enter and the buffer underneath never sees them either. A
+  // modified chord is a global shortcut (Alt+S saves, Ctrl+Shift+M reopens
+  // this panel, Ctrl+B hides the explorer) and goes on to the normal handling
+  // below, the same way the explorer lets those chords through. Swallowing
+  // them here made the panel a keyboard dead zone: with the Problems list
+  // focused, Ctrl+S and every Alt keybind did nothing at all.
+  if (show_integrated_terminal && focus_state == FOCUS_BOTTOM_PANEL && !is_ctrl && !is_alt)
   {
     handle_bottom_panel_input(ch, is_ctrl, is_shift, is_alt);
     return;
@@ -426,10 +431,15 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
       needs_redraw = true;
       return;
     }
-    // Keep global/editor shortcuts usable while explorer is focused.
-    // Ctrl-based keybinds are routed through modeless editor handlers.
+    // Keep global/editor shortcuts usable while explorer is focused: a
+    // modified chord is a shortcut, not a tree command, so Ctrl *and* Alt are
+    // routed through the modeless editor handlers. Dropping Alt here silently
+    // killed every Alt keybind (save, search, palette, buffer close, pane
+    // focus) whenever the explorer had focus -- which is where `jot <dir>`
+    // starts and where clicking any file in the tree leaves the focus -- while
+    // Ctrl kept working, so it read as "Alt does not work in this terminal".
     bool ctrl_control_byte = (ch >= 1 && ch <= 26 && ch != 9 && ch != 10 && ch != 13);
-    if (is_ctrl || ctrl_control_byte || ch == 23 || ch == 12)
+    if (is_ctrl || is_alt || ctrl_control_byte || ch == 23 || ch == 12)
     {
       handle_modeless_input(ch, is_ctrl, is_shift, is_alt);
       return;

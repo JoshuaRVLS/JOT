@@ -771,6 +771,18 @@ levels below it again.
 | `Ctrl+Shift+H/J/K/L` | Resize pane |
 | `Ctrl+Arrow` | Resize pane |
 
+The split keys are `Alt+Shift+<letter>`, so a desktop that binds `Alt+Shift` to
+switching keyboard layouts (the XKB `grp:alt_shift_toggle` option, KDE, Windows)
+will eat them before the terminal sees the letter. `Ctrl+Shift+P` and the pane
+commands are the way round that: `split`, `splitleft`, `splitright`, `splitup`,
+`splitdown` each do one of the four.
+
+Shortcuts are global: the explorer having focus (which is where `jot <folder>`
+starts, and where opening a file from the tree leaves it) does not stop `Alt+S`,
+`Alt+W`, `Alt+B` or the pane chords, and neither does the Problems list. What the
+focused panel owns is the *plain* keys -- a bare letter belongs to the tree or the
+list under the cursor, never to the buffer behind it.
+
 ### Search panel
 
 `Enter` / `↓` / `Ctrl+F` next match · `↑` previous · `Tab` case-sensitivity or

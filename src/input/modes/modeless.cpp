@@ -674,7 +674,12 @@ void Editor::handle_modeless_input(int ch, bool is_ctrl, bool is_shift, bool is_
     return;
   }
 
-  if (ch >= 32 && ch < 1000)
+  // A bare printable key is text. A chord is not: Alt+X must not type "x"
+  // just because no keybind claims the chord, and neither must Ctrl+X when the
+  // terminal reports it as a plain code point with the modifier attached
+  // (kitty CSI-u does exactly that, for every Ctrl+letter the editor has not
+  // bound). Shift is deliberately not excluded -- Shift+1 is "!".
+  if (!is_ctrl && !is_alt && ch >= 32 && ch < 1000)
   {
     auto &buf = get_buffer();
     if (buf.selection.active)

@@ -6,6 +6,7 @@ add_executable(jot_tests
   test_fold_click.cpp
   test_features.cpp
   test_markup_tags.cpp
+  test_alt_chords.cpp
   test_emmet.cpp
   test_web_completion.cpp
   test_html_preview.cpp

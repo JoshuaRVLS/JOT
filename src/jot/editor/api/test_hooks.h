@@ -116,6 +116,12 @@ public:
     return smooth_scroll_enabled_;
   }
   FileBuffer &buffer_for_test(int id = -1);
+  // How many tabs the strip is holding, so a case can assert that a command
+  // the chord reached actually closed or opened one (see test_alt_chords.cpp).
+  int buffer_count_for_test() const
+  {
+    return (int)buffers.size();
+  }
   SplitPane &pane_for_test(int id = -1);
   // Every pane as laid out by the last update_pane_layout, so a test can check
   // the row budget each one was charged (see test_pane_row_budget.cpp).

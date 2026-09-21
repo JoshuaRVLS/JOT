@@ -99,11 +99,13 @@ Editor::FileTabLayout Editor::build_tabline_layout()
   {
     const FileBuffer &buffer = buffers[(size_t)id];
     paths.push_back(buffer.filepath);
-    jot_icons::FileTypeIcon icon{};
-    if (!buffer.filepath.empty())
-    {
-      icon = jot_icons::file_type_icon(buffer.filepath);
-    }
+    // Always through the icon table, empty path included: it answers with the
+    // generic file outline for one. A zero-initialised FileTypeIcon has a null
+    // `glyph`, and pushing that into the vector below built a std::string from
+    // a null pointer -- which throws. That is what a scratch buffer hit (Alt+N,
+    // the home menu's new file): the tab strip died mid-layout, so the new tab
+    // never appeared and the command looked like it had not run at all.
+    const jot_icons::FileTypeIcon icon = jot_icons::file_type_icon(buffer.filepath);
     icons.push_back(icon.glyph);
     icon_colors.push_back(icon.color);
     // "▌ icon name ● ×": the width the tab wants when nothing forces it to
