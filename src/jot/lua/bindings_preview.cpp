@@ -54,6 +54,13 @@ namespace lua_bind
     return 0;
   }
 
+  // jot.preview.set_document(rel_path, text)
+  int l_preview_set_document(lua_State *L)
+  {
+    api(L).preview_set_document_from_lua(L);
+    return 0;
+  }
+
   int l_preview_notify(lua_State *L)
   {
     api(L).preview_notify_from_lua(L);

@@ -38,10 +38,21 @@ void LuaAPI::preview_start_from_lua(lua_State *L)
   }
   std::string host = "127.0.0.1";
   int port = 0;
+  std::string file_root;
   if (lua_istable(L, 1))
   {
     host = table_string(L, 1, "host", host);
     port = table_int(L, 1, "port", port);
+    file_root = table_string(L, 1, "file_root", file_root);
+  }
+
+  // A file root switches the server from "one stored page" to "this directory",
+  // which is what a page with its own stylesheet and scripts needs (see
+  // PreviewServer::set_file_root). It is set before the listen so the first
+  // request already sees it.
+  if (!file_root.empty())
+  {
+    server->set_file_root(file_root);
   }
 
   int bound_port = 0;
@@ -101,6 +112,22 @@ void LuaAPI::preview_set_content_from_lua(lua_State *L)
   size_t len = 0;
   const char *body = luaL_optlstring(L, 1, "", &len);
   server->set_content(std::string(body, len));
+}
+
+void LuaAPI::preview_set_document_from_lua(lua_State *L)
+{
+  PreviewServer *server = ensure_preview_server();
+  if (!server)
+    return;
+  const std::string rel = luaL_optstring(L, 1, "");
+  size_t len = 0;
+  const char *text = luaL_optlstring(L, 2, "", &len);
+  if (rel.empty())
+  {
+    server->clear_document();
+    return;
+  }
+  server->set_document(rel, std::string(text, len));
 }
 
 void LuaAPI::preview_notify_from_lua(lua_State *L)

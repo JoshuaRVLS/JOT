@@ -17,7 +17,7 @@ src/
     workspace/     explorer, sidebar, git, right dock, tasks
     surfaces/      menus, popups, home screen, settings, theme chooser
     lua/           the Lua API surface (view structs in lua/view/)
-    markdown/      the preview server
+    markdown/      the preview server (shared by the markdown and HTML previews)
   edit/            pure text editing (cursor, lines, search, sort, ...)
   features/        self-contained features (folding, colors, config, syntax)
   input/           key/mouse routing: modes, palette, commands
@@ -48,6 +48,13 @@ exactly as it was when this was one 500-line struct.
 
 The groups are independent: no group includes another, so a translation unit
 that only needs one slice can include it directly.
+
+`PreviewServer` (`jot/markdown/preview_server.*`) is one HTTP/SSE server with two
+modes, chosen by whether a file root was set: a *stored page* (the markdown
+preview renders a document and serves it at `/`) or a *served tree* (the HTML
+preview points the browser at a real path, injects a reload client into HTML
+responses, and can override one document with a buffer's text). Both modes are
+driven entirely from Lua over `jot.preview.*`; the server holds no policy.
 
 Two of the groups hold the state around a workspace-wide scan that runs on the
 worker queue: `cpp_defs_state.h` (declarations with no body, and signatures with

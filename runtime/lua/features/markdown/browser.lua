@@ -33,9 +33,15 @@ local function shell_quote(text)
 end
 
 -- The shell command that opens `url`, honoring the configured browser.
-function M.command(url)
+-- `choice_override` lets another feature that shares this launcher (the HTML
+-- preview) name its own browser setting instead of the markdown one.
+function M.command(url, choice_override)
   local quoted = shell_quote(url)
-  local choice = tostring(config.get("browser") or ""):lower()
+  local choice = choice_override
+  if choice == nil then
+    choice = config.get("browser")
+  end
+  choice = tostring(choice or ""):lower()
 
   if choice == "none" then
     return nil
@@ -67,8 +73,8 @@ function M.url(port)
 end
 
 -- Launches the browser. Returns true when a launcher was dispatched.
-function M.open(url)
-  local command = M.command(url)
+function M.open(url, choice_override)
+  local command = M.command(url, choice_override)
   if not command then
     return false
   end

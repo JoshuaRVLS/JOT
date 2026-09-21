@@ -96,6 +96,7 @@ namespace lua_bind
   int l_preview_set_page(lua_State *L);
   int l_preview_page(lua_State *L);
   int l_preview_set_content(lua_State *L);
+  int l_preview_set_document(lua_State *L);
   int l_preview_notify(lua_State *L);
   int l_preview_sync(lua_State *L);
   int l_preview_take_scroll(lua_State *L);

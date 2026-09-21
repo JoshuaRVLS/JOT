@@ -183,6 +183,7 @@ public:
   // Bundled markdown preview feature (features/markdown/init.lua and its
   // modules). Loaded after user plugins so its commands/autocmds survive.
   bool load_markdown_runtime(lua_State *L);
+  bool load_html_runtime(lua_State *L);
   bool load_snippet_runtime(lua_State *L);
 
   // LSP installer host half (see api_lsp_install.cpp): loads the Lua
@@ -660,6 +661,10 @@ public:
   void preview_set_page_from_lua(lua_State *L);
   void preview_page_from_lua(lua_State *L);
   void preview_set_content_from_lua(lua_State *L);
+  // jot.preview.set_document(rel_path, text): the file served in place of the
+  // one on disk under the file root, for the buffer being edited. An empty path
+  // clears it.
+  void preview_set_document_from_lua(lua_State *L);
   void preview_notify_from_lua(lua_State *L);
   void preview_sync_from_lua(lua_State *L);
   void preview_take_scroll_from_lua(lua_State *L);

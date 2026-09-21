@@ -34,6 +34,42 @@ namespace
     std::string data;
   };
 
+  // The client the server appends to a served HTML page: an EventSource on the
+  // same origin that reloads the page when the editor says the file changed.
+  // The `content` event the stream opens with is ignored -- this page renders
+  // itself, and pushing a document body into it would replace the document.
+  const char *kReloadClient =
+      "\n<script>\n"
+      "/* injected by jot: reload this page when the file it came from changes */\n"
+      "(function () {\n"
+      "  if (typeof EventSource === 'undefined') return;\n"
+      "  var source = new EventSource('/events');\n"
+      "  source.addEventListener('reload', function () { location.reload(); });\n"
+      "})();\n"
+      "</script>\n";
+
+  // Whether a response body is a page that should carry the reload client.
+  bool is_html_type(const std::string &content_type)
+  {
+    return content_type.rfind("text/html", 0) == 0;
+  }
+
+  // The page with the reload client in it. Placed before `</body>` when the
+  // document has one (so it stays inside the document), after the content
+  // otherwise.
+  std::string inject_reload_client(const std::string &html)
+  {
+    const std::string marker = "</body>";
+    const size_t at = html.rfind(marker);
+    if (at == std::string::npos)
+    {
+      return html + kReloadClient;
+    }
+    std::string out = html;
+    out.insert(at, kReloadClient);
+    return out;
+  }
+
   std::string read_file_limited(const std::string &path, bool *ok, long long *size_out)
   {
     *ok = false;
@@ -88,6 +124,9 @@ struct PreviewServerImpl
   std::string host;
   std::string page;
   std::string content;
+  std::string file_root;
+  std::string document_path;
+  std::string document_text;
   std::vector<Client *> clients;
   int pending_scroll = -1;
 
@@ -124,11 +163,8 @@ struct PreviewServerImpl
     client->out_queue.pop_front();
     write->req.data = client;
     uv_buf_t buf = uv_buf_init(&write->data[0], static_cast<unsigned>(write->data.size()));
-    const int rc = uv_write(&write->req,
-                            reinterpret_cast<uv_stream_t *>(&client->tcp),
-                            &buf,
-                            1,
-                            on_write);
+    const int rc =
+        uv_write(&write->req, reinterpret_cast<uv_stream_t *>(&client->tcp), &buf, 1, on_write);
     if (rc != 0)
     {
       client->writing = false;
@@ -171,10 +207,8 @@ struct PreviewServerImpl
   }
 
   // ── requests ──────────────────────────────────────────────────────────────
-  static void respond(Client *client,
-                      int status,
-                      const std::string &content_type,
-                      const std::string &body)
+  static void
+  respond(Client *client, int status, const std::string &content_type, const std::string &body)
   {
     send(client, jot_http::build_response(status, content_type, body, false));
     client->close_after_write = true;
@@ -221,6 +255,83 @@ struct PreviewServerImpl
       return;
     }
     respond(client, 200, jot_http::mime_type_for(it->second), bytes);
+  }
+
+  // A request path as a path relative to the file root, or an empty string when
+  // it tries to climb out of it. Percent escapes are already decoded by the
+  // parser; what is left to refuse is a `..` segment (in either slash spelling)
+  // and an absolute path, which would otherwise escape the root.
+  static std::string relative_file_path(const std::string &request_path)
+  {
+    std::string rel = request_path;
+    while (!rel.empty() && rel[0] == '/')
+    {
+      rel.erase(0, 1);
+    }
+    if (rel.empty() || rel.find('\0') != std::string::npos)
+    {
+      return {};
+    }
+    if (rel.find('\\') != std::string::npos)
+    {
+      rel.clear();
+      return rel;
+    }
+    size_t start = 0;
+    while (start <= rel.size())
+    {
+      const size_t end = rel.find('/', start);
+      const std::string segment =
+          rel.substr(start, end == std::string::npos ? std::string::npos : end - start);
+      if (segment == ".." || segment == ".")
+      {
+        return {};
+      }
+      if (end == std::string::npos)
+      {
+        break;
+      }
+      start = end + 1;
+    }
+    return rel;
+  }
+
+  // Serves one file of the tree: the edited document from memory (so unsaved
+  // changes are what the preview shows), everything else from disk.
+  void handle_file(Client *client, const std::string &request_path)
+  {
+    const std::string rel = relative_file_path(request_path);
+    if (rel.empty())
+    {
+      respond(client, 404, "text/plain", "not found");
+      return;
+    }
+
+    std::string content_type = jot_http::mime_type_for(rel);
+    std::string bytes;
+    if (!document_path.empty() && rel == document_path)
+    {
+      // The edited document is the page, whatever the file happens to be
+      // called: the charset is spelled out because a page carries text.
+      content_type = "text/html; charset=utf-8";
+      bytes = document_text;
+    }
+    else
+    {
+      bool ok = false;
+      bytes = read_file_limited(file_root + "/" + rel, &ok, nullptr);
+      if (!ok)
+      {
+        respond(client, 404, "text/plain", "not found");
+        return;
+      }
+    }
+
+    if (is_html_type(content_type))
+    {
+      bytes = inject_reload_client(bytes);
+    }
+    respond(client, 200, content_type, bytes);
   }
 
   void handle_sync(Client *client, const jot_http::Request &req)
@@ -270,6 +381,26 @@ struct PreviewServerImpl
     {
       respond(client, 204, "", "");
       return;
+    }
+    // A file root turns the two paths the stored page occupies into files, and
+    // every other path into a file as well: the tree is the preview.
+    if (!file_root.empty())
+    {
+      if (req.path == "/" && is_get)
+      {
+        if (document_path.empty())
+        {
+          respond(client, 404, "text/plain", "not found");
+          return;
+        }
+        handle_file(client, document_path);
+        return;
+      }
+      if (is_get)
+      {
+        handle_file(client, req.path);
+        return;
+      }
     }
     if (req.path == "/" || req.path == "/index.html")
     {
@@ -405,7 +536,10 @@ bool PreviewServer::start(const std::string &host, int port, int *out_port, std:
     impl_->has_server = false;
     return false;
   }
-  if (uv_listen(reinterpret_cast<uv_stream_t *>(&impl_->server), kListenBacklog, PreviewServerImpl::on_connection) != 0)
+  if (uv_listen(reinterpret_cast<uv_stream_t *>(&impl_->server),
+                kListenBacklog,
+                PreviewServerImpl::on_connection)
+      != 0)
   {
     if (error)
       *error = "cannot listen on " + bind_host + ":" + std::to_string(bind_port);
@@ -486,6 +620,45 @@ const std::string &PreviewServer::content() const
 {
   static const std::string kEmpty;
   return impl_ ? impl_->content : kEmpty;
+}
+
+void PreviewServer::set_file_root(std::string dir)
+{
+  if (!impl_)
+    return;
+  while (dir.size() > 1 && (dir.back() == '/' || dir.back() == '\\'))
+  {
+    dir.pop_back();
+  }
+  impl_->file_root = std::move(dir);
+}
+
+const std::string &PreviewServer::file_root() const
+{
+  static const std::string kEmpty;
+  return impl_ ? impl_->file_root : kEmpty;
+}
+
+void PreviewServer::set_document(std::string relative_path, std::string text)
+{
+  if (!impl_)
+    return;
+  impl_->document_path = std::move(relative_path);
+  impl_->document_text = std::move(text);
+}
+
+void PreviewServer::clear_document()
+{
+  if (!impl_)
+    return;
+  impl_->document_path.clear();
+  impl_->document_text.clear();
+}
+
+const std::string &PreviewServer::document_path() const
+{
+  static const std::string kEmpty;
+  return impl_ ? impl_->document_path : kEmpty;
 }
 
 void PreviewServer::sync_clients(int line)

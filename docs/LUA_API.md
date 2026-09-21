@@ -853,18 +853,26 @@ jot.status.register("branch", {
 Two layers: `jot.preview` is the native transport (a loopback HTTP server plus
 an SSE broadcast), and `jot.md` is the bundled Lua feature that renders the
 document and drives the session. The transport never parses markdown and the
-feature never touches a socket, so either half can be replaced.
+feature never touches a socket, so either half can be replaced. The same
+transport serves the HTML preview (`jot.html_preview`), which uses its file-root
+mode instead of a stored page — see below.
 
 ### `jot.preview` (native)
 
-- `jot.preview.start{ host = "127.0.0.1", port = 0 }` — binds the server
-  (`0` picks a free port). Returns `true, port` or `nil, error`.
+- `jot.preview.start{ host = "127.0.0.1", port = 0, file_root = nil }` — binds
+  the server (`0` picks a free port). Returns `true, port` or `nil, error`.
+  `file_root` is a directory, not a page: it switches the server into *serving a
+  tree*, described under [HTML preview](#html-preview).
 - `jot.preview.stop()` — unbinds the server and closes every client.
 - `jot.preview.status()` — `{ running = bool, port = int, clients = int }`.
 - `jot.preview.set_page(html)` / `jot.preview.page()` — the full page served at
   `GET /`; the page shell is replaced as a whole.
 - `jot.preview.set_content(body)` — the rendered document body kept for the
   initial `GET /` response (the SSE `content` event carries it to live clients).
+- `jot.preview.set_document(rel_path, text)` — with a file root, the text to
+  serve *in place of the file on disk* at that relative path, which is how a
+  buffer's unsaved changes reach the browser. `("", "")` clears it. Only the
+  edited document is overridden; every other path still comes from disk.
 - `jot.preview.notify(event, data)` — broadcast an SSE event to every open
   client (the feature uses `content` and `title`).
 - `jot.preview.sync(line)` — broadcast `event: sync` with a 1-based line, used
@@ -875,6 +883,12 @@ feature never touches a socket, so either half can be replaced.
 
 The server also serves `GET /image?path=...` for local images referenced by the
 document.
+
+With a file root set, every `GET /<path>` is a file under that root (a request
+that tries to climb out of it is refused), and a response whose content type is
+HTML has a live-reload client appended before its `</body>` — an `EventSource`
+on `/events` that calls `location.reload()` when the editor sends
+`jot.preview.notify("reload", ...)`.
 
 ```lua
 local ok, port = jot.preview.start({ port = 0 })
@@ -907,6 +921,47 @@ jot.md.setup({
   end,
 })
 ```
+
+## HTML Preview
+
+`jot.html_preview` is the bundled feature that opens the current HTML file in a
+browser and reloads it as you edit. It shares the transport and the browser
+launcher with the markdown preview; what is its own is the decision of *what the
+server is pointed at*. A page is a tree — its `<link>`, `<script>` and `<img>`
+references are relative paths — so the session roots the server at the workspace
+(or the file's own directory) and sends the browser to the file's path inside
+it, rather than rendering one page the server holds.
+
+- `jot.html_preview.setup(opts)` — applies options into the `html_preview_*`
+  config keys (`auto_start`, `auto_close`, `refresh_interval`, `port`, `host`,
+  `root`, `browser`, `open_browser`, `echo_preview_url`, `html_ext`).
+- `jot.html_preview.start([opts])`, `stop()`, `toggle()`, `refresh([force])`
+  — `refresh` pushes the buffer's text again and reloads the page.
+- `jot.html_preview.is_running()`, `url()`, `state()` — `{ running, port, url, path }`.
+- `jot.html_preview.config` — the option module (`get`, `setup`, `is_html_path`).
+- `jot.html_preview` also exposes the pure URL helpers (`relative_to`,
+  `url_path`, `dirname`, `encode_path`), which is where a wrong URL would come
+  from.
+
+```lua
+jot.html_preview.setup({
+  auto_start = true,      -- open the preview with an HTML buffer
+  root = "dir",          -- serve the file's own directory, not the workspace
+  open_browser = false,   -- serve it and print the URL (e.g. over SSH)
+})
+```
+
+```lua
+-- The same transport by hand: serve the tree, override one document.
+local ok, port = jot.preview.start({ file_root = "/w/site" })
+if ok then
+  jot.preview.set_document("index.html", "<h1>unsaved</h1>")
+  jot.preview.notify("reload", "index.html")
+end
+```
+
+The browser launcher is `jot_md.browser`, shared by both previews; `open(url,
+choice)` takes an optional browser name so each feature can name its own setting.
 
 ## Snippets
 

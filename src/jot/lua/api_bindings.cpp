@@ -597,8 +597,9 @@ bool LuaAPI::init()
   field(L, "register", l_status_register);
   field(L, "unregister", l_status_unregister);
   lua_setfield(L, -2, "status");
-  // jot.preview: the markdown preview HTTP/SSE transport (libuv). All content
-  // policy (parsing, template, commands) lives in the Lua markdown feature.
+  // jot.preview: the preview HTTP/SSE transport (libuv), shared by the markdown
+  // feature (a rendered page) and the HTML feature (the file served in place,
+  // with a file root and a document override). All content policy lives in Lua.
   lua_newtable(L);
   field(L, "start", l_preview_start);
   field(L, "stop", l_preview_stop);
@@ -606,6 +607,7 @@ bool LuaAPI::init()
   field(L, "set_page", l_preview_set_page);
   field(L, "page", l_preview_page);
   field(L, "set_content", l_preview_set_content);
+  field(L, "set_document", l_preview_set_document);
   field(L, "notify", l_preview_notify);
   field(L, "sync", l_preview_sync);
   field(L, "take_scroll", l_preview_take_scroll);
@@ -717,6 +719,10 @@ bool LuaAPI::init()
   // in Lua. Loaded after plugins so its commands and autocmds are not reset by
   // load_plugins().
   load_markdown_runtime(L);
+  // HTML preview (:HtmlPreview and friends): the file served in place from its
+  // own tree, with the same transport and browser launcher the markdown preview
+  // uses, so it loads after it.
+  load_html_runtime(L);
   // Snippet engine (features/snippet/*.lua): a LuaSnip-equivalent expansion
   // system with VSCode/snipMate/Lua packs, Tab/Shift-Tab jumping inside an
   // active snippet and a hook for LSP snippet completions. Loaded after

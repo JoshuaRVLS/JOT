@@ -369,6 +369,26 @@ bool LuaAPI::load_markdown_runtime(lua_State *L)
   return load_bundled_lua_file(L, "features/markdown/init.lua", "Markdown preview");
 }
 
+bool LuaAPI::load_html_runtime(lua_State *L)
+{
+  // The HTML preview shares the markdown preview's transport and browser
+  // launcher (package.loaded["jot_md.browser"], loaded by
+  // load_markdown_runtime, which api_bindings.cpp calls first), so only its own
+  // two modules are loaded here before init.lua runs the registrations.
+  static const char *kModules[] = {
+      "features/html/config.lua",
+      "features/html/preview.lua",
+  };
+  for (const char *rel : kModules)
+  {
+    if (!jot_lua::load_bundled_lua_module(L, rel, "jot_html"))
+    {
+      return false;
+    }
+  }
+  return load_bundled_lua_file(L, "features/html/init.lua", "HTML preview");
+}
+
 bool LuaAPI::load_snippet_runtime(lua_State *L)
 {
   // The snippet engine is a module tree (features/snippet/*.lua): pre-load each
@@ -401,4 +421,3 @@ bool LuaAPI::load_snippet_runtime(lua_State *L)
 
 // Recursively converts one native FileNode (and its children) into a Lua
 // table — the exact tree the explorer sidebar renders.
-

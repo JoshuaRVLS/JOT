@@ -438,6 +438,37 @@ The preview is driven from Lua — `jot.md.start/stop/toggle/refresh`,
 `jot.preview.*` transport, so a plugin can re-implement or extend any part of
 it. See [LUA_API.md](LUA_API.md#markdown-preview).
 
+### HTML preview
+
+`:HtmlPreview` opens the current HTML buffer in the browser and reloads it as
+you edit. It is the same loopback server as the markdown preview, pointed at the
+problem HTML actually has: a page is not one document but a tree.
+
+- **The real tree is served** — the server is rooted at the workspace (or at the
+  file's own directory, with `html_preview_root = "dir"`), and the browser is
+  sent to the page's path inside it. Its `<link href="styles/site.css">`, its
+  `<img src="../img/logo.png">` and its ES module imports resolve exactly as
+  they would over any other static server, instead of 404ing against a one-page
+  server.
+- **Unsaved edits are what the page shows** — the buffer's text overrides the
+  file on disk for the one path being edited. Everything else still comes from
+  the file system, so an unsaved markup change previews without the page's
+  stylesheet disappearing.
+- **Reload on change** — each served HTML page carries a small injected
+  EventSource client, so an edit (debounced by `html_preview_refresh_interval`,
+  default 150 ms) and every save reload the page. A change that leaves the text
+  where the page already was is not a reload, and the request path is confined
+  to the root: a URL that tries to climb out of it is refused.
+
+Opening the browser is `html_preview_open_browser` (false serves it and prints
+the URL instead — the useful setting over SSH), `html_preview_browser` picks
+which one, and `html_preview_auto_start` / `html_preview_auto_close` tie the
+session to HTML buffers opening and closing.
+
+Driven from Lua the same way the markdown preview is — `jot.html_preview`
+(`start`, `stop`, `toggle`, `refresh`, `url()`, `is_running()`, `state()`,
+`setup{}`). See [LUA_API.md](LUA_API.md#html-preview).
+
 ### Snippets
 
 A full snippet engine, ported from LuaSnip's model. Snippets are matched
