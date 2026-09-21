@@ -900,6 +900,13 @@ function M.on_change(event)
   local target = nil
   local active = state.jumps[state.pos]
   local function contains(occ, offset)
+    -- The exit stop (`$0`) is where the session parks the caret for ordinary
+    -- typing; it owns no text, so an edit at it is not "filling this stop".
+    -- Treating it as one splices the edit into the zero-width stop, which
+    -- re-emits the keystroke and duplicates it.
+    if occ.index == 0 then
+      return false
+    end
     return offset >= occ.start and offset <= occ.stop
   end
   if active and contains(active, e_start) then

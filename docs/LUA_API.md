@@ -77,6 +77,7 @@ jot.edit         undo, redo, insert_newline, delete, indent, outdent,
                  comment, duplicate, move_up, move_down, join, uppercase,
                  lowercase, replace, surround, increment, select_all,
                  select_line, search, format
+jot.emmet        expand
 jot.search       execute, info, matches, next, previous
 jot.folds        execute, toggle, fold, unfold, all
 jot.bookmarks    execute, toggle, next, previous
@@ -102,6 +103,17 @@ jot.process      memory
 
 Every command-backed namespace also provides `execute(command)`. This keeps
 new native commands immediately available to Lua while typed bindings grow.
+
+`jot.emmet.expand()` expands the Emmet abbreviation ending at the cursor,
+returning `true` when it did (and starting a snippet session on it). The bundled
+snippet keymap calls it from Tab, after the user's own triggers and before
+`jot.edit.tab()`, which is the hook to replace if you want the gesture on a
+different key:
+
+```lua
+-- Alt+E instead of Tab.
+jot.keymap.set("Alt+E", function() jot.emmet.expand() end, "Emmet: expand", "editor")
+```
 
 ## Native State And Actions
 

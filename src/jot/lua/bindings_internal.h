@@ -232,6 +232,7 @@ namespace lua_bind
   int l_lsp_restart_all(lua_State *L);
   int l_lsp_hover_ui(lua_State *L);
   int l_buf_filetype(lua_State *L);
+  int l_emmet_expand(lua_State *L);
   int l_buf_get_line(lua_State *L);
   int l_git_diff(lua_State *L);
   const char *syntax_token_kind_name(int token);

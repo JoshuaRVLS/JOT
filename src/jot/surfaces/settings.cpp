@@ -35,6 +35,7 @@ const KnownSetting kKnownSettings[] = {
     {"color_scheme", "Color scheme", SettingsEntry::Type::String},
     {"colorizer", "Color preview", SettingsEntry::Type::Bool},
     {"colorizer_mode", "Color preview mode", SettingsEntry::Type::String},
+    {"emmet", "Emmet abbreviations", SettingsEntry::Type::Bool},
     {"colorizer_hex", "Color preview: hex", SettingsEntry::Type::Bool},
     {"colorizer_hex_alpha", "Color preview: 8-digit hex", SettingsEntry::Type::Bool},
     {"colorizer_hex_qml", "Color preview: #AARRGGBB", SettingsEntry::Type::Bool},

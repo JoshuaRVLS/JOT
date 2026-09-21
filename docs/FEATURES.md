@@ -91,6 +91,8 @@ an explicit font file.
   writes the closing tag for you, Enter between a pair splits it onto three
   indented lines, and renaming a tag — from either end, including a name being
   retyped from empty — carries the partner tag along with it.
+- Emmet abbreviations on Tab (`div.card>ul>li*3`, `m10-20`), in markup and
+  style sheets (see the `emmet` setting below).
 - Line helpers: duplicate, delete, move up/down, join; trim trailing
   whitespace or blank lines; uppercase/lowercase; sort/reverse/deduplicate/
   shuffle selected lines.
@@ -935,6 +937,37 @@ on the last column. Raise it to `1` only if a terminal corrupts the frame when
 its last column is written: the renderer already disables autowrap and addresses
 each row with an absolute cursor move, so the wrap hazard the margin guarded
 against cannot trigger on a conforming terminal.
+
+Emmet abbreviations expand on Tab in markup and style sheets. Typing an
+abbreviation and pressing Tab replaces it with the markup or declarations it
+stands for, with the caret left where the next thing goes — inside the element
+the expansion built, or in the value it did not fill:
+
+```text
+div.card>ul>li.item$*3     <div class="card">
+                             <ul>
+                               <li class="item1"></li>
+                               <li class="item2"></li>
+                               <li class="item3"></li>
+                             </ul>
+                           </div>
+a                          <a href=""></a>          (the implied href)
+m10-20                     margin: 10px 20px;
+d:f                        display: flex;
+c#fff                     color: #fff;
+p5+m10                     padding: 5px;
+                             margin: 10px;
+```
+
+It works in `.html`, `.htm`, `.jsx`, `.tsx`, `.css`, `.scss`, `.sass` and
+`.less`. Anything that is not an abbreviation is refused and the Tab goes to
+indentation, so a word in a comment or an expression in JSX is left alone;
+`emmet=false` turns the whole thing off. The expansion is emitted as a snippet,
+so Tab after it walks the stops it left behind. The CSS side knows the usual
+property shorthands (`m`, `p`, `w`, `h`, `d`, `pos`, `bg`, `fz`, `ta`, `jc`,
+`ai`, `bdr`, `bxz`, …) and value keywords (`d:f` is `flex`, `pos:a` is
+`absolute`, `ta:c` is `center`), takes a bare number as the property's own unit
+(`10` is `10px`, `10p` is `10%`, `z10` is `10`), and `!` for `!important`.
 
 See [THEMES.md](THEMES.md) for authoring colorschemes and
 [LUA_API.md](LUA_API.md) for the scripting API.

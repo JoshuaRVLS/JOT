@@ -44,6 +44,13 @@ local function tab()
   if session.active() and session.jump(1) then
     return
   end
+  -- Emmet comes after the triggers, so a user snippet that matches wins, and
+  -- before the editor's own Tab, which is what a refused abbreviation falls
+  -- back to (jot.emmet.expand() answers false for anything that does not
+  -- parse, so prose and code are left alone).
+  if jot.emmet.expand() then
+    return
+  end
   -- Not a snippet: exactly the editor's own Tab.
   jot.edit.tab()
 end

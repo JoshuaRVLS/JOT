@@ -342,6 +342,9 @@ bool LuaAPI::init()
   command_field(L, this, "format", "Format Document");
   lua_setfield(L, -2, "edit");
   lua_newtable(L);
+  field(L, "expand", l_emmet_expand);
+  lua_setfield(L, -2, "emmet");
+  lua_newtable(L);
   field(L, "get", l_cursor);
   field(L, "set", l_set_cursor);
   command_field(L, this, "select_all", ":selectall");

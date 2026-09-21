@@ -263,6 +263,14 @@ public:
   {
     return bracket_depth_at_line_start(get_buffer(), line);
   }
+  // The Emmet entry point the snippet keymap calls from Tab (see
+  // Editor::expand_emmet_abbreviation). Exposed for tests because the real
+  // trigger goes through the Lua keymap, which the raw-key test path does not
+  // run.
+  bool expand_emmet_for_test()
+  {
+    return expand_emmet_abbreviation();
+  }
   // Places the cursor and lets the viewport follow it through the same
   // ensure_cursor_visible the editing paths use, so tests can drive vertical and
   // horizontal scrolling without faking scroll offsets the editor would clamp.

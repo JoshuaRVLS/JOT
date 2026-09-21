@@ -89,6 +89,10 @@ void Config::load_defaults()
   settings["tab_size"] = "2";
   settings["show_indent_guides"] = "true";
   settings["auto_indent"] = "true";
+  // Emmet abbreviations (features/emmet.cpp): Tab expands `div.box>p` in a
+  // markup file and `m10-20` in a style sheet. Off is the escape hatch for code
+  // that presses Tab at the end of a word that happens to parse.
+  settings["emmet"] = "true";
   settings["smart_paste_indent"] = "true";
   settings["auto_save"] = "false";
   settings["auto_save_interval_ms"] = "2000";

@@ -9,6 +9,7 @@ set(JOT_FEATURES_SOURCES
   features/color_tailwind.cpp
   features/color_terminal_codes.cpp
   features/config.cpp
+  features/emmet.cpp
   features/cpp_assist.cpp
   features/cpp_definitions.cpp
   features/cpp_definitions_analysis.cpp

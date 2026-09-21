@@ -123,6 +123,13 @@ private:
   // (see HtmlFeatures::find_tag_pair). A no-op outside markup buffers, and
   // whenever the cursor is not inside a tag name.
   void sync_markup_tag_name();
+  // Expands the Emmet abbreviation ending at the cursor (features/emmet.*) and
+  // starts a snippet session on it, so `div.box>p` becomes markup with the caret
+  // inside it and `m10-20` becomes a declaration. Returns false when there is
+  // nothing to expand -- the `emmet` setting is off, the file is not markup or a
+  // style sheet, or the token does not parse -- which is what lets a Tab fall
+  // through to indentation.
+  bool expand_emmet_abbreviation();
   void insert_string(const std::string &str);
   void delete_char(bool forward = true);
   // Deletes at every caret: the main cursor (point when no primary

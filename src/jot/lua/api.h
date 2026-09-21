@@ -350,6 +350,9 @@ public:
   void delete_mark(lua_State *L);
   void push_mark_list(lua_State *L);
   void register_status_segment(lua_State *L);
+  // Expands the Emmet abbreviation at the cursor through the snippet engine
+  // (jot/app/emmet.cpp). False when there was nothing to expand.
+  bool expand_emmet();
   void unregister_status_segment(lua_State *L);
   std::vector<RenderedStatusSegment> render_status_segments();
 

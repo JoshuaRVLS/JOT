@@ -3,6 +3,7 @@ set(JOT_ENGINE_SOURCES
   jot/app/decorations.cpp
   jot/app/discord_session.cpp
   jot/app/editor.cpp
+  jot/app/emmet.cpp
   jot/app/auto_save.cpp
   jot/app/buffers.cpp
   jot/app/cpp_definitions.cpp

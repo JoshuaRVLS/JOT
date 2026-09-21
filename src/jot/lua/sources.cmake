@@ -19,6 +19,7 @@ set(JOT_LUA_SOURCES
   jot/lua/api_buffer.cpp
   jot/lua/api_config.cpp
   jot/lua/api_debugger.cpp
+  jot/lua/api_emmet.cpp
   jot/lua/api_decorations.cpp
   jot/lua/api_editor.cpp
   jot/lua/api_mark.cpp
