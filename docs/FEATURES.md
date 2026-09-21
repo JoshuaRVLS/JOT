@@ -220,7 +220,14 @@ deliberately does not, so a preview never depends on a file you cannot see.
   C++ (no Python glue).
 - Debounced file sync, diagnostics overlay, and next/previous diagnostic
   jumps.
-- Completion with fuzzy filtering and `textEdit` support; hover on demand or
+- Completion with fuzzy filtering and `textEdit` support, including the
+  `additionalTextEdits` an item carries: accepting a symbol whose file does not
+  import it yet writes the import with it (typescript/vtsls auto-import, and
+  clangd's `#include`). The edits are positions in the document the request saw,
+  so they are remapped across the insert — an edit below the caret follows the
+  lines the insert added, and one that would land inside the text being
+  completed is dropped rather than written at a guessed column.
+- Hover on demand or
   on mouse hover; go-to-definition with a return stack (`:lspback`), from the
   keyboard or from `Ctrl+click`; LSP
   rename across all affected files (`:lsprename <new_name>`); find

@@ -138,6 +138,36 @@ namespace
     return score;
   }
 
+  // Auto-import: the edits a completion item carries are positions in the
+  // document as the server saw it -- the request went out before the insert.
+  // Text strictly above the insertion point still means what it said; an edit on
+  // a later line moved down by however many lines the insert added; an edit that
+  // overlaps the text being completed, or starts after it on that same line,
+  // cannot be placed honestly from here, so it is dropped rather than written
+  // at a guessed column.
+  std::vector<LSPTextEdit> remap_additional_edits(const std::vector<LSPTextEdit> &edits,
+                                                  int main_line,
+                                                  int start_col,
+                                                  int added_lines)
+  {
+    std::vector<LSPTextEdit> out;
+    for (LSPTextEdit edit : edits)
+    {
+      if (edit.end_line < main_line || (edit.end_line == main_line && edit.end_char <= start_col))
+      {
+        out.push_back(std::move(edit));
+        continue;
+      }
+      if (edit.start_line > main_line)
+      {
+        edit.start_line += added_lines;
+        edit.end_line += added_lines;
+        out.push_back(std::move(edit));
+      }
+    }
+    return out;
+  }
+
   struct SnippetExpansion
   {
     std::string text;
@@ -663,6 +693,23 @@ bool Editor::apply_selected_lsp_completion()
     }
   }
 
+  // Where the item is about to be written, and how many lines the document had
+  // before it: the auto-import edits below are positions in *that* document, so
+  // remapping them needs both.
+  const int main_line = buf.cursor.y;
+  const int lines_before = (int)buf.lines.size();
+  auto apply_additional_edits = [&](int start_col)
+  {
+    if (item.additional_text_edits.empty() || buf.filepath.empty())
+    {
+      return;
+    }
+    const int added_lines = (int)buf.lines.size() - lines_before;
+    const auto remapped =
+        remap_additional_edits(item.additional_text_edits, main_line, start_col, added_lines);
+    apply_lsp_text_edits(buf.filepath, remapped);
+  };
+
   // Snippet items (`insert_text_format = 2`) expand through the bundled
   // snippet engine when it registered a handler: it owns tabstops, choices,
   // mirrors and nested snippets, which a plain-text expansion cannot express.
@@ -674,6 +721,7 @@ bool Editor::apply_selected_lsp_completion()
                                           buf.cursor.y + 1,
                                           end + 1))
   {
+    apply_additional_edits(start);
     hide_lsp_completion();
     needs_redraw = true;
     return true;
@@ -745,6 +793,11 @@ bool Editor::apply_selected_lsp_completion()
   buf.selection.active = false;
   ensure_cursor_visible();
   needs_redraw = true;
+
+  // Last, so the caret above lands where the item was typed and an import the
+  // item carries is written after it. Both are one user action; undo takes the
+  // import back first (the applier pushes its own step).
+  apply_additional_edits(start);
 
   if (lua_api)
   {

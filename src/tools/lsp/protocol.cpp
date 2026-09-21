@@ -310,6 +310,14 @@ namespace lsp_detail
         completion.edit_end_line = json_int_or_default(json_object_get(*end, "line"), 0);
         completion.edit_end_char = json_int_or_default(json_object_get(*end, "character"), 0);
       }
+      // Auto-import: the import statement (or any other side-effect edit) the
+      // server pairs with the item. Same TextEdit array shape as a formatting
+      // result, so the one parser reads both.
+      if (const JsonValue *extra = json_object_get(item, "additionalTextEdits"))
+      {
+        text_edits_from_array(*extra, completion.additional_text_edits);
+      }
+
       if (completion.insert_text.empty())
       {
         completion.insert_text = completion.label;
@@ -929,11 +937,12 @@ namespace lsp_detail
     }
   }
 
-  // textDocument/formatting returns an array of TextEdit objects. Positions
-  // are returned in the negotiated encoding (usually UTF-16); character
-  // offsets stay raw here and the caller converts them to editor columns so a
-  // per-document text map is available.
-  void format_edits_from_result(const JsonValue &result, std::vector<LSPTextEdit> &out)
+  // An array of TextEdit objects: a textDocument/formatting result, or the
+  // additionalTextEdits a completion item carries. Positions are returned in
+  // the negotiated encoding (usually UTF-16); character offsets stay raw here
+  // and the caller converts them to editor columns so a per-document text map
+  // is available.
+  void text_edits_from_array(const JsonValue &result, std::vector<LSPTextEdit> &out)
   {
     if (result.type != JsonValue::Array)
     {

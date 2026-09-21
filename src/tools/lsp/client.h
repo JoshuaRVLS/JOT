@@ -8,6 +8,19 @@
 #include <utility>
 #include <vector>
 
+// A range plus its replacement text, in the coordinates the server sent it in
+// (usually UTF-16 characters; callers convert to editor columns). Shared by
+// every feature that consumes an LSP TextEdit: rename, code actions,
+// formatting, and the additionalTextEdits a completion item carries.
+struct LSPTextEdit
+{
+  int start_line = 0;
+  int start_char = 0;
+  int end_line = 0;
+  int end_char = 0;
+  std::string new_text;
+};
+
 struct LSPCompletionItem
 {
   std::string label;
@@ -33,6 +46,13 @@ struct LSPCompletionItem
   int edit_start_char = 0;
   int edit_end_line = 0;
   int edit_end_char = 0;
+  // Text the server wants written elsewhere in the same document as a side
+  // effect of accepting this item. It is how auto-import works: completing an
+  // exported symbol offers to add its `import`/`#include` statement, and
+  // without applying these the completion inserts a name the file cannot
+  // resolve. Positions refer to the document as it was when the request went
+  // out, so the applier remaps them across the insert (see apply_lsp_completion).
+  std::vector<LSPTextEdit> additional_text_edits;
 };
 
 struct LSPLocation
@@ -162,15 +182,6 @@ void apply_lsp_progress(std::map<std::string, LSPProgress> &tokens,
                         const std::string &title,
                         const std::string &message,
                         int percentage);
-
-struct LSPTextEdit
-{
-  int start_line = 0;
-  int start_char = 0;
-  int end_line = 0;
-  int end_char = 0;
-  std::string new_text;
-};
 
 // One textDocument/codeAction item. `edits` holds the WorkspaceEdit expanded
 // into per-file edit lists (UTF-16 characters converted to editor columns);

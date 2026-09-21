@@ -209,6 +209,40 @@ TEST_CASE("LSP completion items parse labelDetails", "[lsp]")
   }
 }
 
+// Auto-import: a completion item may carry the edits that make the completed
+// name resolvable (an `import` statement for TS/JS, an `#include` for clangd).
+// They arrive as the same TextEdit array a formatting result is, and the apply
+// path needs the ranges intact -- an item whose edits are dropped completes to
+// an identifier the file cannot compile.
+TEST_CASE("LSP completion items parse additionalTextEdits", "[lsp]")
+{
+  std::string json =
+      R"json([{"label":"Widget","kind":7,"insertText":"Widget","additionalTextEdits":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"newText":"import { Widget } from \"./widget\";\n"},{"range":{"start":{"line":4,"character":2},"end":{"line":4,"character":9}},"newText":"value"}]}])json";
+  size_t pos = 0;
+  lsp_detail::JsonValue value;
+  REQUIRE(lsp_detail::parse_json_value(json, pos, value));
+  const auto items = lsp_detail::completion_items_from_json(value);
+  REQUIRE(items.size() == 1);
+  REQUIRE(items[0].additional_text_edits.size() == 2);
+  REQUIRE(items[0].additional_text_edits[0].start_line == 0);
+  REQUIRE(items[0].additional_text_edits[0].start_char == 0);
+  REQUIRE(items[0].additional_text_edits[0].new_text == "import { Widget } from \"./widget\";\n");
+  REQUIRE(items[0].additional_text_edits[1].start_line == 4);
+  REQUIRE(items[0].additional_text_edits[1].end_char == 9);
+  REQUIRE(items[0].additional_text_edits[1].new_text == "value");
+
+  // An item with none (every other server) leaves the list empty rather than
+  // inheriting the previous item's edits.
+  const std::string plain = R"json([{"label":"other"},{"label":"Widget"}])json";
+  size_t plain_pos = 0;
+  lsp_detail::JsonValue plain_value;
+  REQUIRE(lsp_detail::parse_json_value(plain, plain_pos, plain_value));
+  const auto plain_items = lsp_detail::completion_items_from_json(plain_value);
+  REQUIRE(plain_items.size() == 2);
+  REQUIRE(plain_items[0].additional_text_edits.empty());
+  REQUIRE(plain_items[1].additional_text_edits.empty());
+}
+
 // The labelDetails fields only arrive if the client asks for them, so the
 // capability is asserted directly: without it servers are entitled to omit the
 // data the popup now relies on for its richer rows.

@@ -293,6 +293,15 @@ void LSPClient::handle_stdout_data(const std::string &data)
             item.edit_end_char = editor_character(
                 completion_it->second.filepath, item.edit_end_line, item.edit_end_char);
           }
+          // The auto-import edits the item carries are positions in this same
+          // document, so they need the same character-to-column conversion.
+          for (auto &edit : item.additional_text_edits)
+          {
+            edit.start_char =
+                editor_character(completion_it->second.filepath, edit.start_line, edit.start_char);
+            edit.end_char =
+                editor_character(completion_it->second.filepath, edit.end_line, edit.end_char);
+          }
         }
         pending_completions.push_back({completion_it->second.filepath, std::move(items)});
       }
@@ -554,7 +563,7 @@ void LSPClient::handle_stdout_data(const std::string &data)
       std::vector<LSPTextEdit> edits;
       if (result)
       {
-        format_edits_from_result(*result, edits);
+        text_edits_from_array(*result, edits);
         for (auto &edit : edits)
         {
           edit.start_char = editor_character(

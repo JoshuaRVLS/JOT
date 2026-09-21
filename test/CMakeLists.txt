@@ -33,6 +33,7 @@ add_executable(jot_tests
   test_lsp_policy.cpp
   test_popup.cpp
   test_prompt_modal.cpp
+  test_completion_import.cpp
   test_tree_sitter_install.cpp
   test_telescope.cpp
   test_ui_text.cpp

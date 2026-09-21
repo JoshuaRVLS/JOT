@@ -72,9 +72,10 @@ namespace lsp_detail
   std::vector<LSPSymbol> document_symbols_from_result(const JsonValue &result,
                                                       const std::string &filepath);
   std::string symbol_kind_name(int kind);
-  // textDocument/formatting returns an array of TextEdit objects
-  // ({range:{start,end}, newText}). Positions are returned in the negotiated
-  // encoding (usually UTF-16); character offsets stay raw here and the caller
-  // converts them to editor columns so a per-document text map is available.
-  void format_edits_from_result(const JsonValue &result, std::vector<LSPTextEdit> &out);
+  // An array of TextEdit objects ({range:{start,end}, newText}) -- the shape of
+  // both a textDocument/formatting result and a completion item's
+  // additionalTextEdits. Positions are returned in the negotiated encoding
+  // (usually UTF-16); character offsets stay raw here and the caller converts
+  // them to editor columns so a per-document text map is available.
+  void text_edits_from_array(const JsonValue &result, std::vector<LSPTextEdit> &out);
 } // namespace lsp_detail
