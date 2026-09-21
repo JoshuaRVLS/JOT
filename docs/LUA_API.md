@@ -154,8 +154,8 @@ it immediately, and **live-applies** every setting that maps to editor state
 `terminal_height`, `debugger_height`, `right_panel_width`,
 `image_viewer_backend`, the `treesitter_*` paths, and `color_scheme`
 (switches the theme). Keys that are read on every use (`prettier_on_save`,
-`clang_format_on_save`, `auto_detect_indent`, `lsp_completion_*`) are live
-automatically. `keys()`, `has(key)`, `unset(key)`, and `path()` complete the
+`clang_format_on_save`, `auto_detect_indent`, `lsp_completion_*`,
+`status_clock`, `status_session_time`) are live automatically. `keys()`, `has(key)`, `unset(key)`, and `path()` complete the
 surface.
 
 Precedence (later wins): built-in defaults < `configs/settings.conf` (the

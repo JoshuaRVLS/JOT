@@ -407,6 +407,9 @@ void Editor::initialize_state_defaults()
   blink_anchor_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now().time_since_epoch())
                         .count();
+  // The session clock the statusline reports: start it from the same steady
+  // reading the blink clock is anchored on.
+  session_start_ms = blink_anchor_ms;
   blink_suspend_until_ms = 0;
   blink_visible = true;
   show_context_menu = false;

@@ -53,6 +53,20 @@ struct ViewState
   long long blink_suspend_until_ms;
   bool blink_visible = false;
 
+  // When this session started (steady clock, ms), for the statusline's
+  // elapsed-time segment, and the two time labels the last frame asked to
+  // paint. The frame loop compares freshly formatted labels against those two
+  // strings, so the instant a wall-clock minute or a second of session time
+  // rolls over is what buys the next repaint -- no timer of its own, and no
+  // repaint while the text would come out identical. `status_time_checked_ms`
+  // is the reading those labels were last computed at: neither can move twice
+  // within one second, so the comparison is only worth doing once per second
+  // (the frame loop runs at render_fps, not once a second).
+  long long session_start_ms;
+  long long status_time_checked_ms = 0;
+  std::string status_clock_label;
+  std::string status_session_label;
+
   // Auto-save: the setting, the interval, and when the last one ran.
   bool auto_save_enabled = false;
   int auto_save_interval_ms = 0;

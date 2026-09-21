@@ -135,6 +135,12 @@ private:
   void render_menu_bar();
   void render_menu_dropdown();
   void render_status_line();
+  // Whether the statusline's time labels (features/status_clock.h) have moved
+  // on since the last frame asked: the clock's minute, or the session
+  // duration's next unit. The frame loop asks before the paint, so a label that
+  // did move goes out on the frame that noticed it -- which is what keeps the
+  // bar honest without a repaint timer or a repaint while the text is unchanged.
+  bool status_time_due_soon();
   void render_command_palette();
   void render_quick_pick();
   // Multi-chord plugin keymaps ("Ctrl+T N"): a prefix chord starts a pending

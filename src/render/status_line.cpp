@@ -1,12 +1,16 @@
 // Editor status line: workspace/file labels, git and LSP status, mode,
-// cursor position, and the plugin-registered status segments.
+// cursor position, the local time and session clock, and the plugin-registered
+// status segments.
 #include "editor.h"
+#include "features/status_clock.h"
 #include "jot/file_icons.h"
 #include "jot/lua/api.h"
 #include "tools/lsp/install.h"
 #include "ui/components.h"
 #include "ui/text.h"
 #include <algorithm>
+#include <chrono>
+#include <ctime>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -122,6 +126,47 @@ namespace
     }
   
 } // namespace
+
+// The bar carries two labels that move on their own: the local clock and the
+// session duration. Nothing else in the editor changes without input, so the
+// frame loop asks here whether they have moved on and, when they have, paints
+// the frame that shows it -- the same shape as the completion preview's gate
+// (main_loop.cpp), except that this one is asked before the paint, because the
+// new label is already true and can go out on the frame that noticed it. The
+// labels are pure functions of the two clocks (features/status_clock.h), so
+// "the text would differ" is answered by formatting them, not by keeping a
+// countdown that could drift out of step with what is painted.
+bool Editor::status_time_due_soon()
+{
+  const bool wants_clock = config.get_bool("status_clock", true);
+  const bool wants_session = config.get_bool("status_session_time", true);
+  if (!wants_clock && !wants_session)
+  {
+    return false;
+  }
+  const long long now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::steady_clock::now().time_since_epoch())
+                               .count();
+  // Neither label can move twice inside one second, and this runs on every
+  // frame whether or not one is painted: one comparison per second is enough.
+  if (now_ms / 1000 == status_time_checked_ms / 1000)
+  {
+    return false;
+  }
+  status_time_checked_ms = now_ms;
+
+  const std::string clock =
+      wants_clock ? status_clock::format_clock(std::time(nullptr)) : std::string();
+  const std::string session =
+      wants_session ? status_clock::format_duration(now_ms - session_start_ms) : std::string();
+  const bool moved = clock != status_clock_label || session != status_session_label;
+  if (moved)
+  {
+    status_clock_label = clock;
+    status_session_label = session;
+  }
+  return moved;
+}
 
 void Editor::render_status_line()
 {
@@ -430,6 +475,42 @@ void Editor::render_status_line()
       {
         right_segments.push_back(std::move(s));
       }
+    }
+  }
+
+  // Local time and how long this session has been going, at the right-hand
+  // end of the bar. Both are small and both are optional, so a narrow terminal
+  // gives them up before the diagnostics, git and LSP chips; between them the
+  // clock outranks the session duration. The frame loop watches these same two
+  // labels, which is what repaints the bar when they roll over (see
+  // status_time_due_soon).
+  {
+    const long long now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now().time_since_epoch())
+                                 .count();
+    if (config.get_bool("status_clock", true))
+    {
+      right_segments.push_back({
+          " " + status_clock::format_clock(std::time(nullptr)) + " ",
+          theme.fg_status_muted,
+          theme.bg_status,
+          false,
+          true,
+          40,
+          " \U000F0150", // nf-md-clock_outline
+          -1});
+    }
+    if (config.get_bool("status_session_time", true))
+    {
+      right_segments.push_back({
+          " " + status_clock::format_duration(now_ms - session_start_ms) + " ",
+          theme.fg_status_muted,
+          theme.bg_status,
+          false,
+          true,
+          30,
+          " \U000F051B", // nf-md-timer_outline
+          -1});
     }
   }
 

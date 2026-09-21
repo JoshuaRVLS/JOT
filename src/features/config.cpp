@@ -97,6 +97,11 @@ void Config::load_defaults()
   settings["auto_detect_indent"] = "false";
   settings["show_line_numbers"] = "true";
   settings["relative_line_numbers"] = "false";
+  // Statusline time chips (features/status_clock.cpp): the local wall clock and
+  // how long this session has been running. Both are optional segments, so a
+  // narrow bar drops them before the diagnostics and git chips.
+  settings["status_clock"] = "true";
+  settings["status_session_time"] = "true";
   settings["word_wrap"] = "false";
   // Block by default: a bar reads as a thin sliver at the cell sizes a HiDPI
   // display or a large font produce. The resolvers below fall back to the same

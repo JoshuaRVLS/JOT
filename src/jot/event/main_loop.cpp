@@ -123,6 +123,16 @@ void Editor::render_frame()
       }
     }
   }
+  // The status line carries two labels that move on their own -- the local
+  // clock and the session duration -- and nothing else on screen changes without
+  // input. Asking before the paint is what puts a rolled-over label on the frame
+  // it rolls over on; a label that would come out identical buys nothing, so an
+  // idle editor still paints only when the blink's own clock calls for a cursor
+  // flush. See status_time_due_soon in status_line.cpp.
+  if (status_time_due_soon())
+  {
+    needs_redraw = true;
+  }
   if (needs_redraw || ui->cursor_needs_flush())
   {
     render();

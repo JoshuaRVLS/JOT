@@ -156,6 +156,8 @@ const KnownSetting kKnownSettings[] = {
     {"snippet_paths", "Snippets: extra paths", SettingsEntry::Type::String},
     {"winbar", "Breadcrumbs: auto / on / off", SettingsEntry::Type::String},
     {"snippet_tab_key", "Snippets: expand/jump key", SettingsEntry::Type::String},
+    {"status_clock", "Statusline: local time", SettingsEntry::Type::Bool},
+    {"status_session_time", "Statusline: session time", SettingsEntry::Type::Bool},
     {"tab_size", "Tab size", SettingsEntry::Type::Int},
     {"terminal_height", "Terminal panel height", SettingsEntry::Type::Int},
     {"toast.duration_ms", "Toast duration (ms)", SettingsEntry::Type::Int},

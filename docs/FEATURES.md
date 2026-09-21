@@ -537,6 +537,16 @@ panels) sit over buffer content on every side, so they keep a full box. Everythi
 is drawn with flat corners; the colour comes from the theme's `WinSeparator` /
 `FloatBorder` / `SidebarBorder` slots.
 
+The status row's right-hand end carries two chips that read the machine's own
+clock: the local time (`status_clock`, 24-hour `HH:MM`) and how long this
+session has been up (`status_session_time`). Both are optional and both are
+small, so a narrow terminal gives them up before the diagnostics, git and LSP
+chips. They are also the only thing on screen that moves with nothing typed,
+which is why the frame loop watches them: each frame formats the two labels and
+asks for a repaint only when one of them would come out different, so the bar
+ticks once a second while idle and an idle editor still paints nothing
+except when a label actually moved.
+
 The mouse is wired throughout —
 click to place the cursor, drag to select (with edge auto-scroll), double/
 triple-click for word/line selection (double-click stops at `.`, so `ext`
@@ -845,8 +855,8 @@ Built-in defaults include `explorer_width=25`, `minimap_width=15`,
 `cursor_style=block`, `cursor_blink_ms=500`, `render_fps=120`, `idle_fps=60`,
 `auto_save=false`, `auto_save_interval_ms=2000`, `lsp_change_debounce_ms=120`,
 `lsp_inlay_hints=true`, `lsp_inlay_type_hints=true`, `cpp_definitions=true`
-(the C++ declaration/definition checks), `terminal_height=10`, and
-`debugger_height=12`. The colour preview adds `colorizer=true`,
+(the C++ declaration/definition checks), `terminal_height=10`,
+`debugger_height=12`, `status_clock=true`, and `status_session_time=true`. The colour preview adds `colorizer=true`,
 `colorizer_mode=background`, `colorizer_hex=true`, `colorizer_hex_alpha=false`,
 `colorizer_hex_qml=false`, `colorizer_hex_no_hash=false`,
 `colorizer_hex_0x=false`, `colorizer_names=true`, `colorizer_tailwind=false`,

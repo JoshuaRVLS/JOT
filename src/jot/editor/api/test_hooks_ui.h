@@ -179,6 +179,15 @@ public:
   {
     needs_redraw = true;
   }
+  // The statusline's session clock (features/status_clock.cpp): rewinding it is
+  // how a test gets an elapsed-time label without waiting an hour for one, and
+  // the last reading is cleared with it so the next frame re-formats the labels
+  // instead of trusting the one it already has.
+  void set_session_start_ms_for_test(long long start_ms)
+  {
+    session_start_ms = start_ms;
+    status_time_checked_ms = 0;
+  }
   // Overrides a setting the way :settings does, without writing it to the real
   // user config (tests run against a scratch JOT_CONFIG_HOME).
   void config_set_for_test(const std::string &key, const std::string &value)
