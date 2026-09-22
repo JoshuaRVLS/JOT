@@ -570,6 +570,33 @@ public:
                                  std::string *id,
                                  std::string *script,
                                  std::string *message);
+  // The HTTP client minus the network: rest_select_for_test picks and resolves
+  // the request `:rest` would (it never sends), rest_deliver_for_test lands
+  // canned curl output through the same path a real reply takes, and
+  // rest_response_lines_for_test reads the response tab back.
+  bool rest_select_for_test(const std::string &name, HttpFile::Resolved &out)
+  {
+    return rest_prepare(name, out);
+  }
+  void rest_deliver_for_test(const HttpFile::Resolved &request, const std::string &output)
+  {
+    rest_show_response(request, output);
+  }
+  std::vector<std::string> rest_response_lines_for_test() const
+  {
+    for (const FileBuffer &buffer : buffers)
+    {
+      if (buffer.filepath.rfind("[Response]", 0) == 0)
+      {
+        return buffer.lines;
+      }
+    }
+    return {};
+  }
+  bool rest_request_running_for_test() const
+  {
+    return rest_request_running;
+  }
   void run_ex_for_test(const std::string &line)
   {
     execute_ex_command(line);

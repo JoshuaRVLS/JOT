@@ -862,6 +862,15 @@ it -- the buffer stays fully visible while you type.
 **Markdown:** `:MarkdownPreview` `:MarkdownPreviewStop`
 `:MarkdownPreviewToggle`
 
+**HTTP client:** `:rest [name|last]` — run the request at the cursor in a
+`.http` / `.rest` file (the IntelliJ / rest.nvim request syntax) through curl
+and land the answer in a `[Response]` tab. `:rest <name>` runs a `# @name` /
+`### name` request, `:rest last` re-sends the previous one. `{{var}}` fills
+from `@var = value` in the same file, `{{$uuid}}` `{{$timestamp}}`
+`{{$datetime}}` `{{$randomInt}}`, or the environment; `< ./body.json` takes the
+body from a file. An unresolved `{{var}}` refuses the run rather than sending
+it wrong.
+
 **Snippets:** `:Snippets` `:Snippet <trigger>` `:SnippetList` `:SnippetReload`
 `:SnippetToggle`
 

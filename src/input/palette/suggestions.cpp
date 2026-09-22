@@ -1,5 +1,6 @@
 #include "commands/utils.h"
 #include "cpp_assist.h"
+#include "features/http_file.h"
 #include "editor.h"
 #include "jot/lua/api.h"
 #include "tree_sitter/install.h"
@@ -234,7 +235,8 @@ namespace
         {"reloadplugins", "Plugin", "Reload init.lua and plugins", 78},
         {"pluginpanel", "Plugin", "Show a plugin panel", 75},
         {"gitdiffclose", "Git", "Close git diff panel", 68},
-        {"gitdiffrefresh", "Git", "Refresh Open Git Diff", 68}};
+        {"gitdiffrefresh", "Git", "Refresh Open Git Diff", 68},
+        {"rest", "HTTP", "Run the request at the cursor (:rest <name> | last)", 80}};
     return meta;
   }
 
@@ -598,6 +600,25 @@ void Editor::refresh_command_palette()
       for (const auto &spec : servers)
       {
         add_arg(spec.id, "LSP", spec.detail.empty() ? "Language server" : spec.detail, 110);
+      }
+    }
+    else if (lcmd == "rest")
+    {
+      add_arg("last", "HTTP", "Re-run the previous request", 110);
+      auto &buf = get_buffer();
+      std::vector<std::string> lines;
+      lines.reserve((size_t)buf.line_count());
+      for (int i = 0; i < (int)buf.line_count(); i++)
+      {
+        lines.push_back(buf.line(i));
+      }
+      // Every named request in this file, so `:rest <Tab>` lists them.
+      for (const HttpFile::Request &request : HttpFile::parse(lines).requests)
+      {
+        if (!request.name.empty())
+        {
+          add_arg(request.name, "HTTP", "Named request in this file", 112);
+        }
       }
     }
     else if (lcmd == "gitdiff" || lcmd == "gitdiffstaged" || lcmd == "gitstage"

@@ -21,6 +21,7 @@
 //   api/panels.h         minimap, bottom dock, terminal tasks, debugger
 //   api/panes.h          folds, pane commands and pane geometry
 //   api/commands.h       text commands, themes, setup, message line
+//   api/rest.h           the HTTP client (.http request files, `:rest`)
 //   api/test_hooks.h     the suite's headless hooks (core)
 //   api/test_hooks_ui.h  the suite's hooks (surfaces and lifecycle)
 //
@@ -341,6 +342,7 @@ private:
 #include "jot/editor/api/panels.h"
 #include "jot/editor/api/panes.h"
 #include "jot/editor/api/commands.h"
+#include "jot/editor/api/rest.h"
 public:
 #include "jot/editor/api/test_hooks.h"
 #include "jot/editor/api/test_hooks_ui.h"

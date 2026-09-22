@@ -10,6 +10,7 @@ add_executable(jot_tests
   test_emmet.cpp
   test_web_completion.cpp
   test_html_preview.cpp
+  test_http_file.cpp
   test_cpp_assist.cpp
   test_cpp_definitions.cpp
   test_cursor.cpp

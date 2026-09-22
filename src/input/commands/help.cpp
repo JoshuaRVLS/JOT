@@ -12,7 +12,7 @@ void Editor::show_command_help(const std::string &topic_text)
   {
     set_message("Commands: :w :q :wq :e <file> :find [dir] :mkfile <p> :mkdir <p> "
                 ":rename <old> <new> :rm <p> :cpppair <p> :cppimpl [p] "
-                ":cppcheck [on|off|next|prev] "
+                ":cppcheck [on|off|next|prev] :rest [name|last] "
                 ":line N[:C] :bd :sp "
                 "[left|right|up|down] :vsp [left|right] "
                 ":splitleft/:splitright/:splitup/:splitdown :bn :bp :home "

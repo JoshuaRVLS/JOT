@@ -112,6 +112,8 @@ namespace jot_icons
         {"vue", {"\uE6A0", 72}},    // nf-dev-vue
         {"sql", {"\uE706", 172}},   // nf-dev-database
         // Web / markup
+        {"http", {"\uF0AC", 39}},   // nf-fa-globe
+        {"rest", {"\uF0AC", 39}},
         {"html", {"\uF13B", 166}},  // nf-fa-html5
         {"htm", {"\uF13B", 166}},
         {"css", {"\uE749", 75}},    // nf-dev-css3

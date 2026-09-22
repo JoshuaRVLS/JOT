@@ -19,6 +19,7 @@ set(JOT_ENGINE_SOURCES
   jot/app/panes_resize.cpp
   jot/app/process_job.cpp
   jot/app/relaunch.cpp
+  jot/app/rest_client.cpp
   jot/app/resize.cpp
   jot/app/smooth_scroll.cpp
   jot/app/undo.cpp
