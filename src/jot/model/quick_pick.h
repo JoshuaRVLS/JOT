@@ -55,19 +55,44 @@ struct SettingsEntry
   {
     Bool,
     Int,
-    String
+    String,
+    Enum // a fixed set of choices: cycled with Left/Right, listed by Enter
   };
   std::string key;    // config key
   std::string label;  // human-readable label
   std::string value;  // current string value (as stored in settings.conf)
   Type type = Type::String;
+  // Enum rows: the choices, in the order they are offered. Empty otherwise.
+  std::vector<std::string> options;
+  // Int rows: what the steppers move by, and the range a stepped or typed
+  // value is clamped to. `has_range` false keeps only a floor of zero, which
+  // is what every count, size and millisecond setting wants.
+  int step = 1;
+  bool has_range = false;
+  int min_value = 0;
+  int max_value = 0;
   // While the row is being edited, its input text and the row's screen
   // position (set by the render pass, used by mouse hit-testing).
   bool editing = false;
   std::string edit_input;
   int row_x = 0;
-  int row_y = 0;
+  // -1 until the render pass places the row: a row that is filtered out,
+  // scrolled past or simply not painted yet must never answer a hit test.
+  int row_y = -1;
   int row_w = 0;
+  // The row's position in the filtered list (set when the search bar's query
+  // is applied), so a mouse hit names the row it landed on rather than an
+  // index into the unfiltered list. -1 while the query hides the row.
+  int row_pos = -1;
+  // The value column, and the decrease/increase affordance inside it (an
+  // int's steppers, an enum's cycling chevrons). The render pass records both
+  // and the Lua surface paints into them, so the picture and the mouse hit
+  // test can never disagree about where a button is. -1 means the row has no
+  // affordance (every type but Enum/Int, and any unselected row).
+  int value_x = 0;
+  int value_w = 0;
+  int step_down_x = -1;
+  int step_up_x = -1;
 };
 
 #endif

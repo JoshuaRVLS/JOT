@@ -105,9 +105,15 @@ struct SurfaceState
   std::vector<HomeMenuEntry> home_menu_entries;
 
   // Cell-based settings menu (:settings, Ctrl+, in GUI mode). Lists every
-  // config key (defaults + Lua-registered) with its current value; bools
-  // toggle on Enter, ints/strings edit through an inline input row.
+  // config key (defaults + Lua-registered) with its current value, filtered
+  // by the search bar above the list. Bools toggle on Enter, ints step and
+  // edit, enums cycle and open their choices, strings edit inline.
   bool show_settings_menu = false;
+  // The search bar's text, and the entries it keeps: indices into
+  // settings_entries, in the menu's own (config) order. settings_selected is
+  // a position in *this* list, so navigation walks matches only.
+  std::string settings_query;
+  std::vector<int> settings_filtered;
   int settings_selected = 0;
   int settings_scroll = 0;
   int settings_panel_x = 0;
@@ -115,6 +121,16 @@ struct SurfaceState
   int settings_panel_w = 0;
   int settings_panel_h = 0;
   std::vector<SettingsEntry> settings_entries;
+  // The choices drop-down an Enum row opens on Enter: the cursor in it, the
+  // box the render pass placed (the Lua surface paints the same rect), and
+  // the window's first option once a long list is scrolled.
+  bool settings_dropdown_open = false;
+  int settings_dropdown_index = 0;
+  int settings_dropdown_scroll = 0;
+  int settings_dropdown_x = 0;
+  int settings_dropdown_y = 0;
+  int settings_dropdown_w = 0;
+  int settings_dropdown_h = 0;
 
   bool show_tree_sitter_status_modal = false;
   int tree_sitter_status_scroll = 0;

@@ -1,16 +1,20 @@
 // Settings menu model + input (cell-based; see render/settings.cpp for the
 // paint pass). The menu enumerates config.keys(), so every setting -- the
 // built-in defaults, settings.conf overrides and Lua-registered keys from
-// jot.config.set -- appears with its current value. Booleans toggle on
-// Enter / Left / Right; integers and strings open an inline input row
-// (type the new value, Enter applies, Esc cancels). Changes flow through
-// apply_settings_value -> config.set + apply_config_live + save, the same
-// live-apply pipeline Lua uses.
+// jot.config.set -- appears with its current value. Each row is edited the
+// way its type asks to be: booleans toggle, integers step (and take a typed
+// value), enumerated settings cycle or open their choices, strings open an
+// inline input row (type the new value, Enter applies, Esc cancels). A
+// search bar above the list filters rows by label or key. Changes flow
+// through apply_settings_value -> config.set + apply_config_live + save, the
+// same live-apply pipeline Lua uses.
 #include "editor.h"
 #include "ui/gui/gui.h"
 
 #include <algorithm>
 #include <cctype>
+#include <climits>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -190,6 +194,133 @@ const KnownSetting kKnownSettings[] = {
     {"zen_content_width", "Zen content width", SettingsEntry::Type::Int},
 };
 
+// The selectable rows: a fixed set of choices, so Left/Right walks them and
+// Enter lists them. An overlay table so the type table above stays one line
+// per setting.
+struct EnumChoices
+{
+  const char *key;
+  const char *const *options;
+  int count;
+};
+
+const char *const kAutoOnOff[] = {"auto", "on", "off"};
+// The names the image viewer's own parser answers to (imageviewer.cpp):
+// `cell` is the half-block preview, `off` shows no picture at all.
+const char *const kImageBackends[] = {"auto", "kitty", "sixel", "cell", "off"};
+const char *const kColorizerModes[] = {"background", "foreground", "virtualtext"};
+// The shapes the renderer spells out (render/frame.cpp); anything else is
+// read as the bar.
+const char *const kCursorStyles[] = {"block", "bar"};
+// Upstream neoscroll's easing names (see features/smooth_scroll.h).
+const char *const kEasings[] = {"linear",   "quadratic", "cubic",  "quartic",
+                                "quintic",  "circular",  "sine"};
+
+const EnumChoices kEnumChoices[] = {
+    {"truecolor", kAutoOnOff, 3},
+    {"winbar", kAutoOnOff, 3},
+    {"cursor_style", kCursorStyles, 2},
+    {"colorizer_mode", kColorizerModes, 3},
+    {"image_viewer_backend", kImageBackends, 5},
+    {"smooth_scroll_easing", kEasings, 7},
+};
+
+// What a numeric row's steppers move by, and the range a stepped or typed
+// value lands in. The ranges mirror the clamps the rest of the app already
+// applies (apply_config_live and the settings' own readers); a row that is
+// absent steps by one and cannot go below zero, which is what every count,
+// size and millisecond budget here wants.
+struct IntRange
+{
+  const char *key;
+  int step;
+  int min;
+  int max;
+};
+
+const IntRange kIntRanges[] = {
+    {"auto_save_interval_ms", 100, 100, 600000},
+    {"cursor_blink_ms", 50, 0, 5000},
+    {"debugger_height", 1, 6, 24},
+    {"discord_idle_timeout", 5, 5, 3600},
+    {"explorer_width", 1, 16, 200},
+    {"gui_font_size", 1, 8, 40},
+    {"html_preview_port", 1, 1, 65535},
+    {"html_preview_refresh_interval", 50, 50, 60000},
+    {"idle_fps", 5, 5, 240},
+    {"lsp_change_debounce_ms", 10, 25, 1000},
+    {"lsp_completion_ghost_delay_ms", 10, 0, 5000},
+    {"lsp_completion_max_items", 5, 1, 1000},
+    {"markdown_preview_open_timeout_ms", 100, 100, 60000},
+    {"markdown_preview_port", 1, 1, 65535},
+    {"markdown_preview_refresh_interval", 50, 50, 60000},
+    {"minimap_width", 1, 4, 40},
+    {"render_fps", 10, 30, 240},
+    {"right_panel_width", 1, 28, 80},
+    {"snippet_history_size", 5, 1, 500},
+    {"tab_size", 1, 1, 16},
+    {"terminal_height", 1, 5, 20},
+    {"toast.duration_ms", 250, 500, 60000},
+    {"toast.fade_ms", 50, 0, 5000},
+    {"toast.gap", 1, 0, 10},
+    {"toast.margin", 1, 0, 20},
+    {"toast.max_visible", 1, 1, 20},
+    {"toast.max_width", 5, 20, 500},
+    {"zen_content_width", 10, 40, 400},
+};
+
+// The search bar's matcher: every character of the query has to appear in the
+// row's label or key, in order, ignoring case and the punctuation between
+// words -- so "autosave" finds "Auto save" and "lspghost" finds
+// "lsp_completion_ghost_delay_ms". The list keeps the config's own order
+// rather than re-ranking: a menu that reshuffles under the cursor is worse
+// than one that only filters.
+std::string match_key_of(const std::string &text)
+{
+  std::string out;
+  out.reserve(text.size());
+  for (char c : text)
+  {
+    if (std::isalnum((unsigned char)c))
+      out.push_back((char)std::tolower((unsigned char)c));
+  }
+  return out;
+}
+
+bool matches_query(const std::string &needle, const std::string &haystack)
+{
+  size_t at = 0;
+  for (char c : haystack)
+  {
+    if (at < needle.size() && needle[at] == c)
+      ++at;
+  }
+  return at == needle.size();
+}
+
+// A typed or stepped number, and the range it has to land in.
+int clamp_setting_int(const SettingsEntry &e, int value)
+{
+  const int lo = e.has_range ? e.min_value : 0;
+  const int hi = e.has_range ? e.max_value : INT_MAX;
+  return std::clamp(value, lo, hi);
+}
+
+bool parse_setting_int(const std::string &text, int &out)
+{
+  if (text.empty())
+    return false;
+  errno = 0;
+  char *end = nullptr;
+  const long value = std::strtol(text.c_str(), &end, 10);
+  if (errno != 0 || end == text.c_str() || *end != '\0')
+    return false;
+  if (value > INT_MAX || value < INT_MIN)
+    return false;
+  out = (int)value;
+  return true;
+}
+
 SettingsEntry::Type infer_type(const std::string &key, const std::string &value)
 {
   for (const KnownSetting &k : kKnownSettings)
@@ -238,11 +369,70 @@ void Editor::rebuild_settings_entries()
         break;
       }
     }
+    for (const EnumChoices &choices : kEnumChoices)
+    {
+      if (key != choices.key)
+        continue;
+      e.type = SettingsEntry::Type::Enum;
+      e.options.assign(choices.options, choices.options + choices.count);
+      break;
+    }
+    // The themes are not a constant -- they depend on what is installed --
+    // so the one enumerated row whose choices are discovered is filled from
+    // the live registry here.
+    if (key == "color_scheme")
+    {
+      e.type = SettingsEntry::Type::Enum;
+      e.options = list_available_themes();
+    }
+    for (const IntRange &range : kIntRanges)
+    {
+      if (key != range.key)
+        continue;
+      e.step = range.step;
+      e.has_range = true;
+      e.min_value = range.min;
+      e.max_value = range.max;
+      break;
+    }
     settings_entries.push_back(std::move(e));
   }
-  settings_selected = std::clamp(settings_selected, 0,
-                                 std::max(0, (int)settings_entries.size() - 1));
+  refresh_settings_filter();
   needs_redraw = true;
+}
+
+void Editor::refresh_settings_filter()
+{
+  settings_filtered.clear();
+  const std::string needle = match_key_of(settings_query);
+  for (int i = 0; i < (int)settings_entries.size(); i++)
+  {
+    SettingsEntry &e = settings_entries[(size_t)i];
+    // The label is what the row reads as, the key is what it is called in a
+    // config file; a query may name either.
+    const bool shown =
+        needle.empty() || matches_query(needle, match_key_of(e.label + e.key));
+    e.row_pos = shown ? (int)settings_filtered.size() : -1;
+    if (shown)
+      settings_filtered.push_back(i);
+  }
+  settings_selected =
+      std::clamp(settings_selected, 0, std::max(0, (int)settings_filtered.size() - 1));
+  // A new query reads from the top; keeping the old window over a shorter
+  // list would leave it past the end.
+  settings_scroll = 0;
+  needs_redraw = true;
+}
+
+SettingsEntry *Editor::settings_selected_entry()
+{
+  if (settings_filtered.empty())
+    return nullptr;
+  const int pos = std::clamp(settings_selected, 0, (int)settings_filtered.size() - 1);
+  const int idx = settings_filtered[(size_t)pos];
+  if (idx < 0 || idx >= (int)settings_entries.size())
+    return nullptr;
+  return &settings_entries[(size_t)idx];
 }
 
 void Editor::toggle_settings_menu()
@@ -252,6 +442,11 @@ void Editor::toggle_settings_menu()
     close_settings_menu();
     return;
   }
+  // A fresh menu opens unfiltered: the search bar is per-visit, so the list
+  // always starts whole rather than on whatever was typed last time.
+  settings_query.clear();
+  settings_selected = 0;
+  settings_scroll = 0;
   rebuild_settings_entries();
   show_settings_menu = true;
   needs_redraw = true;
@@ -261,9 +456,73 @@ void Editor::close_settings_menu()
 {
   show_settings_menu = false;
   settings_entries.clear();
+  settings_filtered.clear();
+  settings_query.clear();
+  settings_dropdown_open = false;
   settings_selected = 0;
   settings_scroll = 0;
   needs_redraw = true;
+}
+
+void Editor::open_settings_dropdown()
+{
+  SettingsEntry *e = settings_selected_entry();
+  if (!e || e->type != SettingsEntry::Type::Enum || e->options.empty())
+    return;
+  settings_dropdown_open = true;
+  settings_dropdown_index = 0;
+  for (int i = 0; i < (int)e->options.size(); i++)
+  {
+    if (e->options[(size_t)i] == e->value)
+    {
+      settings_dropdown_index = i;
+      break;
+    }
+  }
+  settings_dropdown_scroll = 0;
+  needs_redraw = true;
+}
+
+bool Editor::step_settings_value(bool increase)
+{
+  SettingsEntry *e = settings_selected_entry();
+  if (!e)
+    return true;
+  if (e->type == SettingsEntry::Type::Bool)
+  {
+    apply_settings_value(e->key, e->value == "true" ? "false" : "true");
+    return true;
+  }
+  if (e->type == SettingsEntry::Type::Int)
+  {
+    int current = 0;
+    if (!parse_setting_int(e->value, current))
+    {
+      // Nothing sensible to step from (empty or hand-edited): Enter opens the
+      // editor, which is where the value can be typed instead.
+      return true;
+    }
+    const int next = clamp_setting_int(*e, current + (increase ? e->step : -e->step));
+    apply_settings_value(e->key, std::to_string(next));
+    return true;
+  }
+  if (e->type == SettingsEntry::Type::Enum && !e->options.empty())
+  {
+    const int count = (int)e->options.size();
+    int at = 0;
+    for (int i = 0; i < count; i++)
+    {
+      if (e->options[(size_t)i] == e->value)
+      {
+        at = i;
+        break;
+      }
+    }
+    const int next = ((at + (increase ? 1 : -1)) % count + count) % count;
+    apply_settings_value(e->key, e->options[(size_t)next]);
+    return true;
+  }
+  return true;
 }
 
 void Editor::apply_settings_value(const std::string &key, const std::string &value)
@@ -302,106 +561,152 @@ void Editor::apply_settings_value(const std::string &key, const std::string &val
   needs_redraw = true;
 }
 
+bool Editor::handle_settings_dropdown_input(int ch)
+{
+  SettingsEntry *e = settings_selected_entry();
+  if (!e || e->options.empty())
+  {
+    settings_dropdown_open = false;
+    return true;
+  }
+  const int count = (int)e->options.size();
+  if (ch == 1008 || ch == 14)
+  {
+    settings_dropdown_index = std::max(0, settings_dropdown_index - 1);
+    needs_redraw = true;
+    return true;
+  }
+  if (ch == 1009 || ch == 16)
+  {
+    settings_dropdown_index = std::min(count - 1, settings_dropdown_index + 1);
+    needs_redraw = true;
+    return true;
+  }
+  if (ch == 1012 || ch == 1013)
+  {
+    settings_dropdown_index = ch == 1012 ? 0 : count - 1;
+    needs_redraw = true;
+    return true;
+  }
+  if (ch == '\n' || ch == 13)
+  {
+    settings_dropdown_open = false;
+    apply_settings_value(e->key, e->options[(size_t)settings_dropdown_index]);
+    return true;
+  }
+  // The open list owns the keyboard: a stray letter must not silently edit
+  // the row behind it.
+  return true;
+}
+
 bool Editor::handle_settings_input(int ch)
 {
   if (!show_settings_menu)
     return false;
 
-  if (settings_entries.empty())
-  {
-    if (ch == 27)
-      close_settings_menu();
-    return true;
-  }
-
-  SettingsEntry &cur = settings_entries[(size_t)std::clamp(
-      settings_selected, 0, (int)settings_entries.size() - 1)];
-
-  // Esc: cancel an in-progress edit first, then close the menu.
+  // Esc unwinds one layer at a time: the choices drop-down, then a row being
+  // edited, then the search text, and only then the menu itself.
   if (ch == 27)
   {
-    if (cur.editing)
+    if (settings_dropdown_open)
     {
-      cur.editing = false;
+      settings_dropdown_open = false;
       needs_redraw = true;
+      return true;
+    }
+    SettingsEntry *editing = settings_selected_entry();
+    if (editing && editing->editing)
+    {
+      editing->editing = false;
+      needs_redraw = true;
+      return true;
+    }
+    if (!settings_query.empty())
+    {
+      settings_query.clear();
+      refresh_settings_filter();
       return true;
     }
     close_settings_menu();
     return true;
   }
 
-  if (cur.editing)
+  // The drop-down is modal over the panel while it is up.
+  if (settings_dropdown_open)
+    return handle_settings_dropdown_input(ch);
+
+  SettingsEntry *cur = settings_selected_entry();
+
+  if (cur && cur->editing)
   {
     if (ch == '\n' || ch == 13)
     {
-      // Validate ints: empty / non-numeric input cancels the edit.
-      if (cur.type == SettingsEntry::Type::Int)
+      // A typed number has to land in the row's range, and empty /
+      // non-numeric input cancels the edit rather than corrupting the config.
+      if (cur->type == SettingsEntry::Type::Int)
       {
-        const std::string &v = cur.edit_input;
-        bool ok = !v.empty();
-        for (char c : v)
+        int value = 0;
+        if (!parse_setting_int(cur->edit_input, value))
         {
-          if (!std::isdigit((unsigned char)c) && c != '-')
-          {
-            ok = false;
-            break;
-          }
-        }
-        if (!ok)
-        {
-          cur.editing = false;
+          cur->editing = false;
           needs_redraw = true;
           return true;
         }
+        cur->editing = false;
+        apply_settings_value(cur->key, std::to_string(clamp_setting_int(*cur, value)));
+        return true;
       }
-      else if (cur.edit_input.empty())
+      if (cur->edit_input.empty())
       {
         // Empty string input: treat as cancel (no meaningful change).
-        cur.editing = false;
+        cur->editing = false;
         needs_redraw = true;
         return true;
       }
-      apply_settings_value(cur.key, cur.edit_input);
+      apply_settings_value(cur->key, cur->edit_input);
       return true;
     }
     if (ch == 127 || ch == 8)
     {
-      if (!cur.edit_input.empty())
-        cur.edit_input.pop_back();
+      if (!cur->edit_input.empty())
+        cur->edit_input.pop_back();
       needs_redraw = true;
       return true;
     }
     if (ch >= 32 && ch < 1000)
     {
-      cur.edit_input.push_back((char)ch);
+      cur->edit_input.push_back((char)ch);
       needs_redraw = true;
     }
     return true;
   }
 
-  // Navigation (not editing).
-  if (ch == 1008 || ch == 'k' || ch == 'K')
+  // Navigation walks the filtered list; Ctrl+P / Ctrl+N do what the arrows
+  // do, since plain letters belong to the search bar now.
+  const int matches = (int)settings_filtered.size();
+  const auto clamp_selected = [&](int to)
+  { return std::max(0, std::min(matches - 1, to)); };
+  if (ch == 1008 || ch == 14)
   {
-    settings_selected = std::max(0, settings_selected - 1);
+    settings_selected = clamp_selected(settings_selected - 1);
     needs_redraw = true;
     return true;
   }
-  if (ch == 1009 || ch == 'j' || ch == 'J')
+  if (ch == 1009 || ch == 16)
   {
-    settings_selected = std::min((int)settings_entries.size() - 1, settings_selected + 1);
+    settings_selected = clamp_selected(settings_selected + 1);
     needs_redraw = true;
     return true;
   }
   if (ch == 1015)
   {
-    settings_selected = std::max(0, settings_selected - 8);
+    settings_selected = clamp_selected(settings_selected - 8);
     needs_redraw = true;
     return true;
   }
   if (ch == 1016)
   {
-    settings_selected =
-        std::min((int)settings_entries.size() - 1, settings_selected + 8);
+    settings_selected = clamp_selected(settings_selected + 8);
     needs_redraw = true;
     return true;
   }
@@ -413,38 +718,61 @@ bool Editor::handle_settings_input(int ch)
   }
   if (ch == 1013)
   {
-    settings_selected = (int)settings_entries.size() - 1;
+    settings_selected = clamp_selected(matches - 1);
     needs_redraw = true;
     return true;
   }
 
-  // Enter: toggle booleans, start inline edit for ints/strings.
+  // Right/Left: the row's own way of moving a notch (1010 is the right
+  // arrow, 1011 the left, the same codes the buffer's own movement uses).
+  if (ch == 1010 || ch == 1011)
+    return step_settings_value(ch == 1010);
+
+  // Enter: toggle booleans, list an enum's choices, start the inline editor
+  // for everything else.
   if (ch == '\n' || ch == 13)
   {
-    if (cur.type == SettingsEntry::Type::Bool)
+    if (!cur)
+      return true;
+    if (cur->type == SettingsEntry::Type::Bool)
     {
-      apply_settings_value(cur.key, cur.value == "true" ? "false" : "true");
+      apply_settings_value(cur->key, cur->value == "true" ? "false" : "true");
+    }
+    else if (cur->type == SettingsEntry::Type::Enum)
+    {
+      open_settings_dropdown();
     }
     else
     {
       // Fresh input: type the new value from scratch (empty + Enter
       // cancels the edit). Seeding with the old value would force
       // backspacing over it for every change.
-      cur.editing = true;
-      cur.edit_input.clear();
+      cur->editing = true;
+      cur->edit_input.clear();
+      needs_redraw = true;
     }
-    needs_redraw = true;
     return true;
   }
 
-  // Left/Right toggle booleans too (vim-style).
-  if (ch == 1010 || ch == 1011)
+  if (ch == 127 || ch == 8)
   {
-    if (cur.type == SettingsEntry::Type::Bool)
+    if (!settings_query.empty())
     {
-      apply_settings_value(cur.key, cur.value == "true" ? "false" : "true");
-      needs_redraw = true;
+      settings_query.pop_back();
+      settings_selected = 0;
+      refresh_settings_filter();
     }
+    return true;
+  }
+
+  // Typing filters: every printable character lands in the search bar (there
+  // is no other text field in the panel to compete with it), the way the
+  // palette and the quick pick behave.
+  if (ch >= 32 && ch < 1000)
+  {
+    settings_query.push_back((char)ch);
+    settings_selected = 0;
+    refresh_settings_filter();
     return true;
   }
 
@@ -456,22 +784,68 @@ bool Editor::handle_settings_mouse(int x, int y, bool is_click)
   if (!show_settings_menu)
     return false;
 
-  for (int i = 0; i < (int)settings_entries.size(); i++)
+  // An open choices drop-down owns the pointer over its own box; anywhere
+  // else dismisses it (a motion just puts it away, a click also does what it
+  // would have done).
+  if (settings_dropdown_open)
   {
-    const SettingsEntry &e = settings_entries[(size_t)i];
-    if (y == e.row_y && x >= e.row_x && x < e.row_x + e.row_w)
+    const bool inside = x >= settings_dropdown_x && x < settings_dropdown_x + settings_dropdown_w
+                        && y >= settings_dropdown_y && y < settings_dropdown_y + settings_dropdown_h;
+    if (inside)
     {
-      if (settings_selected != i)
+      // Interior rows start one below the top border (the same arithmetic the
+      // painter uses to place them).
+      const int row = y - (settings_dropdown_y + 1) + settings_dropdown_scroll;
+      SettingsEntry *e = settings_selected_entry();
+      const int count = e ? (int)e->options.size() : 0;
+      if (row >= 0 && row < count && e)
       {
-        settings_selected = i;
+        settings_dropdown_index = row;
         needs_redraw = true;
-      }
-      if (is_click)
-      {
-        return handle_settings_input('\n');
+        if (is_click)
+        {
+          settings_dropdown_open = false;
+          apply_settings_value(e->key, e->options[(size_t)row]);
+        }
       }
       return true;
     }
+    settings_dropdown_open = false;
+    needs_redraw = true;
+    if (!is_click)
+      return true;
+  }
+
+  for (int i = 0; i < (int)settings_entries.size(); i++)
+  {
+    SettingsEntry &e = settings_entries[(size_t)i];
+    if (e.row_y != y || x < e.row_x || x >= e.row_x + e.row_w)
+      continue;
+    // The steppers and chevrons sit inside the value column: a press on one
+    // moves the value instead of opening the editor (which is what a press
+    // anywhere else on the row does).
+    if (e.step_down_x >= 0 && x == e.step_down_x)
+    {
+      if (e.row_pos >= 0)
+        settings_selected = e.row_pos;
+      return step_settings_value(false);
+    }
+    if (e.step_up_x >= 0 && x == e.step_up_x)
+    {
+      if (e.row_pos >= 0)
+        settings_selected = e.row_pos;
+      return step_settings_value(true);
+    }
+    if (e.row_pos >= 0 && settings_selected != e.row_pos)
+    {
+      settings_selected = e.row_pos;
+      needs_redraw = true;
+    }
+    if (is_click)
+    {
+      return handle_settings_input('\n');
+    }
+    return true;
   }
 
   const bool inside_panel = x >= settings_panel_x && x < settings_panel_x + settings_panel_w

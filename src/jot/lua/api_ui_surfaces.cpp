@@ -283,6 +283,25 @@ bool LuaAPI::emit_settings(const SettingsView &view)
                        lua_set_int_field(L, t, "selected", view.selected);
                        lua_set_int_field(L, t, "scroll", view.scroll);
                        lua_set_int_field(L, t, "all_count", view.all_count);
+                       lua_set_int_field(L, t, "match_count", view.match_count);
+                       lua_set_str_field(L, t, "query", view.query);
+                       lua_set_int_field(L, t, "search_x", view.search_x);
+                       lua_set_int_field(L, t, "search_y", view.search_y);
+                       lua_set_bool_field(L, t, "dropdown_open", view.dropdown_open);
+                       lua_set_int_field(L, t, "dropdown_x", view.dropdown_x);
+                       lua_set_int_field(L, t, "dropdown_y", view.dropdown_y);
+                       lua_set_int_field(L, t, "dropdown_w", view.dropdown_w);
+                       lua_set_int_field(L, t, "dropdown_h", view.dropdown_h);
+                       lua_set_int_field(L, t, "dropdown_index", view.dropdown_index);
+                       lua_set_int_field(L, t, "dropdown_scroll", view.dropdown_scroll);
+                       lua_set_str_field(L, t, "dropdown_value", view.dropdown_value);
+                       lua_newtable(L);
+                       for (size_t i = 0; i < view.dropdown_options.size(); i++)
+                       {
+                         lua_pushstring(L, view.dropdown_options[i].c_str());
+                         lua_rawseti(L, -2, (lua_Integer)i + 1);
+                       }
+                       lua_setfield(L, t, "dropdown_options");
                        lua_newtable(L);
                        const int arr = lua_gettop(L);
                        for (size_t i = 0; i < view.items.size(); i++)
@@ -296,6 +315,19 @@ bool LuaAPI::emit_settings(const SettingsView &view)
                          lua_set_bool_field(L, it, "selected", item.selected);
                          lua_set_bool_field(L, it, "editing", item.editing);
                          lua_set_str_field(L, it, "edit_input", item.edit_input);
+                         lua_set_int_field(L, it, "option_index", item.option_index);
+                         lua_set_int_field(L, it, "value_x", item.value_x);
+                         lua_set_int_field(L, it, "value_w", item.value_w);
+                         lua_set_int_field(L, it, "step_down_x", item.step_down_x);
+                         lua_set_int_field(L, it, "step_up_x", item.step_up_x);
+                         lua_set_int_field(L, it, "row_y", item.row_y);
+                         lua_newtable(L);
+                         for (size_t o = 0; o < item.options.size(); o++)
+                         {
+                           lua_pushstring(L, item.options[o].c_str());
+                           lua_rawseti(L, -2, (lua_Integer)o + 1);
+                         }
+                         lua_setfield(L, it, "options");
                          lua_rawseti(L, arr, (lua_Integer)i + 1);
                        }
                        lua_setfield(L, t, "items");

@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""Probe: the settings panel's search bar, steppers and choices drop-down.
+
+The unit tests drive the panel's model headlessly (filtering, stepping, the
+drop-down's cursor). What only a real session proves is the picture: that the
+search bar is on screen with a live match count, that typing lands in it, that
+an int row wears its nf-fa-minus/plus steppers right where the mouse hit test
+put them, that an enum row shows its cycling chevrons, and that Enter opens the
+choices as a list that applies what the cursor is on -- with the glyphs the
+native layout recorded rather than whatever Lua felt like drawing.
+
+Every scene is its own session (one screen read per run), opening this probe's
+workspace and then :settings from the command palette.
+
+Usage: test/settings_probe.py [path-to-jot] [--dump]
+Exit codes: 0 pass, 1 fail, 2 skipped (no binary).
+"""
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pty_screen import run_in_pty  # noqa: E402
+
+COLS, ROWS = 120, 34
+
+# Ctrl+Shift+P opens the command palette; Enter runs what is typed in it.
+PALETTE = b"\x1b[112;6u"
+ENTER = b"\r"
+ESC = b"\x1b"
+RIGHT = b"\x1b[C"
+DOWN = b"\x1b[B"
+
+TOGGLE_ON = "\uf205"   # nf-fa-toggle_on
+TOGGLE_OFF = "\uf204"  # nf-fa-toggle_off
+MINUS = "\uf068"       # nf-fa-minus, the int row's decrease stepper
+PLUS = "\uf067"        # nf-fa-plus, its increase stepper
+CHECK = "\uf00c"       # nf-fa-check, the choice in force in the drop-down
+CHEV_L = "\u2039"
+CHEV_R = "\u203a"
+
+
+# The panel is a modal float over a modal palette, and a keystroke delivered
+# while either is still settling is simply dropped: the gaps are generous
+# (verified against a run of four sessions) rather than tight.
+SETTLE, AFTER = 5.0, 0.8
+INIT, TYPE, STEP, TAIL = 1.4, 1.2, 1.5, 1.5
+
+
+def settings_run(binary: str, root: str, cfg: str, extra, tail: float = TAIL):
+    """Opens the workspace, runs :settings from the palette, types `extra`."""
+    phases = [(INIT, PALETTE), (0.8, b"settings"), (0.8, ENTER)]
+    phases.extend(extra)
+    phases.append((tail, b""))
+    return run_in_pty(binary, [root], b"", settle=SETTLE, after=AFTER, cols=COLS,
+                      rows=ROWS, cfg=cfg, cwd=root, phases=phases)
+
+
+def row_of(view: str, needle: str) -> str:
+    for line in view.splitlines():
+        if needle in line:
+            return line
+    return ""
+
+
+def number_in(row: str, needle: str):
+    """The integer that follows `needle` on a panel row, or None."""
+    at = row.find(needle)
+    if at < 0:
+        return None
+    match = re.search(r"(-?\d+)", row[at + len(needle):])
+    return int(match.group(1)) if match else None
+
+
+def main() -> int:
+    binary = sys.argv[1] if len(sys.argv) > 1 else "build/apps/jot/jot"
+    dump = "--dump" in sys.argv
+    if not os.path.exists(binary):
+        print(f"settings probe: SKIP - no binary at {binary}")
+        return 2
+
+    root = "/tmp/jot_settings_probe_ws"
+    shutil.rmtree(root, ignore_errors=True)
+    os.makedirs(root)
+    # Without a workspace the editor paints the home screen and never reaches
+    # the panel at all.
+    with open(os.path.join(root, "notes.txt"), "w") as fh:
+        fh.write("probe workspace\n")
+
+    failures: list[str] = []
+    raws: dict[str, bytes] = {}
+
+    def scene(name: str, extra, tail: float = TAIL) -> str:
+        # A fresh config home per scene per run: the panel *writes* settings
+        # (a stepped number is saved), so a reused directory would hand the
+        # next run a starting point left over from this one.
+        cfg = f"/tmp/jot_settings_probe_cfg_{name}_{os.getpid()}"
+        shutil.rmtree(cfg, ignore_errors=True)
+        screen = settings_run(binary, root, cfg, extra, tail)
+        view = screen.text()
+        # The escape stream as written: the glyph checks read this, because a
+        # multi-byte glyph split across two reads of the pty lands in the grid
+        # as "?" cells (a harness artifact, not something the editor did).
+        raws[name] = bytes(screen.raw)
+        if dump:
+            print(f"--- scene {name} ---")
+            print(view)
+        return view
+
+    def fail(message: str) -> None:
+        failures.append(message)
+
+    # Scene 1: the panel itself -- search bar, keys count, a bool's toggle.
+    view = scene("bar", [])
+    print("scene 1: :settings shows the search bar, the count and typed rows")
+    if not re.search(r"Search \d+ settings", view):
+        fail("the search bar's placeholder is not on the panel")
+    if "keys" not in view:
+        fail("the title row's key count is missing")
+    if TOGGLE_ON not in view and TOGGLE_OFF not in view:
+        fail("no boolean row shows its toggle glyph")
+    if "─" not in view:
+        fail("the divider under the search bar is missing")
+    first_key_row = row_of(view, "Auto-detect indent")
+    if not first_key_row:
+        fail("the unfiltered list does not start with the first config key")
+
+    # Scene 2: typing filters, and the count turns into matches/total.
+    view = scene("filter", [(TYPE, b"tab")])
+    print("scene 2: typing narrows the list and the count")
+    counter = re.search(r"(\d+)/(\d+)", view)
+    if not counter:
+        fail("the search row shows no match count while a query is active")
+    elif int(counter.group(1)) >= int(counter.group(2)):
+        fail(f"the query did not narrow the list ({counter.group(0)})")
+    if "Tab size" not in view:
+        fail("`tab` did not keep the Tab size row")
+    if row_of(view, "Auto-detect indent"):
+        fail("`tab` left a row that cannot match the query")
+
+    # Scenes 3 and 4: an int row wears its steppers and Right moves the number
+    # by exactly one notch.
+    before_view = scene("steppers", [(TYPE, b"tabsize")])
+    print("scene 3: an int row shows its steppers")
+    before_row = row_of(before_view, "Tab size")
+    if not before_row:
+        fail("the Tab size row is not on screen")
+    else:
+        if MINUS not in before_row or PLUS not in before_row:
+            fail(f"the selected int row has no steppers: {before_row!r}")
+        if CHEV_L in before_row:
+            fail("an int row is wearing the enum chevrons")
+    before_value = number_in(before_row, "Tab size")
+    if before_value is None:
+        fail("the Tab size row shows no number")
+
+    after_view = scene("stepped", [(TYPE, b"tabsize"), (STEP, RIGHT)])
+    print("scene 4: Right steps the number")
+    after_row = row_of(after_view, "Tab size")
+    after_value = number_in(after_row, "Tab size")
+    if after_value is None:
+        fail("the Tab size row shows no number after stepping")
+    elif before_value is not None and after_value != before_value + 1:
+        fail(f"Right stepped {before_value} -> {after_value}, not by one")
+    if MINUS not in after_row or PLUS not in after_row:
+        fail("the steppers vanished after stepping")
+
+    # Scene 5: an enum row shows the choice between its cycling chevrons.
+    view = scene("enum", [(TYPE, b"viewerbackend")])
+    print("scene 5: an enum row shows its chevrons and current choice")
+    enum_row = row_of(view, "Image viewer backend")
+    if CHEV_L.encode() not in raws["enum"] or CHEV_R.encode() not in raws["enum"]:
+        fail("the enum row's cycling chevrons were never painted")
+    if not enum_row:
+        fail("the image-viewer row is not on screen")
+    elif "auto" not in enum_row:
+        fail(f"the enum row does not show its current choice: {enum_row!r}")
+    else:
+        # Bracketing, not just present: the chevrons sit one blank cell outside
+        # the choice, on both sides (a split glyph reads as "?" in the grid).
+        at = enum_row.find("auto")
+        if enum_row[at - 2] not in ("?", CHEV_L) or enum_row[at + 5] not in ("?", CHEV_R):
+            fail(f"the chevrons do not bracket the choice: {enum_row!r}")
+
+    # Scene 6: Enter lists the choices, marking the one in force.
+    view = scene("options", [(TYPE, b"viewerbackend"), (STEP, ENTER)])
+    print("scene 6: Enter opens the choices as a list")
+    if "kitty" not in view or "sixel" not in view:
+        fail("the open drop-down does not list the choices")
+    if CHECK not in view:
+        fail("the drop-down does not mark the choice in force")
+    if "auto" not in row_of(view, "Image viewer backend"):
+        fail("the row lost its value while the list is open")
+
+    # Scene 7: Down/Down then Enter applies the choice under the cursor.
+    view = scene("picked", [(TYPE, b"viewerbackend"), (STEP, ENTER),
+                            (0.8, DOWN), (0.8, DOWN), (STEP, ENTER)])
+    print("scene 7: the choice under the cursor is applied")
+    picked_row = row_of(view, "Image viewer backend")
+    if "sixel" not in picked_row:
+        fail(f"the picked choice is not in force: {picked_row!r}")
+    if "kitty" in view:
+        fail("the drop-down is still on screen after taking a choice")
+
+    # Scene 8: Esc puts the list away without changing anything.
+    view = scene("dismissed", [(TYPE, b"viewerbackend"), (STEP, ENTER), (STEP, ESC)])
+    print("scene 8: Esc dismisses the list without applying anything")
+    dismissed_row = row_of(view, "Image viewer backend")
+    if "auto" not in dismissed_row:
+        fail(f"Esc applied a choice: {dismissed_row!r}")
+    if "sixel" in view:
+        fail("the drop-down survived Esc")
+    if "viewerbackend" not in view:
+        fail("Esc closed the whole panel instead of just the list")
+
+    if failures:
+        print()
+        for message in failures:
+            print(f"FAIL: {message}")
+        return 1
+    print("\nsettings probe: all scenes passed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

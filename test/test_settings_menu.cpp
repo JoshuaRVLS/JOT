@@ -4,6 +4,7 @@
 // survive the session. The menu is cell-based, so the same surface serves
 // the terminal and GUI frontends.
 #include "editor.h"
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdlib>
 #include <string>
@@ -41,6 +42,23 @@ namespace
         return i;
     }
     return -1;
+  }
+
+  // Where a key sits in the *filtered* list, which is what the selection
+  // walks. With an empty query the two lists line up.
+  int filtered_pos(const Editor &e, const std::string &key)
+  {
+    for (int i = 0; i < e.settings_match_count_for_test(); i++)
+    {
+      if (e.settings_key_at_for_test(i) == key)
+        return i;
+    }
+    return -1;
+  }
+
+  bool filtered_contains(const Editor &e, const std::string &key)
+  {
+    return filtered_pos(e, key) >= 0;
   }
 } // namespace
 
@@ -151,9 +169,15 @@ TEST_CASE("Settings menu covers Lua-registered and LSP keys", "[jot]")
   // C++-read keys that previously fell back to raw names now carry labels.
   const int scheme = entry_index(e, "color_scheme");
   REQUIRE(scheme >= 0);
+  // The scheme is one of a set -- the themes that are actually installed --
+  // so it is offered as choices rather than as free text.
   REQUIRE(e.settings_entries_for_test()[(size_t)scheme].type
-          == SettingsEntry::Type::String);
+          == SettingsEntry::Type::Enum);
   REQUIRE(e.settings_entries_for_test()[(size_t)scheme].label == "Color scheme");
+  const auto &schemes = e.settings_entries_for_test()[(size_t)scheme].options;
+  REQUIRE_FALSE(schemes.empty());
+  REQUIRE(std::find(schemes.begin(), schemes.end(), e.config_value_for_test("color_scheme"))
+          != schemes.end());
 
   const int inlay = entry_index(e, "lsp_inlay_hints");
   REQUIRE(inlay >= 0);
@@ -217,4 +241,267 @@ TEST_CASE("Settings menu edits a toast key and persists it", "[jot]")
   // The toast module reads the config live (cfg_num on every show), so the
   // change takes effect without a restart.
   REQUIRE(e.config_value_for_test("toast.max_width") == "40");
+}
+
+TEST_CASE("Settings search bar filters the list by label or key", "[jot]")
+{
+  Editor &e = probe_editor();
+  open_menu(e);
+  const int all = e.settings_match_count_for_test();
+  REQUIRE(all > 50);
+  REQUIRE(filtered_contains(e, "tab_size"));
+
+  // Typing lands in the search bar -- there is no other text field in the
+  // panel -- and plain letters are search characters, not navigation.
+  for (char c : std::string("autosave"))
+  {
+    e.settings_input_for_test(c);
+  }
+  REQUIRE(e.settings_query_for_test() == "autosave");
+  REQUIRE(e.settings_match_count_for_test() < all);
+  // Punctuation and case in the label are ignored: "autosave" finds
+  // "Auto save" and auto_save_interval_ms, and nothing else.
+  REQUIRE(filtered_contains(e, "auto_save"));
+  REQUIRE(filtered_contains(e, "auto_save_interval_ms"));
+  REQUIRE_FALSE(filtered_contains(e, "tab_size"));
+  for (int i = 0; i < e.settings_match_count_for_test(); i++)
+  {
+    REQUIRE(e.settings_key_at_for_test(i).find("auto_save") != std::string::npos);
+  }
+  // The selection clamps into the shorter list.
+  REQUIRE(e.settings_selected_pos_for_test() < e.settings_match_count_for_test());
+
+  // Navigation walks the matches only.
+  if (e.settings_match_count_for_test() > 1)
+  {
+    e.settings_input_for_test(1009); // Down
+    REQUIRE(e.settings_selected_pos_for_test() == 1);
+    REQUIRE(e.settings_selected_key_for_test().find("auto_save") != std::string::npos);
+  }
+
+  // Backspace edits the query; Esc clears it and only then closes the menu.
+  e.settings_input_for_test(127);
+  REQUIRE(e.settings_query_for_test() == "autosav");
+  REQUIRE(e.settings_input_for_test(27));
+  REQUIRE(e.settings_query_for_test().empty());
+  REQUIRE(e.settings_match_count_for_test() == all);
+  REQUIRE(e.settings_menu_open_for_test());
+  REQUIRE(e.settings_input_for_test(27));
+  REQUIRE_FALSE(e.settings_menu_open_for_test());
+
+  // A fresh menu opens unfiltered rather than on the last visit's query.
+  e.toggle_settings_menu_for_test();
+  REQUIRE(e.settings_query_for_test().empty());
+  REQUIRE(e.settings_match_count_for_test() == all);
+  e.close_settings_menu_for_test();
+}
+
+TEST_CASE("Settings menu steps ints and clamps them to their range", "[jot]")
+{
+  Editor &e = probe_editor();
+  e.config_set_for_test("tab_size", "7");
+  open_menu(e);
+
+  const int pos = filtered_pos(e, "tab_size");
+  REQUIRE(pos >= 0);
+  e.settings_select_for_test(pos);
+  REQUIRE(e.settings_selected_key_for_test() == "tab_size");
+
+  // Right/Left move the number by the row's own step (1010 is the right
+  // arrow, 1011 the left).
+  REQUIRE(e.settings_input_for_test(1010));
+  REQUIRE(e.config_int_for_test("tab_size") == 8);
+  REQUIRE(e.settings_input_for_test(1011));
+  REQUIRE(e.config_int_for_test("tab_size") == 7);
+
+  // The range is the one the rest of the app already clamps to (1..16), so a
+  // stepper or a typed value cannot leave the row with an unusable number.
+  for (int i = 0; i < 20; i++)
+  {
+    e.settings_input_for_test(1010);
+  }
+  REQUIRE(e.config_int_for_test("tab_size") == 16);
+  for (int i = 0; i < 20; i++)
+  {
+    e.settings_input_for_test(1011);
+  }
+  REQUIRE(e.config_int_for_test("tab_size") == 1);
+
+  // Enter still opens the inline editor, and a typed value is clamped too.
+  const int idx = entry_index(e, "tab_size");
+  REQUIRE(idx >= 0);
+  REQUIRE(e.settings_input_for_test('\n'));
+  REQUIRE(e.settings_entries_for_test()[(size_t)idx].editing);
+  for (char c : std::string("99"))
+  {
+    e.settings_input_for_test(c);
+  }
+  REQUIRE(e.settings_input_for_test('\n'));
+  REQUIRE(e.config_int_for_test("tab_size") == 16);
+  REQUIRE_FALSE(e.settings_entries_for_test()[(size_t)idx].editing);
+
+  // Nonsense still cancels rather than corrupting the value.
+  REQUIRE(e.settings_input_for_test('\n'));
+  e.settings_input_for_test('x');
+  REQUIRE(e.settings_input_for_test('\n'));
+  REQUIRE(e.config_int_for_test("tab_size") == 16);
+}
+
+TEST_CASE("Settings menu cycles enum rows and lists their choices", "[jot]")
+{
+  Editor &e = probe_editor();
+  e.config_set_for_test("image_viewer_backend", "auto");
+  open_menu(e);
+
+  const int idx = entry_index(e, "image_viewer_backend");
+  REQUIRE(idx >= 0);
+  const SettingsEntry &entry = e.settings_entries_for_test()[(size_t)idx];
+  REQUIRE(entry.type == SettingsEntry::Type::Enum);
+  REQUIRE(entry.options.size() == 5);
+  REQUIRE(entry.options.front() == "auto");
+  REQUIRE(entry.options.back() == "off");
+
+  e.settings_select_for_test(filtered_pos(e, "image_viewer_backend"));
+  REQUIRE(e.settings_selected_key_for_test() == "image_viewer_backend");
+
+  // Right/Left walk the choices and wrap around the ends.
+  e.settings_input_for_test(1010);
+  REQUIRE(e.config_value_for_test("image_viewer_backend") == "kitty");
+  e.settings_input_for_test(1011);
+  REQUIRE(e.config_value_for_test("image_viewer_backend") == "auto");
+  e.settings_input_for_test(1011);
+  REQUIRE(e.config_value_for_test("image_viewer_backend") == "off");
+
+  // Enter opens the list of choices (rather than a text editor) on the value
+  // currently in force.
+  e.settings_input_for_test('\n');
+  REQUIRE(e.settings_dropdown_open_for_test());
+  REQUIRE(e.settings_dropdown_index_for_test() == 4); // "off"
+  // The painted box has to hold every choice: all five fit, so the list is
+  // never scrolled behind the cursor.
+  e.set_home_menu_visible(false);
+  e.apply_resize_for_test(120, 40);
+  e.request_redraw_for_test();
+  e.render_for_test();
+  REQUIRE(e.settings_dropdown_rows_for_test() == 5);
+
+  // Placement rules the picture has to satisfy: the box lives inside the
+  // panel and never covers the row whose value it is offering. The row here
+  // sits at the bottom of a one-row list, so this is the case that has to open
+  // the box above the row rather than over it.
+  int panel_x = 0;
+  int panel_y = 0;
+  int panel_w = 0;
+  int panel_h = 0;
+  e.settings_panel_rect_for_test(panel_x, panel_y, panel_w, panel_h);
+  int box_x = 0;
+  int box_y = 0;
+  int box_w = 0;
+  int box_h = 0;
+  REQUIRE(e.settings_dropdown_rect_for_test(box_x, box_y, box_w, box_h));
+  int row_y = 0;
+  int value_x = 0;
+  int step_down_x = 0;
+  int step_up_x = 0;
+  REQUIRE(e.settings_row_cells_for_test(
+      "image_viewer_backend", row_y, value_x, step_down_x, step_up_x));
+  REQUIRE(box_x >= panel_x + 1);
+  REQUIRE(box_x + box_w <= panel_x + panel_w - 1);
+  REQUIRE(box_y >= panel_y + 1);
+  REQUIRE(box_y + box_h <= panel_y + panel_h - 1);
+  REQUIRE(box_y + box_h <= row_y); // above the row, never over it
+  REQUIRE(box_x == value_x - 1);   // aligned with the value column
+  e.settings_input_for_test(1008); // Up
+  REQUIRE(e.settings_dropdown_index_for_test() == 3);
+  e.settings_input_for_test('\n');
+  REQUIRE_FALSE(e.settings_dropdown_open_for_test());
+  REQUIRE(e.config_value_for_test("image_viewer_backend") == "cell");
+
+  // Esc puts the list away without taking a choice, and the menu stays up.
+  e.settings_input_for_test('\n');
+  REQUIRE(e.settings_dropdown_open_for_test());
+  e.settings_input_for_test(1009); // Down -> "off"
+  REQUIRE(e.settings_input_for_test(27));
+  REQUIRE_FALSE(e.settings_dropdown_open_for_test());
+  REQUIRE(e.config_value_for_test("image_viewer_backend") == "cell");
+  REQUIRE(e.settings_menu_open_for_test());
+
+  // While the list is up it owns the keyboard: a stray letter must not edit
+  // the row behind it.
+  e.settings_input_for_test('\n');
+  REQUIRE(e.settings_dropdown_open_for_test());
+  e.settings_input_for_test('x');
+  REQUIRE(e.settings_query_for_test().empty());
+  REQUIRE(e.settings_dropdown_open_for_test());
+  REQUIRE(e.settings_input_for_test(27));
+
+  e.config_set_for_test("image_viewer_backend", "auto");
+  e.close_settings_menu_for_test();
+}
+
+TEST_CASE("Settings steppers are painted where the mouse can click them", "[jot]")
+{
+  Editor &e = probe_editor();
+  e.config_set_for_test("tab_size", "4");
+  open_menu(e);
+  // A workspace-less test editor otherwise paints the home screen and never
+  // reaches the settings panel at all.
+  e.set_home_menu_visible(false);
+  e.apply_resize_for_test(120, 40);
+  e.settings_select_for_test(filtered_pos(e, "tab_size"));
+  e.request_redraw_for_test();
+  e.render_for_test();
+
+  int row_y = 0;
+  int value_x = 0;
+  int down_x = 0;
+  int up_x = 0;
+  REQUIRE(e.settings_row_cells_for_test("tab_size", row_y, value_x, down_x, up_x));
+  REQUIRE(down_x > value_x);
+  REQUIRE(up_x == down_x + 2);
+
+  // A press on the −/−+ cells steps the number; the drawn glyphs sit exactly
+  // there, so the hit test can never disagree with the picture.
+  e.mouse_event_for_test(down_x, row_y, /*bstate=*/1);
+  REQUIRE(e.config_int_for_test("tab_size") == 3);
+  // The steppers travel with the number, so a value that changes width moves
+  // them; the next press reads where the *new* frame put them.
+  e.request_redraw_for_test();
+  e.render_for_test();
+  REQUIRE(e.settings_row_cells_for_test("tab_size", row_y, value_x, down_x, up_x));
+  e.mouse_event_for_test(up_x, row_y, /*bstate=*/1);
+  REQUIRE(e.config_int_for_test("tab_size") == 4);
+
+  // A press on the number itself keeps the old meaning: start typing it.
+  e.request_redraw_for_test();
+  e.render_for_test();
+  REQUIRE(e.settings_row_cells_for_test("tab_size", row_y, value_x, down_x, up_x));
+  e.mouse_event_for_test(value_x, row_y, /*bstate=*/1);
+  const int idx = entry_index(e, "tab_size");
+  REQUIRE(idx >= 0);
+  REQUIRE(e.settings_entries_for_test()[(size_t)idx].editing);
+  e.settings_input_for_test(27);
+
+  // Only the row under the cursor wears its steppers; every other visible row
+  // shows its number alone, so there is nothing to hit on one.
+  e.request_redraw_for_test();
+  e.render_for_test();
+  const std::string selected_key = e.settings_selected_key_for_test();
+  int visible = 0;
+  for (int i = 0; i < e.settings_match_count_for_test(); i++)
+  {
+    const std::string key = e.settings_key_at_for_test(i);
+    int ry = 0;
+    int vx = 0;
+    int dwn = 0;
+    int up = 0;
+    if (!e.settings_row_cells_for_test(key, ry, vx, dwn, up))
+      continue; // scrolled out of the window
+    visible++;
+    if (key == selected_key)
+      continue;
+    REQUIRE(dwn < 0);
+    REQUIRE(up < 0);
+  }
+  REQUIRE(visible > 1);
 }

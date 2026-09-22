@@ -165,6 +165,111 @@ public:
   {
     settings_selected = index;
   }
+  // The search bar's query and what it keeps: the filtered list is what
+  // navigation and selection walk, so a test reads keys, not config indices.
+  std::string settings_query_for_test() const
+  {
+    return settings_query;
+  }
+  int settings_match_count_for_test() const
+  {
+    return (int)settings_filtered.size();
+  }
+  std::string settings_key_at_for_test(int position) const
+  {
+    if (position < 0 || position >= (int)settings_filtered.size())
+      return "";
+    return settings_entries[(size_t)settings_filtered[(size_t)position]].key;
+  }
+  std::string settings_selected_key_for_test() const
+  {
+    int pos = settings_selected;
+    if (pos < 0)
+      pos = 0;
+    if (pos > (int)settings_filtered.size() - 1)
+      pos = (int)settings_filtered.size() - 1;
+    return settings_key_at_for_test(pos);
+  }
+  int settings_selected_pos_for_test() const
+  {
+    return settings_selected;
+  }
+  const SettingsEntry *settings_entry_for_test(const std::string &key) const
+  {
+    for (const SettingsEntry &e : settings_entries)
+    {
+      if (e.key == key)
+        return &e;
+    }
+    return nullptr;
+  }
+  // Re-anchors the blink phase without the input-pause hold restart_blink()
+  // applies (which would keep the caret solid through the whole measurement).
+  // A test that watches the caret flip needs a known phase to start from.
+  void reset_blink_phase_for_test()
+  {
+    blink_anchor_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now().time_since_epoch())
+                          .count();
+    blink_suspend_until_ms = 0;
+    blink_visible = true;
+    needs_redraw = true;
+  }
+  // The choices drop-down state, and the cells the render pass recorded for a
+  // visible row (what the mouse hit test reads).
+  bool settings_dropdown_open_for_test() const
+  {
+    return settings_dropdown_open;
+  }
+  int settings_dropdown_index_for_test() const
+  {
+    return settings_dropdown_index;
+  }
+  // The number of choice rows the drop-down's painted box holds (0 before a
+  // frame has placed it).
+  int settings_dropdown_rows_for_test() const
+  {
+    return settings_dropdown_open ? std::max(0, settings_dropdown_h - 2) : 0;
+  }
+  // The panel's and the drop-down's painted boxes, for the placement rules the
+  // picture has to satisfy (inside the panel, clear of the row that owns it).
+  void settings_panel_rect_for_test(int &x, int &y, int &w, int &h) const
+  {
+    x = settings_panel_x;
+    y = settings_panel_y;
+    w = settings_panel_w;
+    h = settings_panel_h;
+  }
+  bool settings_dropdown_rect_for_test(int &x, int &y, int &w, int &h) const
+  {
+    if (!settings_dropdown_open)
+      return false;
+    x = settings_dropdown_x;
+    y = settings_dropdown_y;
+    w = settings_dropdown_w;
+    h = settings_dropdown_h;
+    return true;
+  }
+  bool settings_row_cells_for_test(const std::string &key,
+                                   int &row_y,
+                                   int &value_x,
+                                   int &step_down_x,
+                                   int &step_up_x) const
+  {
+    for (const SettingsEntry &e : settings_entries)
+    {
+      if (e.key != key)
+        continue;
+      if (e.row_y < 0)
+        return false;
+      row_y = e.row_y;
+      value_x = e.value_x;
+      step_down_x = e.step_down_x;
+      step_up_x = e.step_up_x;
+      return true;
+    }
+    return false;
+  }
   std::string config_value_for_test(const std::string &key)
   {
     return config.get(key, "");

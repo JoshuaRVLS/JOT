@@ -172,14 +172,28 @@ private:
   void render_popup();
   void render_home_menu();
   // Cell-based settings menu (:settings / Ctrl+, in GUI mode): a quick-
-  // pick style panel listing every config key with its value. Bools toggle
-  // on Enter; ints/strings edit inline. Lua-registered config keys appear
-  // automatically (the menu enumerates config.keys()).
+  // pick style panel listing every config key with its value, narrowed by
+  // the search bar above the list. Bools toggle on Enter, ints step and
+  // edit, enums cycle and open their choices, strings edit inline.
+  // Lua-registered config keys appear automatically (the menu enumerates
+  // config.keys()).
   void render_settings_menu();
   void place_settings_cursor();
   void toggle_settings_menu();
   void close_settings_menu();
   void rebuild_settings_entries();
+  // Re-derives the visible entries from the search bar's query and clamps the
+  // selection to the new list. Also refreshes each entry's filtered position.
+  void refresh_settings_filter();
+  // The entry the selection is on, or null when the query matches nothing.
+  SettingsEntry *settings_selected_entry();
+  // Moves the selected row's value one notch: a bool toggles, an int steps by
+  // its own amount (clamped to its range), an enum walks its choices.
+  bool step_settings_value(bool increase);
+  // The choices drop-down: opened by Enter on an Enum row, it owns the
+  // keyboard until a choice is taken or it is dismissed.
+  void open_settings_dropdown();
+  bool handle_settings_dropdown_input(int ch);
   bool handle_settings_input(int ch);
   bool handle_settings_mouse(int x, int y, bool is_click);
   void render_buffer_content(const SplitPane &pane, int pane_index, int buffer_id);

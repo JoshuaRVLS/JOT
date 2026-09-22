@@ -69,6 +69,13 @@ namespace
 
   BlinkSample sample_blink(Editor &e, int period_ms, int window_ms)
   {
+    // Start the cycle where the caller expects it to start. Without this the
+    // window is measured against an anchor set at editor construction, so a
+    // window shorter than one period sees the visible half or the hidden one
+    // depending on how long the earlier test cases happened to take -- the
+    // "a slow period cannot blink inside a short window" case would fail on a
+    // busy machine for no reason at all.
+    e.reset_blink_phase_for_test();
     BlinkSample s;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(window_ms);
     while (std::chrono::steady_clock::now() < deadline)

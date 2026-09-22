@@ -68,21 +68,47 @@ struct QuickPickView
 struct SettingsItemView
 {
   std::string label;
+  // Already formatted for display (a bool reads as its toggle glyph and
+  // "on"/"off", an empty string as "(empty)").
   std::string value;
-  // "bool" | "int" | "string" (inferred like the native menu).
+  // "bool" | "int" | "string" | "enum".
   std::string type;
   bool selected = false;
   bool editing = false;
   std::string edit_input;
+  // Enum rows: the choices and which one the config holds (-1 when the stored
+  // value is none of them).
+  std::vector<std::string> options;
+  int option_index = -1;
+  // Where the value text and the decrease/increase affordances sit on the
+  // row (absolute columns; the affordance columns are -1 when the row has
+  // none). The natively painted fallback draws the same glyphs into the same
+  // cells, so both painters and the mouse hit test agree.
+  int value_x = 0;
+  int value_w = 0;
+  int step_down_x = -1;
+  int step_up_x = -1;
+  int row_y = 0;
 };
 
 struct SettingsView
 {
   int x = 0, y = 0, w = 0, h = 0; // panel rect (absolute)
-  int selected = 0;               // absolute index into the full list
-  int scroll = 0;                 // first visible entry
-  int all_count = 0;
+  int selected = 0;               // position in the filtered list
+  int scroll = 0;                 // first visible position
+  int all_count = 0;              // every config key the menu knows
+  int match_count = 0;            // how many the search bar keeps
+  std::string query;              // the search bar's text ("" = unfiltered)
+  int search_x = 0, search_y = 0; // where the search field's text starts
   std::vector<SettingsItemView> items; // windowed to the visible rows
+  // The choices drop-down (an Enum row opened with Enter). The Lua surface
+  // paints it as a second float over the panel.
+  bool dropdown_open = false;
+  int dropdown_x = 0, dropdown_y = 0, dropdown_w = 0, dropdown_h = 0;
+  int dropdown_index = 0;  // the cursor in it
+  int dropdown_scroll = 0; // first visible choice
+  std::vector<std::string> dropdown_options;
+  std::string dropdown_value; // the choice in force (marked in the list)
 };
 
 struct PopupView

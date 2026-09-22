@@ -530,10 +530,11 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   REQUIRE(g.last_title.find("34 keys") != std::string::npos);
   // The footer is gone: the surface shows its state, not a list of bindings.
   REQUIRE(g.last_footer.empty());
-  // Divider + 2 entry rows: the selected bool shows "on", the editing
-  // row shows its " > 8" input prompt.
-  REQUIRE(g.lines_count >= 3);
-  REQUIRE(g.last_row1.find("─") != std::string::npos);
+  // Search bar, divider, then the entry rows: the selected bool shows "on",
+  // the editing row shows its " > 8" input prompt.
+  REQUIRE(g.lines_count >= 4);
+  REQUIRE(g.last_row1.find("Search") != std::string::npos);
+  REQUIRE(g.lines[1].find("─") != std::string::npos);
   bool saw_edit_input = false;
   for (int i = 0; i < g.lines_count; i++)
   {
