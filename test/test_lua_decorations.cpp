@@ -1,9 +1,11 @@
 // Headless test of the bundled inline-diagnostics feature
 // (runtime/lua/features/decorations.lua). The module is loaded into a raw Lua
 // state whose jot.* API is stubbed with recording functions, so no Editor or
-// terminal is needed. Pins the VSCode-style wavy-underline contract: one
-// decoration per diagnostic with underline=2 + severity underline_hl and NO
-// virtual text.
+// terminal is needed. Pins the VSCode-style wavy-underline contract -- one
+// decoration per diagnostic with underline=2 + severity underline_hl -- and the
+// end-of-line message: the severity's own mark (the statusline's icon for that
+// severity, not a plain dot) followed by the one-line message, all in the
+// severity colour (virt_hl).
 #include <catch2/catch_test_macros.hpp>
 #include <string>
 #include <vector>
@@ -243,9 +245,17 @@ TEST_CASE("Bundled decorations feature applies wavy underlines per diagnostic")
   const DecoSpan &hint = g.spans[2];
   REQUIRE(hint.underline == 0);
   REQUIRE_FALSE(hint.virt_text.empty());
+
+  // The message leads with the mark for its own severity -- the four the
+  // statusline draws (U+F057 / U+F071 / U+F05A / U+F0EB) -- and not with the
+  // plain dot the module used to write, which said nothing about kind.
+  REQUIRE(error.virt_text.rfind("  \uF057 ", 0) == 0);
+  REQUIRE(warning.virt_text.rfind("  \uF071 ", 0) == 0);
+  REQUIRE(hint.virt_text.rfind("  \uF0EB ", 0) == 0);
   for (const DecoSpan &s : g.spans)
   {
     REQUIRE_FALSE(s.virt_text.empty());
+    REQUIRE(s.virt_text.find("\u25CF") == std::string::npos);
   }
 
   lua_close(L);

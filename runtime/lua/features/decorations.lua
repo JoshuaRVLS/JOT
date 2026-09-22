@@ -68,12 +68,28 @@ local function enabled()
 end
 
 -- End-of-line message for a diagnostic, in the severity colour. The lead marker
--- is a plain dot, not a corner: the message sits beside the code, so anything
--- with a stem in it (a "|-" / corner glyph) would imply a line below that is
--- not there. The renderer draws only the first virt_text it finds on a row, so
--- the map below keeps exactly one per line.
+-- is the severity icon the statusline already draws (see
+-- src/render/status_line.cpp), not a plain dot: one dot for every severity says
+-- only that a message is here, while the icon says which kind at a glance and
+-- keeps the inline message reading like the rest of the chrome. The glyphs
+-- carry no stem, for the reason the dot was chosen over a corner mark in the
+-- first place: the message sits beside the code on the same row, so a
+-- descending stroke would imply a line below that is not there. The renderer
+-- draws only the first virt_text it finds on a row, so the map below keeps
+-- exactly one message per line.
 local VIRT_TEXT_KEY = "diagnostics_virtual_text"
-local VIRT_TEXT_PREFIX = "  ● "
+-- The same four marks the statusline uses for the same severities
+-- (src/render/status_line.cpp): times-circle, exclamation-triangle,
+-- info-circle, lightbulb. Spelled as byte escapes rather than as literal
+-- glyphs so the private-use codepoints cannot be mangled by an editor or a save
+-- that re-encodes the file.
+local VIRT_TEXT_MARK = {
+  [1] = "\239\129\151", -- U+F057 times-circle
+  [2] = "\239\129\177", -- U+F071 exclamation-triangle
+  [3] = "\239\129\154", -- U+F05A info-circle
+  [4] = "\239\131\171", -- U+F0EB lightbulb
+}
+local VIRT_TEXT_MARK_DEFAULT = VIRT_TEXT_MARK[3]
 
 local function virtual_text_enabled()
   return jot.config.get(VIRT_TEXT_KEY, "true") ~= "false"
@@ -130,7 +146,8 @@ local function apply_diagnostics(info)
       deco.underline_hl = hl
     end
     if want_text and loudest[d.line] == d then
-      deco.virt_text = VIRT_TEXT_PREFIX .. one_line(d.message)
+      local mark = VIRT_TEXT_MARK[d.severity] or VIRT_TEXT_MARK_DEFAULT
+      deco.virt_text = "  " .. mark .. " " .. one_line(d.message)
       deco.virt_hl = hl
     end
     if deco.underline or deco.virt_text then
