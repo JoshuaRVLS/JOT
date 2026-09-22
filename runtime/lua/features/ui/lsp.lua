@@ -268,6 +268,7 @@ local function lsp_completion(p)
   local selection_fg = colors.selection_fg or 0
   local selection_bg = colors.selection_bg or 6
   local comment = colors.comment or 8
+  local accent = colors.accent or 6
 
   -- Native passes the content box; the float wraps it in a one-cell border.
   local f = {
@@ -316,10 +317,17 @@ local function lsp_completion(p)
     -- The label area runs to the end of the row: the label builder splits it
     -- into name / arguments / type and right-aligns the type itself.
     local label_w = math.max(1, content_w - cell_len(icon) - 1)
+    -- The typed prefix is highlighted in the accent colour, except on the
+    -- selected row: there the highlight has to be the selection's own text
+    -- colour, because the accent and the selection background are allowed to be
+    -- the same colour (the bundled dark theme does exactly that) and a match
+    -- drawn in its own row's background is invisible. Every other
+    -- match-highlighting surface in the kit takes this same branch.
     local rendered = completion_label.render(plans[i], colors, {
       width = label_w,
       right_width = right_w,
       align = align_type and plans[i].align,
+      match_fg = sel and selection_fg or accent,
     })
     local label_off = #table.concat(parts)
     parts[#parts + 1] = rendered.text

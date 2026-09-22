@@ -322,10 +322,16 @@ local function telescope(p)
       local name_off = put(rw, list_col + fixed, name, row_fg, row_bg)
       -- Highlight the characters the query consumed: byte offsets into the raw
       -- name, and the rendered name is a prefix of it.
+      -- The highlight is the accent, except on the selected row: there the
+      -- accent can be the row's own background (the bundled dark theme's pink
+      -- is both), and a match drawn in its own row's background is invisible --
+      -- the characters the query just consumed would vanish. Every other
+      -- match-highlighting surface takes this same branch.
       if name_off >= 0 and result.match and #result.match > 0 then
+        local match_fg = is_selected and t_sel_fg or accent
         for _, m in ipairs(result.match) do
           if m >= 0 and m < #name then
-            rw.spans[#rw.spans + 1] = { start = name_off + m, len = 1, fg = accent }
+            rw.spans[#rw.spans + 1] = { start = name_off + m, len = 1, fg = match_fg }
           end
         end
       end

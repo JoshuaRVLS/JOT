@@ -825,6 +825,14 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   lua_setfield(L, -2, "is_directory");
   lua_pushboolean(L, 0);
   lua_setfield(L, -2, "opened");
+  lua_newtable(L); // match: 0-based offsets of the query's `mai`
+  lua_pushinteger(L, 0);
+  lua_rawseti(L, -2, 1);
+  lua_pushinteger(L, 1);
+  lua_rawseti(L, -2, 2);
+  lua_pushinteger(L, 2);
+  lua_rawseti(L, -2, 3);
+  lua_setfield(L, -2, "match");
   lua_rawseti(L, -2, 1);
   lua_setfield(L, -2, "results");
   lua_newtable(L); // preview
@@ -853,6 +861,25 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   REQUIRE(g.set_cursor_count == 1); // query focus caret
   REQUIRE(g.last_cursor_y == 2);
   REQUIRE(g.last_cursor_x >= 1);
+
+  // The query's characters are highlighted on the SELECTED row, and the accent
+  // is allowed to be the selection's own background (the bundled dark theme's
+  // pink is both) -- painted literally the matched `mai` would be invisible on
+  // the row the user is looking at. The highlight takes the selection's text
+  // colour there, so every match-span on that row is t_sel_fg (16 in the stub).
+  bool saw_match_span = false;
+  for (const auto &line : g.spans_by_line)
+  {
+    for (const auto &sp : line.second)
+    {
+      if (sp.len == 1)
+      {
+        saw_match_span = true;
+        REQUIRE(sp.fg == 16);
+      }
+    }
+  }
+  REQUIRE(saw_match_span);
 
   push_module_field(L, 1, "telescope");
   lua_pushnil(L);
@@ -1687,6 +1714,126 @@ TEST_CASE("Completion rows split the label and right-align the type")
   REQUIRE(matched_cells == 3);
 
   // Closing the surface still works.
+  push_module_field(L, 1, "lsp_completion");
+  lua_pushnil(L);
+  REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+  lua_pop(L, 1);
+
+  lua_close(L);
+}
+
+// The matched prefix of a completion row is highlighted in the accent colour,
+// and the accent is allowed to be the same colour as the selection background
+// (the bundled dark theme's sakura pink is both). Drawn literally, the prefix of
+// the SELECTED row is then its own row's background and disappears -- typing
+// `incl` in C++ showed a suggestion reading `udes` with the matched `in`
+// invisible in the pink band. A highlight colour must contrast with the
+// surface it sits on, so on the selected row the prefix takes the selection's
+// own text colour instead, exactly as the palette and quick-pick do.
+TEST_CASE("Completion keeps the matched prefix readable on the selected row")
+{
+  g = StubState{};
+  lua_State *L = luaL_newstate();
+  REQUIRE(L != nullptr);
+  luaL_openlibs(L);
+  push_stub_jot(L);
+  REQUIRE(jot_lua::load_ui_kit_modules(L));
+  const std::string path = std::string(JOT_LUA_SOURCE_DIR) + "/features/ui.lua";
+  REQUIRE(luaL_loadfile(L, path.c_str()) == LUA_OK);
+  REQUIRE(lua_pcall(L, 0, 1, 0) == LUA_OK);
+  REQUIRE(lua_istable(L, 1));
+
+  // The collision the bundled dark theme lives in: one pink for both the accent
+  // and the selected row's background.
+  const int pink = 215;
+  const int selection_fg = 16; // colors.selection_fg from the stub box
+  const int inner_w = 44;
+
+  // Renders one `includes` row with its `in` prefix matched, at the given
+  // selection index (-1 for "nothing selected").
+  auto emit = [&](int selected) {
+    push_module_field(L, 1, "lsp_completion");
+    push_box(L, 10, 4, inner_w, 3);
+    lua_getfield(L, -1, "colors");
+    lua_pushinteger(L, pink);
+    lua_setfield(L, -2, "accent");
+    lua_pushinteger(L, pink);
+    lua_setfield(L, -2, "selection_bg");
+    lua_pop(L, 1);
+    lua_pushinteger(L, 1);
+    lua_setfield(L, -2, "max_items");
+    lua_pushinteger(L, 0);
+    lua_setfield(L, -2, "start");
+    lua_pushinteger(L, selected);
+    lua_setfield(L, -2, "selected");
+    lua_pushinteger(L, 1);
+    lua_setfield(L, -2, "total");
+    lua_pushstring(L, "clangd");
+    lua_setfield(L, -2, "server");
+    lua_newtable(L); // items
+    lua_newtable(L);
+    lua_pushstring(L, "includes");
+    lua_setfield(L, -2, "label");
+    lua_pushstring(L, "Header");
+    lua_setfield(L, -2, "detail");
+    lua_pushstring(L, "Function");
+    lua_setfield(L, -2, "kind_name");
+    lua_pushstring(L, "[F] ");
+    lua_setfield(L, -2, "kind_icon");
+    lua_newtable(L); // match: the `in` prefix (0-based byte offsets)
+    lua_pushinteger(L, 0);
+    lua_rawseti(L, -2, 1);
+    lua_pushinteger(L, 1);
+    lua_rawseti(L, -2, 2);
+    lua_setfield(L, -2, "match");
+    lua_rawseti(L, -2, 1);
+    lua_setfield(L, -2, "items");
+    REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+    REQUIRE(lua_toboolean(L, -1));
+    lua_pop(L, 1);
+  };
+
+  // Finding the match spans: the gutter and the "[F] " icon are 5 cells, so
+  // the name starts at cell 5 and the two matched characters are single-cell
+  // spans at 5 and 6. Nothing else on the row is a one-cell span there.
+  auto match_fgs = [&]() {
+    std::vector<int> fgs;
+    for (const auto &line : g.spans_by_line)
+    {
+      for (const auto &sp : line.second)
+      {
+        if (sp.len == 1 && (sp.start == 5 || sp.start == 6))
+        {
+          fgs.push_back(sp.fg);
+        }
+      }
+    }
+    return fgs;
+  };
+
+  // Selected: the prefix must be readable, so it is the selection's text colour
+  // -- never the accent that doubles as this row's background.
+  emit(0);
+  std::vector<int> selected_fgs = match_fgs();
+  REQUIRE(selected_fgs.size() == 2);
+  for (int fg : selected_fgs)
+  {
+    REQUIRE(fg == selection_fg);
+    REQUIRE(fg != pink);
+  }
+
+  // Not selected: the accent still highlights the prefix, sitting on the row's
+  // (dark) background where it contrasts normally.
+  g.lines.clear();
+  g.spans_by_line.clear();
+  emit(-1);
+  std::vector<int> plain_fgs = match_fgs();
+  REQUIRE(plain_fgs.size() == 2);
+  for (int fg : plain_fgs)
+  {
+    REQUIRE(fg == pink);
+  }
+
   push_module_field(L, 1, "lsp_completion");
   lua_pushnil(L);
   REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);

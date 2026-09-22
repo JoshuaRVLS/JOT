@@ -347,7 +347,13 @@ function M.render(plan, colors, options)
   end
   table.sort(cuts)
 
-  local match_fg = (colors and colors.accent) or 6
+  -- The caller picks this, because it depends on the row: the accent is the
+  -- right colour on a plain row, but on the selected row it can *be* the row
+  -- background (the bundled dark theme's accent and its PmenuSel background
+  -- are the same pink), and a match painted in its own row's background is a
+  -- match the user cannot see -- the letters they just typed go missing from
+  -- the row they are reading (see lsp.lua's lsp_completion).
+  local match_fg = (options and options.match_fg) or (colors and colors.accent) or 6
   local pos = 0
   for _, m in ipairs(cuts) do
     if m > pos then
