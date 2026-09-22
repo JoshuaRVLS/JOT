@@ -44,6 +44,20 @@ std::string truncate(const std::string &s, int max_len)
     return ui_take_cells(s, max_len);
   return ui_take_cells(s, max_len - 3) + "...";
 }
+
+// The painted row the selected entry sits on. Sections put headers between the
+// rows, so the selection's position in the selectable list is not its position
+// on screen; every window decision (scroll, how much room the choices
+// drop-down has) has to be made in rows.
+int display_row_of(const std::vector<SettingsRow> &rows, int entry_pos, int fallback)
+{
+  for (int i = 0; i < (int)rows.size(); i++)
+  {
+    if (rows[(size_t)i].entry_pos == entry_pos)
+      return i;
+  }
+  return fallback;
+}
 } // namespace
 
 void Editor::render_settings_menu()
@@ -58,6 +72,8 @@ void Editor::render_settings_menu()
   ui->dim_rect({0, 0, screen_w, screen_h});
 
   const int match_count = (int)settings_filtered.size();
+  // The painted rows: the matches plus a header wherever a section starts.
+  const int row_count = (int)settings_rows.size();
 
   // The choices drop-down (an Enum row opened with Enter) needs room under the
   // row it belongs to, so the panel grows for it instead of covering the value
@@ -74,10 +90,11 @@ void Editor::render_settings_menu()
 
   const int w = std::min(std::max(60, screen_w - 12), 96);
   const int max_rows = std::min(20, std::max(9, screen_h - 10));
-  int h = std::min(std::max(match_count + 6, 10), max_rows);
+  int h = std::min(std::max(row_count + 6, 10), max_rows);
   if (dropdown_row)
   {
-    const int row_offset = std::max(0, settings_selected - settings_scroll);
+    const int row_offset =
+        std::max(0, display_row_of(settings_rows, settings_selected, 0) - settings_scroll);
     h = std::min(max_rows, std::max(h, row_offset + dropdown_wanted + 5));
   }
   const int x = std::max(0, (screen_w - w) / 2);
@@ -94,15 +111,19 @@ void Editor::render_settings_menu()
   const int search_y = y + 1;
   const int list_y = y + 3;
   const int list_h = std::max(1, h - 5);
-  const int max_scroll = std::max(0, match_count - list_h);
+  // The window runs over painted rows, headers included, because a header is
+  // a row the eye needs -- a window measured in entries could not fit the
+  // group names and would leave the bottom of the list off screen.
+  const int selected_display = display_row_of(settings_rows, settings_selected, 0);
+  const int max_scroll = std::max(0, row_count - list_h);
   settings_scroll = std::clamp(settings_scroll, 0, max_scroll);
   // Keep the selection visible: the input handler moves settings_selected;
   // the window follows it here on the next frame (up before down, so a
   // selection at the very bottom stays fully visible).
-  if (settings_selected < settings_scroll)
-    settings_scroll = settings_selected;
-  if (settings_selected >= settings_scroll + list_h)
-    settings_scroll = settings_selected - list_h + 1;
+  if (selected_display < settings_scroll)
+    settings_scroll = selected_display;
+  if (selected_display >= settings_scroll + list_h)
+    settings_scroll = selected_display - list_h + 1;
 
   const int key_w = std::max(18, (int)(w * 0.55));
   const int val_x = x + 1 + key_w;
@@ -118,11 +139,14 @@ void Editor::render_settings_menu()
 
   for (int row = 0; row < list_h; row++)
   {
-    const int pos = settings_scroll + row;
-    if (pos < 0 || pos >= match_count)
+    const int display = settings_scroll + row;
+    if (display < 0 || display >= row_count)
       break;
-    SettingsEntry &e = settings_entries[(size_t)settings_filtered[(size_t)pos]];
-    const bool selected = pos == settings_selected;
+    const SettingsRow &r = settings_rows[(size_t)display];
+    if (r.entry_pos < 0)
+      continue; // a header owns no cells the mouse can act on
+    SettingsEntry &e = settings_entries[(size_t)settings_filtered[(size_t)r.entry_pos]];
+    const bool selected = r.entry_pos == settings_selected;
     e.row_x = x + 1;
     e.row_y = list_y + row;
     e.row_w = w - 2;
@@ -216,11 +240,21 @@ void Editor::render_settings_menu()
     view.items.reserve((size_t)list_h);
     for (int row = 0; row < list_h; row++)
     {
-      const int pos = settings_scroll + row;
-      if (pos < 0 || pos >= match_count)
+      const int display = settings_scroll + row;
+      if (display < 0 || display >= row_count)
         break;
-      const SettingsEntry &e = settings_entries[(size_t)settings_filtered[(size_t)pos]];
+      const SettingsRow &r = settings_rows[(size_t)display];
       SettingsItemView item;
+      if (r.entry_pos < 0)
+      {
+        // A section header is an item like any other row, so the surface
+        // paints exactly the window it was handed.
+        item.header = true;
+        item.label = r.header;
+        view.items.push_back(std::move(item));
+        continue;
+      }
+      const SettingsEntry &e = settings_entries[(size_t)settings_filtered[(size_t)r.entry_pos]];
       item.label = e.label;
       item.value = value_display(e);
       item.type = e.type == SettingsEntry::Type::Bool
@@ -228,7 +262,7 @@ void Editor::render_settings_menu()
                       : (e.type == SettingsEntry::Type::Int
                              ? "int"
                              : (e.type == SettingsEntry::Type::Enum ? "enum" : "string"));
-      item.selected = pos == settings_selected;
+      item.selected = r.entry_pos == settings_selected;
       item.editing = e.editing;
       item.edit_input = e.edit_input;
       item.options = e.options;
@@ -325,12 +359,28 @@ void Editor::render_settings_menu()
 
   for (int row = 0; row < list_h; row++)
   {
-    const int pos = settings_scroll + row;
-    if (pos < 0 || pos >= match_count)
+    const int display = settings_scroll + row;
+    if (display < 0 || display >= row_count)
       break;
-    SettingsEntry &e = settings_entries[(size_t)settings_filtered[(size_t)pos]];
+    const SettingsRow &r = settings_rows[(size_t)display];
+    if (r.entry_pos < 0)
+    {
+      // A section header: no chevron, no value, and none of the row's own
+      // emphasis -- the group's name in the panel's quiet ink, on the column
+      // the labels start at, so it reads as a heading over the rows beneath
+      // it rather than as a row of its own.
+      ui->fill_rect(
+          {x + 1, list_y + row, std::max(1, w - 2), 1}, " ", theme.fg_comment, panel_theme.bg_command);
+      ui->draw_text(x + 2,
+                    list_y + row,
+                    truncate(r.header, std::max(1, w - 4)),
+                    theme.fg_comment,
+                    panel_theme.bg_command);
+      continue;
+    }
+    SettingsEntry &e = settings_entries[(size_t)settings_filtered[(size_t)r.entry_pos]];
 
-    const bool selected = pos == settings_selected;
+    const bool selected = r.entry_pos == settings_selected;
     const int fg = selected ? theme.fg_selection : theme.fg_command;
     const int bg = selected ? theme.bg_selection : panel_theme.bg_command;
     ui->fill_rect({e.row_x, e.row_y, e.row_w, 1}, " ", fg, bg);

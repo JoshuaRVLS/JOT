@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Probe: the settings panel's search bar, steppers and choices drop-down.
+"""Probe: the settings panel's search bar, sections, steppers and choices drop-down.
 
-The unit tests drive the panel's model headlessly (filtering, stepping, the
-drop-down's cursor). What only a real session proves is the picture: that the
-search bar is on screen with a live match count, that typing lands in it, that
-an int row wears its nf-fa-minus/plus steppers right where the mouse hit test
-put them, that an enum row shows its cycling chevrons, and that Enter opens the
+The unit tests drive the panel's model headlessly (grouping, filtering,
+stepping, the drop-down's cursor). What only a real session proves is the
+picture: that the search bar is on screen with a live match count, that typing
+lands in it, that the keys are listed under their group's heading, that an int
+row wears its nf-fa-minus/plus steppers right where the mouse hit test put
+them, that an enum row shows its cycling chevrons, and that Enter opens the
 choices as a list that applies what the cursor is on -- with the glyphs the
 native layout recorded rather than whatever Lua felt like drawing.
 
@@ -63,6 +64,28 @@ def row_of(view: str, needle: str) -> str:
     for line in view.splitlines():
         if needle in line:
             return line
+    return ""
+
+
+def row_index_of(view: str, needle: str) -> int:
+    for index, line in enumerate(view.splitlines()):
+        if needle in line:
+            return index
+    return -1
+
+
+def first_list_row(view: str) -> str:
+    """The first row of the list, whichever chrome sits above it.
+
+    Anchored on the divider under the search bar -- a long run of box rule
+    between two sides, with no corner glyph in it. Reading the search bar's
+    text instead would only work while it was showing its placeholder, which
+    is exactly what a query replaces.
+    """
+    lines = view.splitlines()
+    for at, line in enumerate(lines):
+        if re.search("─{20,}", line) and not any(corner in line for corner in "┌┐└┘"):
+            return lines[at + 1] if at + 1 < len(lines) else ""
     return ""
 
 
@@ -124,9 +147,9 @@ def main() -> int:
         fail("no boolean row shows its toggle glyph")
     if "─" not in view:
         fail("the divider under the search bar is missing")
-    first_key_row = row_of(view, "Auto-detect indent")
-    if not first_key_row:
-        fail("the unfiltered list does not start with the first config key")
+    # The first group's first key, under the heading scene 8 reads.
+    if not row_of(view, "Auto-detect indent"):
+        fail("the unfiltered list does not open on the first config key")
 
     # Scene 2: typing filters, and the count turns into matches/total.
     view = scene("filter", [(TYPE, b"tab")])
@@ -205,9 +228,37 @@ def main() -> int:
     if "kitty" in view:
         fail("the drop-down is still on screen after taking a choice")
 
-    # Scene 8: Esc puts the list away without changing anything.
+    # Scene 8: the panel is grouped -- a heading over the keys it files, the
+    # heading on its own row and the group's first key under it.
+    view = scene("sections", [])
+    print("scene 8: the keys are listed under section headings")
+    first = first_list_row(view)
+    if "Editor" not in first:
+        fail(f"the list does not open on its first group's heading: {first!r}")
+    at = row_index_of(view, "Editor")
+    lines = view.splitlines()
+    second = lines[at + 1] if 0 <= at < len(lines) - 1 else ""
+    if "Auto-detect indent" not in second:
+        fail(f"the heading is not followed by its group's first key: {second!r}")
+    # The window holds fifteen rows and the first group is ten keys, so the
+    # group after it is on screen too -- the headings are not one big heading.
+    if not row_of(view, "Appearance"):
+        fail("the second group's heading is missing")
+
+    # Scene 9: a query announces the groups it kept and only those.
+    view = scene("grouped", [(TYPE, b"tabsize")])
+    print("scene 9: a query keeps the heading of the group it matched")
+    first = first_list_row(view)
+    if "Editor" not in first:
+        fail(f"the matched group's heading is gone: {first!r}")
+    if not row_of(view, "Tab size"):
+        fail("the matched row itself is gone")
+    if row_of(view, "Appearance"):
+        fail("a group the query emptied is still announced")
+
+    # Scene 10: Esc puts the list away without changing anything.
     view = scene("dismissed", [(TYPE, b"viewerbackend"), (STEP, ENTER), (STEP, ESC)])
-    print("scene 8: Esc dismisses the list without applying anything")
+    print("scene 10: Esc dismisses the list without applying anything")
     dismissed_row = row_of(view, "Image viewer backend")
     if "auto" not in dismissed_row:
         fail(f"Esc applied a choice: {dismissed_row!r}")

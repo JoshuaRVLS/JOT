@@ -194,6 +194,36 @@ public:
   {
     return settings_selected;
   }
+  // The painted rows: a section header, or an entry at a position in the
+  // selectable list. The panel puts a *header* row wherever the group changes,
+  // so these are what the picture and the scroll window are made of.
+  int settings_row_count_for_test() const
+  {
+    return (int)settings_rows.size();
+  }
+  std::string settings_row_header_for_test(int row) const
+  {
+    if (row < 0 || row >= (int)settings_rows.size())
+      return "";
+    return settings_rows[(size_t)row].header;
+  }
+  std::string settings_row_key_for_test(int row) const
+  {
+    if (row < 0 || row >= (int)settings_rows.size())
+      return "";
+    const int pos = settings_rows[(size_t)row].entry_pos;
+    return pos < 0 ? "" : settings_key_at_for_test(pos);
+  }
+  // Which group a key is filed under, and the order the groups are listed in.
+  std::string settings_section_for_test(const std::string &key) const
+  {
+    for (const SettingsEntry &e : settings_entries)
+    {
+      if (e.key == key)
+        return e.section;
+    }
+    return "";
+  }
   const SettingsEntry *settings_entry_for_test(const std::string &key) const
   {
     for (const SettingsEntry &e : settings_entries)

@@ -110,11 +110,17 @@ struct SurfaceState
   // edit, enums cycle and open their choices, strings edit inline.
   bool show_settings_menu = false;
   // The search bar's text, and the entries it keeps: indices into
-  // settings_entries, in the menu's own (config) order. settings_selected is
-  // a position in *this* list, so navigation walks matches only.
+  // settings_entries, in the menu's own (section, then alphabetical) order.
+  // settings_selected is a position in *this* list, so navigation walks
+  // matches only.
   std::string settings_query;
   std::vector<int> settings_filtered;
   int settings_selected = 0;
+  // The rows actually painted: the selectable list above with a section
+  // header folded in wherever the group changes. settings_scroll is a row in
+  // *this* list -- headers take up room on screen, so a window measured in
+  // entries would run off the bottom of a grouped panel.
+  std::vector<SettingsRow> settings_rows;
   int settings_scroll = 0;
   int settings_panel_x = 0;
   int settings_panel_y = 0;

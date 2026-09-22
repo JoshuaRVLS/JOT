@@ -137,7 +137,11 @@ local function settings(p)
     end
     local is_selected = item.selected
     local is_editing = is_selected and item.editing
-    local row_fg = is_selected and selection_fg or fg
+    -- A section header rides the same row machinery with no value and no
+    -- affordances (the native side sends it with none); only its ink differs,
+    -- so the group names read as headings over the rows beneath them rather
+    -- than as settings. The native painter draws the same row the same way.
+    local row_fg = item.header and comment or (is_selected and selection_fg or fg)
     local row_bg = is_selected and selection_bg or bg
     -- The affordances take the row's own ink: on the selection bar the accent
     -- colour can vanish into the fill (jot-dark's accent is its selection bg).

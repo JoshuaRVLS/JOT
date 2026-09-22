@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -504,4 +505,214 @@ TEST_CASE("Settings steppers are painted where the mouse can click them", "[jot]
     REQUIRE(up < 0);
   }
   REQUIRE(visible > 1);
+}
+
+TEST_CASE("Settings panel files every key under a section", "[jot]")
+{
+  Editor &e = probe_editor();
+  open_menu(e);
+
+  // The section tables have to keep up with config.cpp: a default that no
+  // section claims would fall into the catch-all, which is for keys the user's
+  // own config or a plugin registered. An empty catch-all is what says the
+  // tables still cover the defaults.
+  std::string unclaimed;
+  for (const SettingsEntry &entry : e.settings_entries_for_test())
+  {
+    if (entry.section == "Other")
+      unclaimed += entry.key + " ";
+  }
+  REQUIRE(unclaimed.empty());
+
+  // A key is filed where its subject says. The families are the interesting
+  // part: the colorizer's switches have no section named for them, they hang
+  // off "colorizer_" -- and `colorizer` itself is not swallowed by that
+  // prefix, because a family has to end in a separator.
+  REQUIRE(e.settings_section_for_test("tab_size") == "Editor");
+  REQUIRE(e.settings_section_for_test("word_wrap") == "Editor");
+  REQUIRE(e.settings_section_for_test("color_scheme") == "Appearance");
+  REQUIRE(e.settings_section_for_test("tabline_auto_hide") == "Appearance");
+  REQUIRE(e.settings_section_for_test("smooth_scroll_easing") == "Appearance");
+  REQUIRE(e.settings_section_for_test("colorizer") == "Color preview");
+  REQUIRE(e.settings_section_for_test("colorizer_mode") == "Color preview");
+  REQUIRE(e.settings_section_for_test("colorizer_hex_alpha") == "Color preview");
+  REQUIRE(e.settings_section_for_test("completion_rich_labels") == "Code intelligence");
+  REQUIRE(e.settings_section_for_test("lsp_inlay_hints") == "Code intelligence");
+  REQUIRE(e.settings_section_for_test("cpp_dim_inactive") == "Code intelligence");
+  REQUIRE(e.settings_section_for_test("treesitter_query_paths") == "Code intelligence");
+  REQUIRE(e.settings_section_for_test("diagnostics_virtual_text") == "Code intelligence");
+  REQUIRE(e.settings_section_for_test("explorer_width") == "Panes & layout");
+  REQUIRE(e.settings_section_for_test("show_explorer") == "Panes & layout");
+  REQUIRE(e.settings_section_for_test("discord_rpc") == "Discord presence");
+  REQUIRE(e.settings_section_for_test("toast.max_width") == "Toasts");
+  REQUIRE(e.settings_section_for_test("update.check_on_startup") == "Updates");
+}
+
+TEST_CASE("Settings rows read in groups, header first", "[jot]")
+{
+  Editor &e = probe_editor();
+  open_menu(e);
+
+  const int rows = e.settings_row_count_for_test();
+  REQUIRE(rows > e.settings_match_count_for_test()); // there are headers in it
+  // The listing opens on the first group, not on a row with no heading over it.
+  REQUIRE(e.settings_row_header_for_test(0) == "Editor");
+
+  // Every group is announced exactly once, on the row before its first member,
+  // and no two headings sit together -- a heading with nothing under it would
+  // be a group the query emptied, and those are not drawn at all.
+  std::vector<std::string> seen;
+  std::string current;
+  for (int row = 0; row < rows; row++)
+  {
+    const std::string header = e.settings_row_header_for_test(row);
+    if (!header.empty())
+    {
+      seen.push_back(header);
+      REQUIRE(header != current);
+      REQUIRE(row + 1 < rows);
+      REQUIRE(e.settings_row_header_for_test(row + 1).empty());
+      current = header;
+      continue;
+    }
+    const std::string key = e.settings_row_key_for_test(row);
+    REQUIRE_FALSE(key.empty());
+    // A row is never pulled out of its group: the heading above it is the
+    // section the key itself says it belongs to.
+    REQUIRE(e.settings_section_for_test(key) == current);
+  }
+  REQUIRE(seen.size() >= 8);
+  // The groups read in the order the panel declares them -- a section that
+  // moves in the table moves on screen. Groups whose keys only exist once the
+  // Lua features have registered theirs (Snippets, the two previews) are not
+  // here at all, so what the list has to be is a subsequence of the order.
+  const std::string canonical =
+      "Editor Appearance Color preview Code intelligence Panes & layout Markdown preview "
+      "HTML preview Snippets Discord presence Toasts Updates";
+  size_t at = 0;
+  for (const std::string &title : seen)
+  {
+    const size_t found = canonical.find(title, at);
+    REQUIRE(found != std::string::npos);
+    at = found + title.size();
+  }
+
+  // The painted rows and the selectable list are the same list, in the same
+  // order: the search bar, the arrows and the scroll window all speak in
+  // entries, and the mouse speaks in rows, so the two must not drift.
+  std::string from_rows;
+  for (int row = 0; row < rows; row++)
+  {
+    const std::string key = e.settings_row_key_for_test(row);
+    if (!key.empty())
+      from_rows += key + " ";
+  }
+  std::string from_list;
+  for (int i = 0; i < e.settings_match_count_for_test(); i++)
+  {
+    from_list += e.settings_key_at_for_test(i) + " ";
+  }
+  REQUIRE(from_rows == from_list);
+}
+
+TEST_CASE("Settings navigation steps over a section header", "[jot]")
+{
+  Editor &e = probe_editor();
+  open_menu(e);
+
+  // The last row of one group and the first row of the next name the two keys
+  // either side of a heading.
+  int boundary = -1;
+  for (int row = 1; row < e.settings_row_count_for_test(); row++)
+  {
+    if (!e.settings_row_header_for_test(row).empty() &&
+        e.settings_row_header_for_test(row - 1).empty())
+    {
+      boundary = row;
+      break;
+    }
+  }
+  REQUIRE(boundary > 0);
+  const std::string before = e.settings_row_key_for_test(boundary - 1);
+  const std::string after = e.settings_row_key_for_test(boundary + 1);
+  REQUIRE_FALSE(before.empty());
+  REQUIRE_FALSE(after.empty());
+  REQUIRE(e.settings_section_for_test(before) != e.settings_section_for_test(after));
+
+  // Down from the group's last row lands on the next group's first row: the
+  // heading is a row on screen but not a step in the list.
+  e.settings_select_for_test(filtered_pos(e, before));
+  REQUIRE(e.settings_selected_key_for_test() == before);
+  e.settings_input_for_test(1009); // Down
+  REQUIRE(e.settings_selected_key_for_test() == after);
+  e.settings_input_for_test(1008); // Up, back over the heading
+  REQUIRE(e.settings_selected_key_for_test() == before);
+}
+
+TEST_CASE("Settings header rows are not clickable", "[jot]")
+{
+  Editor &e = probe_editor();
+  e.config_set_for_test("tab_size", "4");
+  open_menu(e);
+  e.set_home_menu_visible(false);
+  e.apply_resize_for_test(120, 40);
+  e.settings_select_for_test(filtered_pos(e, "tab_size"));
+  e.request_redraw_for_test();
+  e.render_for_test();
+
+  // A heading is painted on the panel's own row grid, so its y follows from
+  // where the list starts (the render pass places both). Aim at the one above
+  // the selected row's group rather than at any key's cells.
+  int panel_x = 0;
+  int panel_y = 0;
+  int panel_w = 0;
+  int panel_h = 0;
+  e.settings_panel_rect_for_test(panel_x, panel_y, panel_w, panel_h);
+  int row_y = 0;
+  int value_x = 0;
+  int down_x = 0;
+  int up_x = 0;
+  REQUIRE(e.settings_row_cells_for_test("tab_size", row_y, value_x, down_x, up_x));
+  const int header_y = panel_y + 3; // the first painted row, which is a heading
+  REQUIRE(e.settings_row_header_for_test(0) == "Editor");
+
+  const std::string selected_before = e.settings_selected_key_for_test();
+  e.mouse_event_for_test(panel_x + 5, header_y, /*bstate=*/1);
+  // Swallowed: no editor opens, no value moves, the panel stays up and the
+  // selection stays where it was.
+  REQUIRE(e.settings_menu_open_for_test());
+  REQUIRE(e.settings_selected_key_for_test() == selected_before);
+  REQUIRE(e.config_int_for_test("tab_size") == 4);
+  for (const SettingsEntry &entry : e.settings_entries_for_test())
+  {
+    REQUIRE_FALSE(entry.editing);
+  }
+  REQUIRE_FALSE(e.settings_dropdown_open_for_test());
+}
+
+TEST_CASE("The settings wheel stays inside the matches the search bar kept", "[jot]")
+{
+  Editor &e = probe_editor();
+  open_menu(e);
+  for (char c : std::string("tabsize"))
+  {
+    e.settings_input_for_test(c);
+  }
+  const int matches = e.settings_match_count_for_test();
+  REQUIRE(matches > 0);
+  REQUIRE(matches < (int)e.settings_entries_for_test().size());
+
+  // A notch walks three rows and stops at the end of what the query kept; it
+  // used to clamp against every entry the panel knows, which could park the
+  // selection on a row the search bar was hiding.
+  for (int i = 0; i < 10; i++)
+  {
+    e.wheel_event_for_test(60, 20, /*up=*/false, /*down=*/true);
+  }
+  REQUIRE(e.settings_selected_pos_for_test() == matches - 1);
+  for (int i = 0; i < 10; i++)
+  {
+    e.wheel_event_for_test(60, 20, /*up=*/true, /*down=*/false);
+  }
+  REQUIRE(e.settings_selected_pos_for_test() == 0);
 }

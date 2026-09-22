@@ -309,6 +309,7 @@ bool LuaAPI::emit_settings(const SettingsView &view)
                          const SettingsItemView &item = view.items[i];
                          lua_newtable(L);
                          const int it = lua_gettop(L);
+                         lua_set_bool_field(L, it, "header", item.header);
                          lua_set_str_field(L, it, "label", item.label);
                          lua_set_str_field(L, it, "value", item.value);
                          lua_set_str_field(L, it, "type", item.type);

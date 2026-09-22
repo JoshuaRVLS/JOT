@@ -76,16 +76,19 @@ void Editor::handle_mouse_input(int x,
 
   if (show_settings_menu)
   {
-    if (is_scroll_up && !settings_entries.empty())
+    // The wheel walks the selectable list, so its ends are the *filtered*
+    // list's ends -- a query that keeps three rows must not let a notch park
+    // the selection on a row the search bar is hiding.
+    const int settings_matches = (int)settings_filtered.size();
+    if (is_scroll_up && settings_matches > 0)
     {
       settings_selected = std::max(0, settings_selected - 3);
       needs_redraw = true;
       return;
     }
-    if (is_scroll_down && !settings_entries.empty())
+    if (is_scroll_down && settings_matches > 0)
     {
-      settings_selected =
-          std::min((int)settings_entries.size() - 1, settings_selected + 3);
+      settings_selected = std::min(settings_matches - 1, settings_selected + 3);
       needs_redraw = true;
       return;
     }

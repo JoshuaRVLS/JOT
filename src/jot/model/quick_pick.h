@@ -61,6 +61,10 @@ struct SettingsEntry
   std::string key;    // config key
   std::string label;  // human-readable label
   std::string value;  // current string value (as stored in settings.conf)
+  // The group the panel files the row under (see the sections table in
+  // surfaces/settings.cpp). Entries are kept in section order, so the list
+  // reads in groups without the render pass having to sort anything.
+  std::string section;
   Type type = Type::String;
   // Enum rows: the choices, in the order they are offered. Empty otherwise.
   std::vector<std::string> options;
@@ -93,6 +97,16 @@ struct SettingsEntry
   int value_w = 0;
   int step_down_x = -1;
   int step_up_x = -1;
+};
+
+// One painted row of the settings panel: either a section header or one of
+// the entries. `entry_pos` is the row's position in the selectable list (what
+// SettingsEntry::row_pos records too) and -1 on a header, so the picture, the
+// scroll window and the mouse hit test all speak in the same units.
+struct SettingsRow
+{
+  std::string header; // the title, on a header row
+  int entry_pos = -1; // position in the selectable list; -1 on a header
 };
 
 #endif

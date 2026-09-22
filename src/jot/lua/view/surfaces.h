@@ -67,11 +67,14 @@ struct QuickPickView
 
 struct SettingsItemView
 {
+  // A section header rather than a setting: `label` is the group's name and
+  // every other field is empty, since there is nothing to toggle or step.
+  bool header = false;
   std::string label;
   // Already formatted for display (a bool reads as its toggle glyph and
   // "on"/"off", an empty string as "(empty)").
   std::string value;
-  // "bool" | "int" | "string" | "enum".
+  // "bool" | "int" | "string" | "enum" ("" on a header).
   std::string type;
   bool selected = false;
   bool editing = false;
@@ -94,13 +97,15 @@ struct SettingsItemView
 struct SettingsView
 {
   int x = 0, y = 0, w = 0, h = 0; // panel rect (absolute)
-  int selected = 0;               // position in the filtered list
-  int scroll = 0;                 // first visible position
+  int selected = 0;               // position in the filtered (selectable) list
+  int scroll = 0;                 // first visible item row (headers included)
   int all_count = 0;              // every config key the menu knows
   int match_count = 0;            // how many the search bar keeps
   std::string query;              // the search bar's text ("" = unfiltered)
   int search_x = 0, search_y = 0; // where the search field's text starts
-  std::vector<SettingsItemView> items; // windowed to the visible rows
+  // The rows to paint, in order: each match with a section header folded in
+  // where the group changes. `scroll` indexes this list.
+  std::vector<SettingsItemView> items;
   // The choices drop-down (an Enum row opened with Enter). The Lua surface
   // paints it as a second float over the panel.
   bool dropdown_open = false;

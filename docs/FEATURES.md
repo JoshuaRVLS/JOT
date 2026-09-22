@@ -707,7 +707,7 @@ so they need a grammar for the file type.
 | `Ctrl+T` or `Alt+T` | Theme chooser |
 | `` Ctrl+` `` | Open / focus / hide terminal panel |
 | `F12` | Toggle zen focus mode (hide chrome, center buffer) |
-| `:settings` or `Ctrl+,` (GUI) | Open the settings menu (all config keys, searchable: type to filter, booleans toggle, ints step, enums list their choices, values edit inline; Lua-registered keys included) |
+| `:settings` or `Ctrl+,` (GUI) | Open the settings menu: every config key under a section heading (Editor, Appearance, Code intelligence, ...), searchable by typing, booleans toggle, ints step, enums list their choices, values edit inline; Lua-registered keys included |
 
 ### The workspace tab strip
 

@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cctype>
 #include <climits>
+#include <cstddef>
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -269,6 +270,131 @@ const IntRange kIntRanges[] = {
     {"zen_content_width", 10, 40, 400},
 };
 
+// The panel's sections, in the order they are listed. A section claims a key
+// by naming it, or by a prefix that ends in a separator (`_` or `.`) -- so
+// `colorizer_` takes the whole family of color-preview switches in one line
+// while `auto_save` claims only itself, and `tab_size` cannot be swallowed by
+// `tabline`. The first section to claim a key owns it; the section table also
+// *is* the listing order, so the entries only have to be sorted by their
+// section's index here to read in groups.
+//
+// The claim tables are hand-checked against the defaults config.cpp
+// registers: every one of them is claimed, so the final bucket holds only
+// what a user's own config or a plugin added.
+struct SettingSection
+{
+  const char *title;
+  const char *const *keys;      // named keys
+  int key_count;
+  const char *const *families;  // key prefixes
+  int family_count;
+};
+
+const char *const kEditorKeys[] = {
+    "auto_detect_indent",   "auto_indent",   "auto_save",        "auto_save_interval_ms",
+    "clang_format_on_save", "emmet",         "prettier_on_save", "smart_paste_indent",
+    "tab_size",             "word_wrap",
+};
+const char *const kAppearanceKeys[] = {
+    "color_scheme",     "cursor_blink_ms",      "cursor_style",     "gui_font_family",
+    "gui_font_size",    "highlight_cursor_line", "minimap_width",   "relative_line_numbers",
+    "render_margin",    "show_indent_guides",   "show_line_numbers", "show_minimap",
+    "smooth_scroll",    "status_clock",         "status_session_time", "tabline",
+    "tabline_auto_hide", "tabline_insert",      "truecolor",        "winbar",
+    "zen_content_width",
+};
+const char *const kAppearanceFamilies[] = {"smooth_scroll_"};
+const char *const kColorPreviewKeys[] = {"colorizer", "colorizer_mode"};
+const char *const kColorPreviewFamilies[] = {"colorizer_"};
+const char *const kCodeIntelFamilies[] = {"completion_", "cpp_",         "decorations_",
+                                         "diagnostics_",  "lsp_",         "treesitter_"};
+const char *const kPanesKeys[] = {
+    "debugger_height",     "explorer_width", "idle_fps",   "image_viewer_backend",
+    "render_fps",          "right_panel_width", "show_explorer", "terminal_height",
+};
+const char *const kMarkdownPreviewFamilies[] = {"markdown_preview_"};
+const char *const kHtmlPreviewFamilies[] = {"html_preview_"};
+const char *const kSnippetFamilies[] = {"snippet_"};
+const char *const kDiscordFamilies[] = {"discord_"};
+const char *const kToastFamilies[] = {"toast."};
+const char *const kUpdateFamilies[] = {"update."};
+
+// A table's own length, so the rows below do not each carry a count the next
+// person has to remember to bump.
+template <typename T, std::size_t N>
+constexpr int count_of(const T (&)[N])
+{
+  return (int)N;
+}
+
+const SettingSection kSections[] = {
+    {"Editor", kEditorKeys, count_of(kEditorKeys), nullptr, 0},
+    {"Appearance",
+     kAppearanceKeys,
+     count_of(kAppearanceKeys),
+     kAppearanceFamilies,
+     count_of(kAppearanceFamilies)},
+    {"Color preview",
+     kColorPreviewKeys,
+     count_of(kColorPreviewKeys),
+     kColorPreviewFamilies,
+     count_of(kColorPreviewFamilies)},
+    {"Code intelligence", nullptr, 0, kCodeIntelFamilies, count_of(kCodeIntelFamilies)},
+    {"Panes & layout", kPanesKeys, count_of(kPanesKeys), nullptr, 0},
+    {"Markdown preview",
+     nullptr,
+     0,
+     kMarkdownPreviewFamilies,
+     count_of(kMarkdownPreviewFamilies)},
+    {"HTML preview", nullptr, 0, kHtmlPreviewFamilies, count_of(kHtmlPreviewFamilies)},
+    {"Snippets", nullptr, 0, kSnippetFamilies, count_of(kSnippetFamilies)},
+    {"Discord presence", nullptr, 0, kDiscordFamilies, count_of(kDiscordFamilies)},
+    {"Toasts", nullptr, 0, kToastFamilies, count_of(kToastFamilies)},
+    {"Updates", nullptr, 0, kUpdateFamilies, count_of(kUpdateFamilies)},
+};
+
+const int kSectionCount = count_of(kSections);
+// Where a key no section claims goes: a key from the user's own config or a
+// plugin's. Kept last, after every subject that has a name.
+const char *const kOtherSection = "Other";
+
+bool claims_key(const std::string &claim, const std::string &key)
+{
+  if (key == claim)
+    return true;
+  const bool family = !claim.empty() && (claim.back() == '_' || claim.back() == '.');
+  return family && key.size() > claim.size() && key.compare(0, claim.size(), claim) == 0;
+}
+
+const char *section_of(const std::string &key)
+{
+  for (const SettingSection &section : kSections)
+  {
+    for (int i = 0; i < section.family_count; i++)
+    {
+      if (claims_key(section.families[i], key))
+        return section.title;
+    }
+    for (int i = 0; i < section.key_count; i++)
+    {
+      if (claims_key(section.keys[i], key))
+        return section.title;
+    }
+  }
+  return kOtherSection;
+}
+
+// Where a section sits in the listing, for the sort that groups the entries.
+int section_rank(const std::string &title)
+{
+  for (int i = 0; i < kSectionCount; i++)
+  {
+    if (title == kSections[i].title)
+      return i;
+  }
+  return kSectionCount; // the unclaimed bucket, last
+}
+
 // The search bar's matcher: every character of the query has to appear in the
 // row's label or key, in order, ignoring case and the punctuation between
 // words -- so "autosave" finds "Auto save" and "lspghost" finds
@@ -395,8 +521,18 @@ void Editor::rebuild_settings_entries()
       e.max_value = range.max;
       break;
     }
+    e.section = section_of(key);
     settings_entries.push_back(std::move(e));
   }
+  // Grouped: the panel reads top-down by section, and inside a section the way
+  // config.keys() handed the keys over (which is alphabetical, since the config
+  // is a map). A stable sort is all this takes -- the entries never have to be
+  // re-derived, and a key that moves between sections lands where the table
+  // now says it belongs on the next open.
+  std::stable_sort(settings_entries.begin(),
+                   settings_entries.end(),
+                   [](const SettingsEntry &a, const SettingsEntry &b)
+                   { return section_rank(a.section) < section_rank(b.section); });
   refresh_settings_filter();
   needs_redraw = true;
 }
@@ -404,7 +540,12 @@ void Editor::rebuild_settings_entries()
 void Editor::refresh_settings_filter()
 {
   settings_filtered.clear();
+  settings_rows.clear();
   const std::string needle = match_key_of(settings_query);
+  // The entries are already in section order, so walking them in order keeps
+  // the groups together and a group is announced the moment it starts. A
+  // section the query emptied is simply never announced.
+  std::string announced;
   for (int i = 0; i < (int)settings_entries.size(); i++)
   {
     SettingsEntry &e = settings_entries[(size_t)i];
@@ -413,13 +554,26 @@ void Editor::refresh_settings_filter()
     const bool shown =
         needle.empty() || matches_query(needle, match_key_of(e.label + e.key));
     e.row_pos = shown ? (int)settings_filtered.size() : -1;
-    if (shown)
-      settings_filtered.push_back(i);
+    if (!shown)
+      continue;
+    if (e.section != announced)
+    {
+      announced = e.section;
+      SettingsRow header;
+      header.header = announced;
+      settings_rows.push_back(std::move(header));
+    }
+    SettingsRow row;
+    row.entry_pos = e.row_pos;
+    settings_rows.push_back(std::move(row));
+    settings_filtered.push_back(i);
   }
   settings_selected =
       std::clamp(settings_selected, 0, std::max(0, (int)settings_filtered.size() - 1));
   // A new query reads from the top; keeping the old window over a shorter
-  // list would leave it past the end.
+  // list would leave it past the end. The render pass then keeps the
+  // selection visible, in the row units the picture uses (a section header
+  // takes a row of its own, so counting entries would run off the bottom).
   settings_scroll = 0;
   needs_redraw = true;
 }
@@ -457,6 +611,7 @@ void Editor::close_settings_menu()
   show_settings_menu = false;
   settings_entries.clear();
   settings_filtered.clear();
+  settings_rows.clear();
   settings_query.clear();
   settings_dropdown_open = false;
   settings_selected = 0;

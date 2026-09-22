@@ -492,7 +492,13 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   lua_pushinteger(L, 34);
   lua_setfield(L, -2, "all_count");
   lua_newtable(L); // items (visible window)
-  lua_newtable(L); // row 1: bool, plain
+  lua_newtable(L); // row 1: a section header
+  lua_pushboolean(L, true);
+  lua_setfield(L, -2, "header");
+  lua_pushstring(L, "Appearance");
+  lua_setfield(L, -2, "label");
+  lua_rawseti(L, -2, 1);
+  lua_newtable(L); // row 2: bool, plain
   lua_pushstring(L, "Auto save");
   lua_setfield(L, -2, "label");
   lua_pushstring(L, "on");
@@ -503,8 +509,8 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   lua_setfield(L, -2, "selected");
   lua_pushboolean(L, false);
   lua_setfield(L, -2, "editing");
-  lua_rawseti(L, -2, 1);
-  lua_newtable(L); // row 2: int, selected + editing
+  lua_rawseti(L, -2, 2);
+  lua_newtable(L); // row 3: int, selected + editing
   lua_pushstring(L, "Tab size");
   lua_setfield(L, -2, "label");
   lua_pushstring(L, "4");
@@ -517,7 +523,7 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   lua_setfield(L, -2, "editing");
   lua_pushstring(L, "8");
   lua_setfield(L, -2, "edit_input");
-  lua_rawseti(L, -2, 2);
+  lua_rawseti(L, -2, 3);
   lua_setfield(L, -2, "items");
   REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
   REQUIRE(lua_toboolean(L, -1));
@@ -530,11 +536,35 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   REQUIRE(g.last_title.find("34 keys") != std::string::npos);
   // The footer is gone: the surface shows its state, not a list of bindings.
   REQUIRE(g.last_footer.empty());
-  // Search bar, divider, then the entry rows: the selected bool shows "on",
-  // the editing row shows its " > 8" input prompt.
-  REQUIRE(g.lines_count >= 4);
+  // Search bar, divider, then the rows: a section header, the selected bool
+  // showing "on", and the editing row showing its " > 8" input prompt.
+  REQUIRE(g.lines_count >= 5);
   REQUIRE(g.last_row1.find("Search") != std::string::npos);
   REQUIRE(g.lines[1].find("─") != std::string::npos);
+  // A header is a row of its own: the group's name on the column the labels
+  // start at, with no value or affordances after it.
+  REQUIRE(g.lines[2].find("Appearance") != std::string::npos);
+  REQUIRE(g.lines[2].find("4") == std::string::npos);
+  // And it carries the panel's quiet ink rather than the row ink a setting
+  // reads in -- the ink is the whole difference between a heading and a row,
+  // and all the header flag changes when the row is drawn. The first span of
+  // a line is present_panel's full-line fill, which carries the row's ink; in
+  // the stub's palette that is comment 244 for the heading, fg 250 for a row.
+  int header_line = -1;
+  int setting_line = -1;
+  for (int i = 0; i < g.lines_count; i++)
+  {
+    if (g.lines[i].find("Appearance") != std::string::npos)
+      header_line = i + 1;
+    if (g.lines[i].find("Auto save") != std::string::npos)
+      setting_line = i + 1;
+  }
+  REQUIRE(header_line > 0);
+  REQUIRE(setting_line > 0);
+  REQUIRE_FALSE(g.spans_by_line[header_line].empty());
+  REQUIRE_FALSE(g.spans_by_line[setting_line].empty());
+  REQUIRE(g.spans_by_line[header_line].front().fg == 244);
+  REQUIRE(g.spans_by_line[setting_line].front().fg == 250);
   bool saw_edit_input = false;
   for (int i = 0; i < g.lines_count; i++)
   {
