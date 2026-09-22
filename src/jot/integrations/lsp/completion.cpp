@@ -391,11 +391,32 @@ bool Editor::refresh_lsp_completion_filter()
     // (see lsp_completion_preview_withheld).
     lsp_completion_typing_ms = lsp_internal::now_ms();
   }
+  // The rows are rebuilt here on every frame (the render path re-filters), and
+  // the selection has to survive that: a server's overloads share one label --
+  // every `std::includes` row is labeled "std::includes" -- so carrying it "by
+  // label" would snap a Down press back to the first of the family on the next
+  // frame and the list could never be browsed past the first overload. The
+  // held rows are kept instead: with the same rows in the same order the index
+  // is carried as-is, and only a genuinely new list (a keystroke re-ranked it,
+  // or the server answered again) follows the item that was selected, by its
+  // label and parameter list first, then by label alone.
+  std::vector<LSPCompletionItem> previous_items = std::move(lsp_completion_items);
+  const int previous_selected = lsp_completion_selected;
   std::string selected_label;
-  if (lsp_completion_selected >= 0 && lsp_completion_selected < (int)lsp_completion_items.size())
+  std::string selected_detail;
+  if (previous_selected >= 0 && previous_selected < (int)previous_items.size())
   {
-    selected_label = lsp_completion_items[lsp_completion_selected].label;
+    selected_label = previous_items[previous_selected].label;
+    selected_detail = previous_items[previous_selected].label_detail;
   }
+  // What makes two rows the same symbol: the label plus the parameter list a
+  // server sends in labelDetails, which is what tells one overload from
+  // another.
+  const auto same_symbol = [](const LSPCompletionItem &a, const LSPCompletionItem &b)
+  {
+    return a.label == b.label && a.label_detail == b.label_detail
+           && a.insert_text == b.insert_text;
+  };
 
   std::vector<std::pair<int, LSPCompletionItem>> ranked;
   ranked.reserve(lsp_completion_all_items.size());
@@ -432,7 +453,6 @@ bool Editor::refresh_lsp_completion_filter()
                      return as < bs;
                    });
 
-  lsp_completion_items.clear();
   const int max_items = 200;
   for (int i = 0; i < (int)ranked.size() && i < max_items; i++)
   {
@@ -441,17 +461,61 @@ bool Editor::refresh_lsp_completion_filter()
 
   lsp_completion_prefix = query;
   lsp_completion_selected = 0;
-  for (int i = 0; i < (int)lsp_completion_items.size(); i++)
+  bool same_rows_ref = previous_items.size() == lsp_completion_items.size();
+  for (int i = 0; same_rows_ref && i < (int)lsp_completion_items.size(); i++)
   {
-    if (!selected_label.empty() && lsp_completion_items[i].label == selected_label)
+    if (!same_symbol(previous_items[i], lsp_completion_items[i]))
     {
-      lsp_completion_selected = i;
-      break;
+      same_rows_ref = false;
     }
-    if (selected_label.empty() && lsp_completion_items[i].preselect)
+  }
+  if (same_rows_ref && previous_selected >= 0 && !lsp_completion_items.empty())
+  {
+    // The list is the one that was already on screen, so the index still names
+    // the row it named: keep it (Up/Down moved it here, not the filter).
+    lsp_completion_selected =
+        std::clamp(previous_selected, 0, (int)lsp_completion_items.size() - 1);
+  }
+  else if (!selected_label.empty())
+  {
+    // A new list: follow the symbol that was selected. The parameter list
+    // narrows it to the same overload when that row is still offered, and the
+    // label alone keeps the family when it is not.
+    bool followed = false;
+    if (!selected_detail.empty())
     {
-      lsp_completion_selected = i;
-      break;
+      for (int i = 0; i < (int)lsp_completion_items.size(); i++)
+      {
+        if (lsp_completion_items[i].label == selected_label
+            && lsp_completion_items[i].label_detail == selected_detail)
+        {
+          lsp_completion_selected = i;
+          followed = true;
+          break;
+        }
+      }
+    }
+    if (!followed)
+    {
+      for (int i = 0; i < (int)lsp_completion_items.size(); i++)
+      {
+        if (lsp_completion_items[i].label == selected_label)
+        {
+          lsp_completion_selected = i;
+          break;
+        }
+      }
+    }
+  }
+  else
+  {
+    for (int i = 0; i < (int)lsp_completion_items.size(); i++)
+    {
+      if (lsp_completion_items[i].preselect)
+      {
+        lsp_completion_selected = i;
+        break;
+      }
     }
   }
   lsp_completion_visible = !lsp_completion_items.empty();

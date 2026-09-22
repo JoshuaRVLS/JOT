@@ -337,6 +337,23 @@ public:
   {
     return lsp_completion_ghost_text;
   }
+  // Which row of the popup's list is selected, and what the rows are -- the two
+  // things Up/Down and the per-frame re-filter move (see
+  // refresh_lsp_completion_filter).
+  int lsp_completion_selected_for_test() const
+  {
+    return lsp_completion_selected;
+  }
+  std::vector<std::string> lsp_completion_labels_for_test() const
+  {
+    std::vector<std::string> labels;
+    labels.reserve(lsp_completion_items.size());
+    for (const LSPCompletionItem &item : lsp_completion_items)
+    {
+      labels.push_back(item.label);
+    }
+    return labels;
+  }
   std::string lsp_completion_prefix_for_test() const
   {
     return lsp_completion_prefix;
