@@ -161,6 +161,65 @@ TEST_CASE("Completion selection: the wheel over the popup walks the list", "[jot
   REQUIRE(e.buffer_for_test().scroll_offset != 0);
 }
 
+TEST_CASE("Completion selection: the pointer takes a row out of the popup", "[jot]")
+{
+  seed_config_home();
+  Editor e;
+  e.set_home_menu_visible(false);
+  open_with_caret(e, "int main() {\n  incl\n}\n", 1, 6);
+
+  const std::vector<LSPCompletionItem> family = {
+      overload("std::includes", "(ExecutionPolicy &&policy, ...)", "includes_policy"),
+      overload("std::includes", "(InputIt1 first1, ...)", "includes_iter"),
+      overload("std::includes", "(InputIt3 first3, ...)", "includes_third"),
+  };
+  REQUIRE(e.seed_lsp_completion_for_test(family));
+  e.render_for_test();
+  const int box_x = e.lsp_completion_box_x_for_test();
+  const int box_y = e.lsp_completion_box_y_for_test();
+  const int box_h = e.lsp_completion_box_h_for_test();
+  REQUIRE(box_h > 2);
+  const int row_x = box_x + 3;
+  // The stored rect is the box's outside, border included: its first row is the
+  // top border, the item rows follow, then the footer, then the bottom border.
+  const int item1_y = box_y + 2;             // the second item row
+  const int footer_y = box_y + box_h - 2;
+  const int bottom_y = box_y + box_h - 1;
+
+  // The border and the footer are the box too: a press there is swallowed
+  // rather than reaching the text through the list.
+  const Cursor held_caret = e.buffer_for_test().cursor;
+  e.mouse_event_for_test(row_x, box_y, /*bstate=*/1);     // top border
+  e.mouse_event_for_test(row_x, footer_y, /*bstate=*/1);  // footer row
+  e.mouse_event_for_test(row_x, bottom_y, /*bstate=*/1);  // bottom border
+  REQUIRE(e.lsp_completion_visible_for_test());
+  REQUIRE(e.buffer_for_test().cursor.y == held_caret.y);
+  REQUIRE(e.buffer_for_test().cursor.x == held_caret.x);
+  REQUIRE(e.buffer_for_test().line(1) == "  incl");
+
+  // Motion over a row selects it and leaves the list up: it used to hide the
+  // popup, so reaching for a row with the pointer dismissed it.
+  e.mouse_event_for_test(row_x, item1_y, /*bstate=*/32);
+  REQUIRE(e.lsp_completion_selected_for_test() == 1);
+  REQUIRE(e.lsp_completion_visible_for_test());
+
+  // The press takes that row -- the item's own text lands where the typed word
+  // was, and the list closes.
+  e.mouse_event_for_test(row_x, item1_y, /*bstate=*/1);
+  REQUIRE(!e.lsp_completion_visible_for_test());
+  REQUIRE(e.buffer_for_test().line(1) == "  includes_iter");
+
+  // Outside the box the press keeps its old owner: the list closes and the
+  // caret goes where the pointer is. A fresh popup, because taking a row left
+  // the word the last one was completing.
+  open_with_caret(e, "int main() {\n  incl\n}\n", 1, 6);
+  REQUIRE(e.seed_lsp_completion_for_test(family));
+  e.render_for_test();
+  REQUIRE(e.lsp_completion_visible_for_test());
+  e.mouse_event_for_test(std::max(1, box_x - 5), item1_y, /*bstate=*/1);
+  REQUIRE(!e.lsp_completion_visible_for_test());
+}
+
 TEST_CASE("Completion selection: a new list follows the selected overload", "[jot]")
 {
   seed_config_home();

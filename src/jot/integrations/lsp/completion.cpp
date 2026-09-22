@@ -356,6 +356,8 @@ void Editor::hide_lsp_completion()
   lsp_completion_box_y = -1;
   lsp_completion_box_w = 0;
   lsp_completion_box_h = 0;
+  lsp_completion_box_start = 0;
+  lsp_completion_box_rows = 0;
   lsp_completion_replace_start = {0, 0};
   lsp_completion_items.clear();
   lsp_completion_all_items.clear();

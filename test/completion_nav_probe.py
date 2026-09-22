@@ -12,10 +12,11 @@ back, and the popup could never be browsed past the first overload.
 This drives the real binary against the real clangd, types `incl` in a C++
 file, and reads the popup's own footer (its "N/total" position counter) and
 selection band off the terminal stream -- the two things a user sees move. The
-same run also checks the other half: Up walks back. One more scene aims an SGR
-wheel at the box the popup painted: the wheel belongs to the list there, so a
-notch walks it and the popup stays up (before, the wheel fell through to the
-buffer and dismissed it).
+same run also checks the other half: Up walks back. The scenes after that aim
+SGR mouse events at the box the popup painted, because the pointer belongs to
+the list there: a wheel notch walks it and a press takes the clicked row, both
+with the popup staying up until the press takes it (before, either one fell
+through to the buffer -- the wheel dismissed the popup, a press moved the caret).
 
 Usage: test/completion_nav_probe.py [path-to-jot-binary]
 Exit codes: 0 pass, 1 fail, 2 binary or clangd missing.
@@ -48,6 +49,10 @@ BOX_TOP = re.compile(r"┌─+┐")
 # The bundled dark theme's selection background (PmenuSel), where the selected
 # row's band is painted. Truecolour cells are stored as 1000 + rgb.
 SELECTION_BG = 1000 + 0xFF79C0
+
+
+def rows(screen):
+    return ["".join(screen.cells[row]) for row in range(screen.rows)]
 
 
 def popup_or_none(screen):
@@ -118,17 +123,20 @@ def popup_position(screen) -> tuple[int, int, int]:
     return band_y, position, length
 
 
-def run_retrying(binary: str, after_typing: bytes, cfg: str, attempts: int = 2):
+def run_retrying(binary: str, after_typing: bytes, cfg: str, attempts: int = 2, extra=()):
     """A run from `run`, retried once over a cold server's slow first answer."""
     last = None
     for attempt in range(attempts):
-        last = run(binary, after_typing, cfg if attempt == 0 else cfg + "_retry")
+        last = run(binary,
+                   after_typing,
+                   cfg if attempt == 0 else cfg + "_retry",
+                   extra=extra)
         if popup_or_none(last) is not None:
             return last
     return last
 
 
-def run(binary: str, after_typing: bytes, cfg: str):
+def run(binary: str, after_typing: bytes, cfg: str, extra=()):
     work = "/tmp/jot_completion_nav_probe"
     os.makedirs(work, exist_ok=True)
     path = os.path.join(work, "probe.cpp")
@@ -150,7 +158,7 @@ def run(binary: str, after_typing: bytes, cfg: str):
                       phases=[
                           (0.5, b"incl"),
                           (6.0, after_typing),
-                      ])
+                      ] + list(extra))
 
 
 def main() -> int:
@@ -197,29 +205,62 @@ def main() -> int:
               f"not {band0}")
         return 1
 
-    # The wheel over the popup's own box: one notch walks three rows (the step
-    # the palette and the quick pick take) and the popup stays up. The aim comes
-    # from the box the first scene painted -- a wheel is a pointer event, so its
-    # coordinates are part of the case -- and SGR reports the cell 1-based.
+    # The wheel over the popup's own box: a notch walks three rows (the step the
+    # palette and the quick pick take) and the popup stays up. The aim comes from
+    # the box the first scene painted -- a wheel is a pointer event, so its
+    # coordinates are part of the case -- and SGR reports the cell 1-based. The
+    # notch is sent twice because a cold clangd can answer after the first one,
+    # which then lands on the code instead: the walk is asserted to be one or two
+    # notches, not exactly one.
     box_top, box_left, _right, _bottom = popup_box(typed)
     wheel = f"\x1b[<65;{box_left + 5};{box_top + 3}M".encode()
-    scrolled = run_retrying(binary, wheel, "/tmp/jot_completion_nav_probe_cfg_d")
+    scrolled = run_retrying(binary,
+                            wheel,
+                            "/tmp/jot_completion_nav_probe_cfg_d",
+                            extra=[(5.0, wheel)])
     found = popup_or_none(scrolled)
     if found is None:
         print("completion nav probe: FAIL - a wheel over the popup dismissed it "
               "instead of walking the list")
         return 1
     band_wheel, position_wheel, length_wheel = found
-    print(f"popup after one wheel notch: row {band_wheel}, "
+    print(f"popup after wheel notches: row {band_wheel}, "
           f"position {position_wheel}/{length_wheel}")
-    if (position_wheel, length_wheel) != (position0 + 3, length):
+    one_notch = (position0 + 3, length)
+    two_notches = (position0 + 6, length)
+    if (position_wheel, length_wheel) not in (one_notch, two_notches):
         print("completion nav probe: FAIL - the wheel over the popup did not walk "
               f"the selection (was {position0}/{length}, now {position_wheel}/{length_wheel})")
         return 1
     box_top_wheel = popup_box(scrolled)[0]
-    if band_wheel != box_top_wheel + 4:
+    if band_wheel != box_top_wheel + position_wheel:
         print(f"completion nav probe: FAIL - the selection band is at row {band_wheel}, "
-              f"not three rows into the box at {box_top_wheel + 1}")
+              f"not the row of position {position_wheel} in the box at {box_top_wheel + 1}")
+        return 1
+
+    # A press on a row takes it, the way a click in the palette's list does: the
+    # item's text lands where the typed word was, and the popup goes away. Sent
+    # twice for the same reason as the notch, over two runs: a press that arrives
+    # before the popup only moves the caret, and the second one then lands on a
+    # live popup.
+    click = (f"\x1b[<0;{box_left + 5};{box_top + 3}M"
+             f"\x1b[<0;{box_left + 5};{box_top + 3}m").encode()
+    for attempt in range(2):
+        clicked = run(binary,
+                      click,
+                      f"/tmp/jot_completion_nav_probe_cfg_e{attempt}",
+                      extra=[(5.0, click)])
+        if popup_or_none(clicked) is not None:
+            continue  # the presses never caught a live popup: try again
+        line = next((row for row in rows(clicked) if "int main()" in row), "")
+        if "includes" not in line:
+            print("completion nav probe: FAIL - the click dismissed the popup "
+                  f"without taking the row (the line reads {line.strip()!r})")
+            return 1
+        print(f"popup after a click on a row: gone, line {line.strip()!r}")
+        break
+    else:
+        print("completion nav probe: FAIL - the click left the popup up")
         return 1
 
     print("completion nav probe: OK")

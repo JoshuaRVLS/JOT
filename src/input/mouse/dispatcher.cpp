@@ -628,6 +628,44 @@ void Editor::handle_mouse(void *event_ptr)
     }
   }
 
+  // The completion popup is a list floating over the pane, so the pointer
+  // belongs to it while it is over its own box, the way it belongs to the
+  // palette's list: motion selects the row under the pointer (band and ghost
+  // preview follow it the way they follow Up/Down) and a press takes that row --
+  // the same single click the palette's list acts on. The press is swallowed,
+  // border and footer included, so a click aimed at a row can never move the
+  // caret instead. Without this the list could not be aimed at with the mouse at
+  // all: motion in the pane hides the completion popup and a press places the
+  // caret, so reaching for a row dismissed it. The box and the window of items
+  // painted in it are the painter's (render_lsp_completion).
+  if (lsp_completion_visible && !lsp_completion_items.empty() && lsp_completion_box_w > 0
+      && event->x >= lsp_completion_box_x
+      && event->x < lsp_completion_box_x + lsp_completion_box_w
+      && event->y >= lsp_completion_box_y
+      && event->y < lsp_completion_box_y + lsp_completion_box_h)
+  {
+    const int row = event->y - (lsp_completion_box_y + 1);
+    const int idx = lsp_completion_box_start + row;
+    if (row >= 0 && row < lsp_completion_box_rows && idx >= 0
+        && idx < (int)lsp_completion_items.size())
+    {
+      if (is_click)
+      {
+        lsp_completion_selected = idx;
+        update_lsp_completion_ghost();
+        apply_selected_lsp_completion();
+        needs_redraw = true;
+      }
+      else if (is_motion && lsp_completion_selected != idx)
+      {
+        lsp_completion_selected = idx;
+        update_lsp_completion_ghost();
+        needs_redraw = true;
+      }
+    }
+    return;
+  }
+
   if (is_right_click)
   {
     if (right_panel_resize_dragging)

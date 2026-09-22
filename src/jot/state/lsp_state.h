@@ -90,13 +90,17 @@ struct LspUiState
   std::vector<LSPCompletionItem> lsp_completion_all_items;
   std::vector<LSPCompletionItem> lsp_completion_items;
   // The rect the popup painted on the last frame, border included, in screen
-  // cells (x/y are -1 / w is 0 while it is not on screen). The wheel hit-tests
-  // against this: the placement lives in the painter, and a wheel event lands
-  // on the picture the user is looking at -- the frame that was painted last.
+  // cells (x/y are -1 / w is 0 while it is not on screen), plus the window it
+  // painted in it: the item index of its first row and how many rows there are.
+  // The pointer hit-tests against these: the placement and the scrolling window
+  // live in the painter, and a mouse event lands on the picture the user is
+  // looking at -- the frame that was painted last.
   int lsp_completion_box_x = -1;
   int lsp_completion_box_y = -1;
   int lsp_completion_box_w = 0;
   int lsp_completion_box_h = 0;
+  int lsp_completion_box_start = 0;
+  int lsp_completion_box_rows = 0;
 
   bool lsp_signature_visible = false;
   // Position of the '(' that opened the call shown by the signature popup.
