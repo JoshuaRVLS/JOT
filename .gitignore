@@ -51,6 +51,8 @@ PLANS.md
 .gemini/
 .copilot/
 .commandcode/
+antislop.md
+CLAUDE.md
 
 # Temp
 tmp/
@@ -70,3 +72,4 @@ build_no_ts/test/CTestTestfile.cmake
 build_no_ts/test/jot_tests
 index.html
 .tokensave/
+
