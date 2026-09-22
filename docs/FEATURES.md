@@ -802,7 +802,9 @@ to editor
 
 Type to filter, `↑`/`↓` to move, `Home`/`End` to jump, `Enter` to accept,
 `Backspace` to edit, `Esc` to close. In LSP completion, `Enter` or `Tab`
-applies and `Esc` closes. In the file finder, `Backspace` on an empty query
+applies and `Esc` closes; a wheel notch over the popup's own box walks the
+list three rows the way it does the palette's, instead of scrolling the code
+behind it. In the file finder, `Backspace` on an empty query
 walks up a folder, but it floors at the workspace the picker opened in -- the
 workspace is the folder root, and `:find src` scopes the picker to a subfolder
 of it instead of a second way out. The typed characters light up in each item's

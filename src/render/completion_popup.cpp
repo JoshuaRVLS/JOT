@@ -109,6 +109,15 @@ using namespace overlay_internal;
 
 void Editor::render_lsp_completion()
 {
+  // The wheel hit-test reads this (handle_mouse_input), so it describes the
+  // frame that is being painted: cleared here, set below only where the box
+  // really goes up. A frame that skips the popup -- nothing to show, another
+  // pane's buffer, a caret that moved off the word -- must not leave the last
+  // frame's rect behind, or the wheel would walk a list that is not on screen.
+  lsp_completion_box_x = -1;
+  lsp_completion_box_y = -1;
+  lsp_completion_box_w = 0;
+  lsp_completion_box_h = 0;
   if (!lsp_completion_visible || lsp_completion_items.empty() || panes.empty())
   {
     return;
@@ -285,6 +294,14 @@ void Editor::render_lsp_completion()
 
   int box_x = clamp_box_x(place_right ? cursor_x + 2 : cursor_x - box_w - 2);
   int box_y = clamp_box_y(place_below ? cursor_y + 2 : cursor_y - box_h - 2);
+
+  // The wheel's hit test reads this. The border is part of the picture the
+  // pointer is over, so the rect is the box plus its one-cell frame -- both the
+  // Lua float and the native fallback paint it that way.
+  lsp_completion_box_x = box_x - 1;
+  lsp_completion_box_y = box_y - 1;
+  lsp_completion_box_w = box_w + 2;
+  lsp_completion_box_h = box_h + 2;
 
   // A registered Lua UI handler paints the completion popup from this state;
   // the box geometry stays native (placement is cursor-avoidance logic the

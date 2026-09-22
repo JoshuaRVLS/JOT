@@ -12,6 +12,7 @@
 // the symbol (label plus the parameter list in labelDetails) rather than the
 // label alone.
 #include "editor.h"
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdlib>
 #include <fstream>
@@ -104,6 +105,60 @@ TEST_CASE("Completion selection: Down survives the frame's re-filter", "[jot]")
   e.refresh_lsp_completion_for_test();
   REQUIRE(e.lsp_completion_selected_for_test() == 3);
   REQUIRE(e.lsp_completion_ghost_for_test() == "usive_scan");
+}
+
+TEST_CASE("Completion selection: the wheel over the popup walks the list", "[jot]")
+{
+  seed_config_home();
+  Editor e;
+  e.set_home_menu_visible(false);
+  // Long enough that the pane can scroll: the last check is that a wheel which
+  // lands outside the popup still belongs to the code behind it.
+  std::string text = "int main() {\n  incl\n";
+  for (int i = 0; i < 60; i++)
+  {
+    text += "  // filler\n";
+  }
+  text += "}\n";
+  open_with_caret(e, text, 1, 6);
+
+  const std::vector<LSPCompletionItem> family = {
+      overload("std::includes", "(ExecutionPolicy &&policy, ...)", "includes"),
+      overload("std::includes", "(InputIt1 first1, InputIt1 last1, ...)", "includes"),
+      overload("std::includes", "(InputIt2 first2, InputIt2 last2, ...)", "includes"),
+      overload("std::includes", "(InputIt3 first3, InputIt3 last3, ...)", "includes"),
+      overload("std::inclusive_scan", "(InputIt first, InputIt last, ...)", "inclusive_scan"),
+      overload("std::inner_product", "(InputIt1 first1, InputIt1 last1, ...)", "inner_product"),
+  };
+  REQUIRE(e.seed_lsp_completion_for_test(family));
+
+  // The wheel is aimed at the box the frame painted, the way a user aims it.
+  e.render_for_test();
+  REQUIRE(e.lsp_completion_box_w_for_test() > 0);
+  REQUIRE(e.lsp_completion_box_h_for_test() > 1);
+  const int box_x = e.lsp_completion_box_x_for_test();
+  const int box_y = e.lsp_completion_box_y_for_test();
+  const int wheel_x = box_x + 3;
+  const int wheel_y = box_y + 2;
+
+  // One notch is three rows, the step the palette and the quick pick take; the
+  // notch does not fall through to the buffer behind the list.
+  e.wheel_event_for_test(wheel_x, wheel_y, false, true);
+  REQUIRE(e.lsp_completion_selected_for_test() == 3);
+  REQUIRE(e.lsp_completion_visible_for_test());
+  REQUIRE(e.buffer_for_test().scroll_offset == 0);
+
+  // A notch up walks back, and the clamp holds at the top of the list.
+  e.wheel_event_for_test(wheel_x, wheel_y, true, false);
+  REQUIRE(e.lsp_completion_selected_for_test() == 0);
+  e.wheel_event_for_test(wheel_x, wheel_y, true, false);
+  REQUIRE(e.lsp_completion_selected_for_test() == 0);
+
+  // Outside the box the wheel keeps its old owner: the popup closes and the
+  // viewport takes the notch.
+  e.wheel_event_for_test(std::max(1, box_x - 5), wheel_y, false, true);
+  REQUIRE(!e.lsp_completion_visible_for_test());
+  REQUIRE(e.buffer_for_test().scroll_offset != 0);
 }
 
 TEST_CASE("Completion selection: a new list follows the selected overload", "[jot]")

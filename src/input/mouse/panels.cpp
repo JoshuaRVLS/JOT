@@ -23,6 +23,31 @@ void Editor::handle_mouse_input(int x,
     return;
   }
 
+  // The completion popup owns the wheel over its own box, the way the palette
+  // owns it over its list: a notch walks the selection three rows -- the same
+  // step the other lists take -- and the ghost preview follows the row it lands
+  // on. The test is against the box the last frame painted, not a layout
+  // recomputed here, because what the pointer is over is the picture on screen.
+  // It has to come before the block below, which hides the popup on every
+  // wheel, and before the buffer's own scroll takes the notch.
+  if ((is_scroll_up || is_scroll_down) && lsp_completion_visible
+      && !lsp_completion_items.empty() && lsp_completion_box_w > 0
+      && x >= lsp_completion_box_x && x < lsp_completion_box_x + lsp_completion_box_w
+      && y >= lsp_completion_box_y && y < lsp_completion_box_y + lsp_completion_box_h)
+  {
+    const int delta = is_scroll_up ? -3 : 3;
+    const int sel = std::clamp(lsp_completion_selected + delta,
+                               0,
+                               (int)lsp_completion_items.size() - 1);
+    if (sel != lsp_completion_selected)
+    {
+      lsp_completion_selected = sel;
+      update_lsp_completion_ghost();
+    }
+    needs_redraw = true;
+    return;
+  }
+
   if (is_click || is_scroll_up || is_scroll_down || is_scroll_left || is_scroll_right)
   {
     clear_debugger_breakpoint_hover();

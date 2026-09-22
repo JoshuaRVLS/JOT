@@ -354,6 +354,25 @@ public:
     }
     return labels;
   }
+  // Where the popup painted its box on the last frame (border included), so a
+  // mouse test can aim the wheel at it the way a user does. w is 0 while the
+  // popup is not on screen; see the LSP state's lsp_completion_box_*.
+  int lsp_completion_box_x_for_test() const
+  {
+    return lsp_completion_box_x;
+  }
+  int lsp_completion_box_y_for_test() const
+  {
+    return lsp_completion_box_y;
+  }
+  int lsp_completion_box_w_for_test() const
+  {
+    return lsp_completion_box_w;
+  }
+  int lsp_completion_box_h_for_test() const
+  {
+    return lsp_completion_box_h;
+  }
   std::string lsp_completion_prefix_for_test() const
   {
     return lsp_completion_prefix;

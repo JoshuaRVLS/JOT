@@ -12,7 +12,10 @@ back, and the popup could never be browsed past the first overload.
 This drives the real binary against the real clangd, types `incl` in a C++
 file, and reads the popup's own footer (its "N/total" position counter) and
 selection band off the terminal stream -- the two things a user sees move. The
-same run also checks the other half: Up walks back.
+same run also checks the other half: Up walks back. One more scene aims an SGR
+wheel at the box the popup painted: the wheel belongs to the list there, so a
+notch walks it and the popup stays up (before, the wheel fell through to the
+buffer and dismissed it).
 
 Usage: test/completion_nav_probe.py [path-to-jot-binary]
 Exit codes: 0 pass, 1 fail, 2 binary or clangd missing.
@@ -39,6 +42,9 @@ int main() {
 # the pattern so the editor's own `1/…` counters can never match it.
 FOOTER = re.compile(r"│\s*(\d+)/(\d+)\s")
 
+# The popup's top border: `┌` at the box's left column, `┐` at its right.
+BOX_TOP = re.compile(r"┌─+┐")
+
 # The bundled dark theme's selection background (PmenuSel), where the selected
 # row's band is painted. Truecolour cells are stored as 1000 + rgb.
 SELECTION_BG = 1000 + 0xFF79C0
@@ -51,6 +57,28 @@ def popup_or_none(screen):
         return None
 
 
+def popup_box(screen) -> tuple[int, int, int, int]:
+    """(top row, left col, right col, bottom row) of the popup's box.
+
+    The bottom row is found by the `└` under the top-left corner's column, not
+    by a matching right corner: the screen reader decodes cell by cell, and a
+    border glyph split across pty reads comes back as `?` cells, which says
+    nothing about the frame jot painted (the byte stream has the corner).
+    """
+    for y in range(screen.rows):
+        match = BOX_TOP.search("".join(screen.cells[y]))
+        if not match:
+            continue
+        left = match.start()
+        right = match.end() - 1
+        for bottom in range(y + 1, screen.rows):
+            text = "".join(screen.cells[bottom])
+            if len(text) > left and text[left] == "└":
+                return y, left, right, bottom
+        break
+    raise AssertionError("the completion popup box is not on screen")
+
+
 def popup_position(screen) -> tuple[int, int, int]:
     """(selected row index, position on the list, list length) of the popup.
 
@@ -59,25 +87,17 @@ def popup_position(screen) -> tuple[int, int, int]:
     the screen, so neither can pass by the state being right while the frame is
     not.
     """
-    box_top = -1
+    box_top, _left, _right, box_bottom = popup_box(screen)
     footer_y = -1
     position = length = 0
-    for y in range(screen.rows):
-        text = "".join(screen.cells[y])
-        if box_top < 0 and "┌" in text and "┐" in text:
-            box_top = y
-            continue
-        if box_top < 0:
-            continue
-        match = FOOTER.search(text)
+    for y in range(box_top + 1, box_bottom):
+        match = FOOTER.search("".join(screen.cells[y]))
         if match and int(match.group(2)) > 1:
             footer_y = y
             position = int(match.group(1))
             length = int(match.group(2))
             break
 
-    if box_top < 0:
-        raise AssertionError("the completion popup box is not on screen")
     if footer_y < 0:
         raise AssertionError("completion popup footer not found on screen")
 
@@ -175,6 +195,31 @@ def main() -> int:
     if band_up != band0:
         print(f"completion nav probe: FAIL - the selection band ended at row {band_up}, "
               f"not {band0}")
+        return 1
+
+    # The wheel over the popup's own box: one notch walks three rows (the step
+    # the palette and the quick pick take) and the popup stays up. The aim comes
+    # from the box the first scene painted -- a wheel is a pointer event, so its
+    # coordinates are part of the case -- and SGR reports the cell 1-based.
+    box_top, box_left, _right, _bottom = popup_box(typed)
+    wheel = f"\x1b[<65;{box_left + 5};{box_top + 3}M".encode()
+    scrolled = run_retrying(binary, wheel, "/tmp/jot_completion_nav_probe_cfg_d")
+    found = popup_or_none(scrolled)
+    if found is None:
+        print("completion nav probe: FAIL - a wheel over the popup dismissed it "
+              "instead of walking the list")
+        return 1
+    band_wheel, position_wheel, length_wheel = found
+    print(f"popup after one wheel notch: row {band_wheel}, "
+          f"position {position_wheel}/{length_wheel}")
+    if (position_wheel, length_wheel) != (position0 + 3, length):
+        print("completion nav probe: FAIL - the wheel over the popup did not walk "
+              f"the selection (was {position0}/{length}, now {position_wheel}/{length_wheel})")
+        return 1
+    box_top_wheel = popup_box(scrolled)[0]
+    if band_wheel != box_top_wheel + 4:
+        print(f"completion nav probe: FAIL - the selection band is at row {band_wheel}, "
+              f"not three rows into the box at {box_top_wheel + 1}")
         return 1
 
     print("completion nav probe: OK")
