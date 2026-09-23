@@ -37,6 +37,8 @@ SOURCE = os.path.join(ROOT, "tall.cpp")
 # 1+base form of shift(1) + alt(2). The editor matches the uppercase letter,
 # which is what Alt+Shift decodes to on every terminal.
 FLOAT_KEY = b"\x1b[116;4u"
+# Ctrl+Shift+P opens the command palette; Enter runs what is typed in it.
+PALETTE = b"\x1b[112;6u"
 ESC = b"\x1b"
 ENTER = b"\r"
 FLOAT_OK = "FLOAT_OK_123"
@@ -101,6 +103,32 @@ def covered_rows(pre_lines: list[str], lines: list[str], edges) -> list[int]:
     return covered
 
 
+def box_content_lines(lines: list[str], edges) -> list[str]:
+    """The rows inside the box's frame."""
+    top, left, right, bottom = edges
+    return [line[left + 1 : right] for line in lines[top + 1 : bottom]]
+
+
+def docked_content_lines(lines: list[str]) -> list[str]:
+    """The docked panel's rows under its tab strip, up to the status line.
+
+    The strip is found by its close marker and `+` tab: nothing a shell prints
+    inside the panel's rows looks like both of those at that depth from the
+    bottom.
+    """
+    for y in range(len(lines) - 1, max(0, len(lines) - 14), -1):
+        if "x|" in lines[y] and "+" in lines[y]:
+            return lines[y + 1 : len(lines) - 1]
+    return []
+
+
+def box_has_output(screen) -> bool:
+    edges = box_edges(rows(screen))
+    if edges is None:
+        return False
+    return any(line.strip() for line in box_content_lines(rows(screen), edges))
+
+
 def capture(screen, store) -> bool:
     store.setdefault("pre", screen.text())
     return True
@@ -116,9 +144,9 @@ def write_workspace() -> None:
                      "the floating box\n" % (i, i, i))
 
 
-def run(binary, phases):
+def run(binary, phases, until_timeout: float = 15.0):
     return run_in_pty(binary, [SOURCE], b"", settle=5.0, after=0.6, cols=COLS, rows=ROWS,
-                      cfg=CFG, cwd=ROOT, phases=phases)
+                      cfg=CFG, cwd=ROOT, phases=phases, until_timeout=until_timeout)
 
 
 def main() -> int:
@@ -256,6 +284,46 @@ def main() -> int:
     if row_of(screen, FLOAT_OK) < 0:
         failures.append("scroll: the wheel did not reach %r again" % FLOAT_OK)
     print("scrollback:   %s" % ("ok" if len(failures) == before else "FAILED"))
+
+    # Both shells must show their prompt with no key pressed. fish asks the
+    # terminal for its device attributes at startup and waits ten seconds for
+    # the answer: the editor's vterm answers, but the answer is only useful if
+    # it reaches the pty on its own instead of riding out on the next keypress.
+    fish = shutil.which("fish")
+    if fish is None:
+        print("prompt:       skipped (no fish)")
+    else:
+        before = len(failures)
+        os.environ["SHELL"] = fish
+        screen = run(
+            binary,
+            [
+                (0.6, PALETTE),
+                (0.8, b"termnew"),
+                (0.6, ENTER),
+                # No key after this one: the prompt has to arrive on its own.
+                (0.2, lambda s: any(line.strip() for line in docked_content_lines(rows(s)))),
+            ],
+            until_timeout=3.0,
+        )
+        if not any(line.strip() for line in docked_content_lines(rows(screen))):
+            failures.append("prompt: the docked shell was still blank after 3s with no key")
+
+        screen = run(
+            binary,
+            [
+                (0.5, FLOAT_KEY),
+                (1.2, lambda s: box_edges(rows(s)) is not None),
+                (0.2, box_has_output),
+            ],
+            until_timeout=3.0,
+        )
+        if box_edges(rows(screen)) is None:
+            failures.append("prompt: the box never opened")
+        elif not box_has_output(screen):
+            failures.append("prompt: the boxed shell was still blank after 3s with no key")
+        os.environ["SHELL"] = "/bin/bash" if os.path.exists("/bin/bash") else os.environ["SHELL"]
+        print("prompt:       %s" % ("ok" if len(failures) == before else "FAILED"))
 
     if failures:
         print("float terminal probe: FAIL")

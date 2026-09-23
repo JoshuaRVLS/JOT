@@ -414,6 +414,13 @@ bool IntegratedTerminal::poll_output()
     refresh_current_line();
   }
 
+  // The vterm answers the shell's own queries (device attributes, a cursor
+  // position report) through the output callback, and the shell waiting on that
+  // answer is the one on the other end of the pty: flushing only on a keypress
+  // left a shell that asks at startup (fish asks for its device attributes)
+  // blank until the first key or its own ten-second timeout.
+  write_output_buffer();
+
   if (session_->process_exited())
   {
     session_->close_after_exit();
