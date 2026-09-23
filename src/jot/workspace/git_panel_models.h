@@ -217,6 +217,86 @@ namespace jot_git_panel
     }
     return rows;
   }
+
+  // The panel's view tabs, in draw order. One source for the labels, the keys
+  // that select them (lazygit's numbering) and the mouse hit-test, so a tab's
+  // label and its clickable extent cannot drift apart.
+  struct ViewTab
+  {
+    std::string label;
+    View view;
+    int key;
+  };
+
+  inline std::vector<ViewTab> view_tabs()
+  {
+    return {{" \uE725 2 Files ", View::Files, 2},
+            {" \uE725 3 Branches ", View::Branches, 3},
+            {" \uE731 4 Commits ", View::Commits, 4},
+            {" \uF187 5 Stash ", View::Stash, 5}};
+  }
+
+  // The keys worth showing for the current view, one line short enough for the
+  // panel: the footer row that fills the spare row when the list fits.
+  inline std::string view_hint(View view)
+  {
+    switch (view)
+    {
+    case View::Branches:
+      return "space checkout \u00b7 n new \u00b7 f fetch";
+    case View::Commits:
+      return "space checkout \u00b7 y copy hash";
+    case View::Stash:
+      return "space apply \u00b7 g pop \u00b7 d drop";
+    case View::Files:
+    default:
+      return "space stage \u00b7 \u23ce diff \u00b7 c commit";
+    }
+  }
+
+  // The flat row the selected entry sits on, or -1 when it is not in the list:
+  // the selection indexes entries, and only the files view pads them with
+  // section rows.
+  inline int flat_index_of_selection(const std::vector<FlatRow> &rows, int selected)
+  {
+    for (int i = 0; i < (int)rows.size(); i++)
+    {
+      if (!rows[(size_t)i].section && rows[(size_t)i].index == selected)
+      {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  // The scroll that brings a flat row into view: it moves the window only when
+  // the row is above or below it, and never past the list's end.
+  inline int scroll_to_show(int scroll, int flat_index, int body_h, int row_count)
+  {
+    if (flat_index < 0 || body_h <= 0)
+    {
+      return scroll;
+    }
+    int next = scroll;
+    if (flat_index < next)
+    {
+      next = flat_index;
+    }
+    else if (flat_index >= next + body_h)
+    {
+      next = flat_index - body_h + 1;
+    }
+    const int max_scroll = row_count > body_h ? row_count - body_h : 0;
+    if (next < 0)
+    {
+      next = 0;
+    }
+    if (next > max_scroll)
+    {
+      next = max_scroll;
+    }
+    return next;
+  }
 } // namespace jot_git_panel
 
 #endif // GIT_PANEL_MODELS_H

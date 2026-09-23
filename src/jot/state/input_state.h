@@ -35,9 +35,10 @@ struct InputState
   long long last_git_panel_click_ms = 0;
   int last_git_panel_click_row = -1;
   // Mouse hover tracking (motion events): the model row under the pointer in
-  // the git panel and the hovered right-dock tab, -1 when none. Purely
-  // visual -- selection is never overwritten by hover.
+  // the git panel, its view tab, and the hovered right-dock tab, -1 when none.
+  // Purely visual -- selection is never overwritten by hover.
   int git_panel_hover_row = -1;
+  int git_panel_hover_tab = -1;
   int right_panel_hover_tab = -1;
   long long last_tab_click_ms;
   int last_tab_clicked_index = 0;

@@ -282,17 +282,22 @@ local function side_panel(p)
     local icon_fg = (r.icon_fg and r.icon_fg >= 0) and r.icon_fg or f
     local lead_fg = r.lead_fg or -1
     local lead_len = r.lead_len or 0
+    -- The selected row carries the cursor bar the explorer, the tab strip and
+    -- the palette use, so every list in the editor marks its cursor the same
+    -- way; the bar is part of the line, so the text after it shifts one cell.
+    local bar = sel and "\u{258C}" or ""
     local text = r.text or ""
     if icon ~= "" then
       text = icon .. " " .. text
     end
-    local lead_at = icon ~= "" and (#icon + 1) or 0
+    text = bar .. text
+    local lead_at = #bar + ((icon ~= "" and (#icon + 1)) or 0)
     local function base_spans(limit)
       local out = {
         { start = 0, len = 65535, fg = f, bg = b, bold = sel },
       }
       if icon ~= "" then
-        out[#out + 1] = { start = 0, len = #icon, fg = icon_fg, bg = b, bold = sel }
+        out[#out + 1] = { start = #bar, len = #icon, fg = icon_fg, bg = b, bold = sel }
       end
       if lead_fg >= 0 and lead_len > 0 and lead_at < limit then
         out[#out + 1] = {

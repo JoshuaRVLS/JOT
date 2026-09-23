@@ -11,6 +11,7 @@
 
 #include "jot/workspace/git_panel_models.h"
 #include "jot/workspace/git_run.h"
+#include "ui/text.h" // ui_cell_count
 
 #include <algorithm>
 #include <chrono>
@@ -256,6 +257,51 @@ void Editor::git_panel_refresh()
   needs_redraw = true;
 }
 
+TerminalBox Editor::git_panel_body() const
+{
+  // Title + tab strip + header above the rows, one cell of border on each side.
+  TerminalBox body;
+  if (!ui)
+  {
+    return body;
+  }
+  const int panel_w = effective_right_panel_width();
+  const int panel_x = std::max(0, ui->get_render_width() - panel_w);
+  const int panel_y = topbar_height();
+  const int panel_h = std::max(1, ui->get_height() - status_height - panel_y);
+  body.x = panel_x;
+  body.y = panel_y + 4;
+  body.w = panel_w;
+  body.h = std::max(0, panel_h - 4);
+  return body;
+}
+
+void Editor::scroll_git_panel(int delta)
+{
+  using namespace jot_git_panel;
+  const int rows = (int)build_flat_rows(git_panel).size();
+  const int body_h = git_panel_body().h;
+  const int max_scroll = rows > body_h ? rows - body_h : 0;
+  const int next = std::clamp(git_panel.scroll + delta, 0, max_scroll);
+  if (next != git_panel.scroll)
+  {
+    git_panel.scroll = next;
+    needs_redraw = true;
+  }
+}
+
+void Editor::git_panel_track_selection()
+{
+  using namespace jot_git_panel;
+  const std::vector<FlatRow> rows = build_flat_rows(git_panel);
+  const int flat = flat_index_of_selection(rows, git_panel.selected);
+  const int next = scroll_to_show(git_panel.scroll, flat, git_panel_body().h, (int)rows.size());
+  if (next != git_panel.scroll)
+  {
+    git_panel.scroll = next;
+  }
+}
+
 void Editor::git_panel_switch_view(int view_number)
 {
   using namespace jot_git_panel;
@@ -297,6 +343,10 @@ void Editor::git_panel_move_selection(int delta)
   }
   git_panel.pending_confirm.clear();
   git_panel.selected = std::clamp(git_panel.selected + delta, 0, (int)count - 1);
+  // The selected row follows the cursor: before this, `scroll` only ever reset
+  // when the view changed, so moving past the last visible row walked the
+  // selection off the panel with no way to scroll back to it.
+  git_panel_track_selection();
   needs_redraw = true;
 }
 
@@ -320,6 +370,7 @@ void Editor::git_panel_jump_to_end(bool bottom)
     return;
   }
   git_panel.selected = bottom ? (int)count - 1 : 0;
+  git_panel_track_selection();
   needs_redraw = true;
 }
 
@@ -759,19 +810,54 @@ bool Editor::handle_git_panel_mouse(int x, int y, bool is_click, bool is_double_
   if (x < panel_x || x >= panel_x + panel_w || y < panel_y || y >= panel_y + panel_h)
   {
     // Pointer left the panel: drop the hover highlight.
-    if (git_panel_hover_row != -1)
+    if (git_panel_hover_row != -1 || git_panel_hover_tab != -1)
     {
       git_panel_hover_row = -1;
+      git_panel_hover_tab = -1;
       needs_redraw = true;
     }
     return false;
   }
-  // Row area starts below the title + tab strip + header (see render_git_panel).
-  const int row_top = panel_y + 4;
-  const int row_index = y - row_top;
   using namespace jot_git_panel;
+  // The view tabs: a click switches the view through the same path the 2-5 keys
+  // take, motion lights the tab under the pointer.
+  if (y == panel_y + 2)
+  {
+    int hover = -1;
+    int tab_x = panel_x + 1;
+    const std::vector<ViewTab> tabs = view_tabs();
+    for (int i = 0; i < (int)tabs.size(); i++)
+    {
+      const int tab_w = (int)ui_cell_count(tabs[(size_t)i].label);
+      if (tab_x + tab_w >= panel_x + panel_w - 1)
+      {
+        break;
+      }
+      if (x >= tab_x && x < tab_x + tab_w)
+      {
+        hover = i;
+        if (is_click)
+        {
+          focus_state = FOCUS_RIGHT_PANEL;
+          git_panel_switch_view(tabs[(size_t)i].key);
+        }
+        break;
+      }
+      tab_x += tab_w;
+    }
+    if (git_panel_hover_tab != hover)
+    {
+      git_panel_hover_tab = hover;
+      needs_redraw = true;
+    }
+    return true;
+  }
+  // Rows: the same rect the renderer paints into and the scroll math clamps to.
+  const TerminalBox body = git_panel_body();
+  const int row_top = body.y;
+  const int row_index = y - row_top;
   const std::vector<FlatRow> flat = build_flat_rows(git_panel);
-  const int visible = panel_h - 4;
+  const int visible = body.h;
   const int index = git_panel.scroll + row_index;
   int hover_row = -1;
   if (row_index >= 0 && index >= 0 && index < (int)flat.size() && index < git_panel.scroll + visible

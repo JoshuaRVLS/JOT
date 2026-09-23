@@ -232,6 +232,21 @@ void Editor::handle_mouse_input(int x,
     return;
   }
 
+  // The git panel scrolls its own list; the pointer only has to be in the dock.
+  if (show_right_panel && active_right_panel_tab == RIGHT_PANEL_GIT && ui)
+  {
+    int panel_w = effective_right_panel_width();
+    int panel_x = std::max(0, ui->get_render_width() - panel_w);
+    int panel_y = topbar_height();
+    int panel_h = std::max(1, ui->get_height() - status_height - panel_y);
+    bool inside = x >= panel_x && x < panel_x + panel_w && y >= panel_y && y < panel_y + panel_h;
+    if (inside && (is_scroll_up || is_scroll_down))
+    {
+      scroll_git_panel(is_scroll_up ? -3 : 3);
+      return;
+    }
+  }
+
   if (show_right_panel && active_right_panel_tab == RIGHT_PANEL_GIT_DIFF && ui)
   {
     int panel_w = effective_right_panel_width();

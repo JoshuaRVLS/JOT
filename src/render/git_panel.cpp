@@ -117,30 +117,33 @@ void Editor::render_git_panel()
   const jot_git_panel::State &state = git_panel;
   const bool files_view = state.view == View::Files;
 
-  // View tabs (lazygit panel numbers: 2 files, 3 branches, 4 commits, 5 stash).
-  const std::vector<std::pair<std::string, View>> kTabs = {
-      {" \uE725 2 Files ", View::Files},
-      {" \uE725 3 Branches ", View::Branches},
-      {" \uE731 4 Commits ", View::Commits},
-      {" \uF187 5 Stash ", View::Stash},
-  };
+  // View tabs (lazygit panel numbers: 2 files, 3 branches, 4 commits, 5 stash),
+  // built from the same list the click hit-test walks. The active tab carries
+  // the focused pair; an inactive tab under the pointer takes the focused
+  // background with its own foreground, the vocabulary the dock's tab strip
+  // already uses.
   int tab_x = panel_x + 1;
   const int tab_y = panel_y + 2;
-  for (const auto &tab : kTabs)
+  const std::vector<ViewTab> tabs = view_tabs();
+  for (int i = 0; i < (int)tabs.size(); i++)
   {
-    if (tab_x + (int)tab.first.size() >= panel_x + panel_w - 1)
+    const ViewTab &tab = tabs[(size_t)i];
+    const int tab_w = (int)ui_cell_count(tab.label);
+    if (tab_x + tab_w >= panel_x + panel_w - 1)
     {
       break;
     }
-    const bool active = state.view == tab.second;
-    view.tabs.push_back({tab.first, active});
+    const bool active = state.view == tab.view;
+    const bool hovered = !active && i == git_panel_hover_tab;
+    view.tabs.push_back({tab.label, active});
     ui->draw_text(tab_x,
                   tab_y,
-                  tab.first,
+                  tab.label,
                   active ? theme.fg_terminal_tab_focused : theme.fg_terminal_tab_inactive,
-                  active ? theme.bg_terminal_tab_focused : theme.bg_terminal_tab_inactive,
+                  active || hovered ? theme.bg_terminal_tab_focused
+                                    : theme.bg_terminal_tab_inactive,
                   active);
-    tab_x += (int)tab.first.size();
+    tab_x += tab_w;
   }
 
   // Header: repo name + current branch with drift + change counts.
@@ -305,17 +308,15 @@ void Editor::render_git_panel()
       }
       if (selected)
       {
-        r.fg = theme.fg_tab_active;
-        if (r.icon_fg < 0)
-        {
-          r.icon_fg = theme.fg_tab_active;
-        }
+        r.bold = true;
       }
     }
     view.rows.push_back(std::move(r));
   }
 
-  // Pending two-step confirmation hint in the last row.
+  // Pending two-step confirmation hint, or the current view's keys when the
+  // list leaves a row for them. Both renderers draw these rows, so the Lua
+  // handler shows the hints too instead of only the native fallback.
   if (!state.pending_confirm.empty())
   {
     SidePanelRowView hint;
@@ -325,28 +326,39 @@ void Editor::render_git_panel()
     hint.bg = theme.bg_terminal;
     view.rows.push_back(std::move(hint));
   }
+  else if ((int)view.rows.size() < body_h)
+  {
+    SidePanelRowView hint;
+    hint.text = view_hint(state.view);
+    hint.kind = "git_hint";
+    hint.fg = theme.fg_comment;
+    hint.bg = theme.bg_terminal;
+    view.rows.push_back(std::move(hint));
+  }
 
   if (lua_api && lua_api->has_lua_ui_handler("side_panel") && lua_api->emit_side_panel(view))
   {
     return;
   }
 
-  // Native fallback: identical rows, plus a key-hint footer line.
+  // Native fallback: the same rows. Selected rows carry the selection pair and
+  // the cursor bar the explorer and the palette use, so the dock's lists read
+  // alike; hovered rows get the selection tint without the selected foreground.
   const int draw_rows = (int)view.rows.size();
   for (int row = 0; row < draw_rows && row < body_h; row++)
   {
     const SidePanelRowView &r = view.rows[row];
-    // Selected rows keep the tab-active bar; hovered rows get the selection
-    // tint without the selected foreground swap.
-    const int row_bg = r.selected ? theme.bg_tab_active : (r.hovered ? theme.bg_selection : r.bg);
+    const int row_fg = r.selected ? theme.fg_selection : r.fg;
+    const int row_bg = r.selected ? theme.bg_selection : (r.hovered ? theme.bg_selection : r.bg);
     int draw_x = content_x;
+    if (r.selected)
+    {
+      ui->draw_text(draw_x, body_y + row, "\u258C", theme.fg_selection, row_bg, true);
+      draw_x += 1;
+    }
     if (!r.icon.empty())
     {
-      ui->draw_text(draw_x,
-                    body_y + row,
-                    r.icon,
-                    r.icon_fg >= 0 ? r.icon_fg : r.fg,
-                    row_bg);
+      ui->draw_text(draw_x, body_y + row, r.icon, r.icon_fg >= 0 ? r.icon_fg : row_fg, row_bg);
       draw_x += (int)ui_cell_count(r.icon) + 1;
     }
     std::string text = ui_truncate_cells(r.text, content_w - (draw_x - content_x));
@@ -375,16 +387,8 @@ void Editor::render_git_panel()
     ui->draw_text(draw_x,
                   body_y + row,
                   ui_truncate_cells(text, std::max(1, content_w - (draw_x - content_x))),
-                  r.fg,
+                  row_fg,
                   row_bg,
                   r.bold);
-  }
-  if (body_h > draw_rows)
-  {
-    ui->draw_text(content_x,
-                  body_y + draw_rows,
-                  "space stage/checkout  a/A all  c commit  d discard  s stash  y copy  r refresh",
-                  theme.fg_comment,
-                  theme.bg_terminal);
   }
 }

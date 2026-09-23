@@ -98,6 +98,14 @@ private:
   void git_panel_move_selection(int delta);
   void git_panel_page(int delta);
   void git_panel_jump_to_end(bool bottom);
+  // The panel's row area (x, y, w, h) and its scroll: one geometry the
+  // renderer, the mouse hit-test and the scroll math all read, so a click lands
+  // on the row it points at and a scroll keeps the selection visible.
+  TerminalBox git_panel_body() const;
+  void scroll_git_panel(int delta);
+  // Scrolls the window so the selected entry is on screen (a no-op when it
+  // already is).
+  void git_panel_track_selection();
   void git_panel_primary(); // space: stage/unstage, checkout, apply stash
   void git_panel_stage_all();
   void git_panel_unstage_all();
