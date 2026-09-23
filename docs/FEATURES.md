@@ -85,8 +85,14 @@ an explicit font file.
 - Undo/redo, copy/cut/paste, select all, mouse selection, double-click word
   selection, triple-click line selection.
 - Smart multi-line paste that re-indents to the cursor.
-- Auto-indent, auto-closing brackets, bracket matching and jumping, rainbow
-  bracket colors (`rainbow_brackets`), and an active bracket guide.
+- Auto-indent, bracket matching and jumping, rainbow bracket colors
+  (`rainbow_brackets`), and an active bracket guide.
+- Auto-closing pairs, at every caret: typing `(`, `[`, `{`, `"` or `'` opens
+  the pair and leaves the caret inside it, typing the closer when it is already
+  there steps over it instead of doubling it, and Backspace between an empty
+  pair removes both. A selection wraps instead of being replaced. A quote pairs
+  only where it opens a string: not inside one already open, so a closing quote
+  after a brace stays single, and not beside a word (`don't`, `word"`).
 - Markup tags (`.html`, `.htm`, `.jsx`, `.tsx`): typing `>` on an opening tag
   writes the closing tag for you, Enter between a pair splits it onto three
   indented lines, and renaming a tag - from either end, including a name being

@@ -213,21 +213,55 @@ bool Editor::insert_char(char c)
     std::sort(edits.begin(), edits.end(), [](const CaretEdit &a, const CaretEdit &b) {
       return a.y > b.y || (a.y == b.y && a.x > b.x);
     });
-    for (const auto &e : edits)
-    {
-      int ix = ui_clamp_to_utf8_boundary(
-          buf.line(e.y), std::clamp(e.x, 0, (int)buf.line(e.y).size()));
-      buf.line_mut(e.y).insert(ix, text);
-      if (e.is_primary)
-      {
-        buf.cursor.x = ui_clamp_to_utf8_boundary(buf.line(e.y), e.x + (int)text.size());
-      }
+    // A closing character that already sits at a caret is stepped over rather
+    // than doubled, and a pair character inserts its partner at every caret, so
+    // the pairs a lone caret gets are the pairs a column gets.
+    auto move_caret = [&](const CaretEdit &edit, int x) {
+      if (edit.is_primary)
+        buf.cursor.x = ui_clamp_to_utf8_boundary(buf.line(edit.y), x);
       else
       {
-        auto &caret = buf.extra_carets[e.extra_idx];
-        caret.end.x =
-            ui_clamp_to_utf8_boundary(buf.line(e.y), e.x + (int)text.size());
+        auto &caret = buf.extra_carets[edit.extra_idx];
+        caret.end.x = ui_clamp_to_utf8_boundary(buf.line(edit.y), x);
         caret.start = caret.end;
+      }
+    };
+    const bool closing_domain = AutoClose::is_closing_bracket(c);
+    auto caret_x = [&](const CaretEdit &edit) {
+      return edit.is_primary ? buf.cursor.x : buf.extra_carets[edit.extra_idx].end.x;
+    };
+
+    for (std::size_t i = 0; i < edits.size(); i++)
+    {
+      const CaretEdit &e = edits[i];
+      const std::string &line = buf.line(e.y);
+      const int ix = ui_clamp_to_utf8_boundary(line, std::clamp(e.x, 0, (int)line.size()));
+
+      if (closing_domain && AutoClose::should_skip_closing(c, line, ix))
+      {
+        move_caret(e, e.x + 1);
+        continue;
+      }
+
+      std::string insert = text;
+      if (AutoClose::should_insert_pair(c, line, ix))
+        insert.push_back(AutoClose::get_closing_bracket(c));
+
+      buf.line_mut(e.y).insert(ix, insert);
+      // One character forward, so a caret that opened a pair lands inside it.
+      move_caret(e, e.x + (int)text.size());
+
+      // Carets are reached right to left, so what is already placed on this
+      // line sits to the right of the text that just went in and moves with
+      // it. Without that, a caret that opened its pair earlier in the loop no
+      // longer sits inside it.
+      for (std::size_t j = 0; j < i; j++)
+      {
+        if (edits[j].y != e.y)
+          continue;
+        const int x = caret_x(edits[j]);
+        if (x >= ix)
+          move_caret(edits[j], x + (int)insert.size());
       }
     }
     buf.modified = true;
@@ -261,6 +295,17 @@ bool Editor::insert_char(char c)
       buf.cursor.x++;
       needs_redraw = true;
       return false;
+    }
+
+    // The partner is decided before the character goes in: afterwards the
+    // neighbour before the caret is the character just typed, not the one the
+    // rules are about.
+    char partner = '\0';
+    {
+      const std::string &line = buf.line(buf.cursor.y);
+      const int at = std::clamp(buf.cursor.x, 0, (int)line.size());
+      if (AutoClose::should_insert_pair(c, line, at))
+        partner = AutoClose::get_closing_bracket(c);
     }
 
     buf.line_mut(buf.cursor.y).insert(buf.cursor.x, 1, c);
@@ -305,13 +350,9 @@ bool Editor::insert_char(char c)
       }
     }
 
-    if (AutoClose::should_auto_close(c))
+    if (partner != '\0')
     {
-      char closing = AutoClose::get_closing_bracket(c);
-      if (closing != '\0')
-      {
-        buf.line_mut(buf.cursor.y).insert(buf.cursor.x, 1, closing);
-      }
+      buf.line_mut(buf.cursor.y).insert(buf.cursor.x, 1, partner);
     }
 
     sync_markup_tag_name();
