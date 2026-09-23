@@ -9,6 +9,9 @@ namespace Language
 {
   bool is_python_file(const std::string &path);
   bool is_lua_file(const std::string &path);
+  // A C-family source file (C, C++, Objective-C), whose brace and label
+  // conventions differ from the brace-on-the-same-line languages.
+  bool is_c_family_file(const std::string &path);
   // A source file: one the breadcrumb winbar has something to say about
   // (symbols, a document outline). Data, prose and media files are not code,
   // and neither is a file without an extension -- `winbar = auto` keeps the

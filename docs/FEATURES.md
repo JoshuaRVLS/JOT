@@ -93,6 +93,16 @@ an explicit font file.
 - Smart multi-line paste that re-indents to the cursor.
 - Auto-indent, bracket matching and jumping, rainbow bracket colors
   (`rainbow_brackets`), and an active bracket guide.
+- Smart indent on Enter. A bracket left open on the line lines the new line up
+  under the argument after it, so a wrapped call stays aligned:
+  `res = call(arg,` continues at `arg`'s column. In the C family a control
+  statement does not indent on its own — its `{` belongs on the next line at the
+  statement's own indent (the brace style the project's clang-format enforces) —
+  while a label (`case 1:`, `public:`) introduces the body under it. Typing one
+  of those labels, or a `#` that starts a preprocessor directive, pulls the line
+  back out to where clang-format would put it (`IndentCaseLabels: false`, the
+  access modifier's offset, column 0). Brackets inside a string or a comment are
+  text and decide nothing.
 - Auto-closing pairs, at every caret: typing `(`, `[`, `{`, `"` or `'` opens
   the pair and leaves the caret inside it, typing the closer when it is already
   there steps over it instead of doubling it, and Backspace between an empty

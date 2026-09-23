@@ -62,17 +62,9 @@ namespace
     return Language::is_lua_file(buf.filepath);
   }
 
-  bool should_indent_after_line(const FileBuffer &buf, const std::string &line)
+  bool is_c_family_buffer(const FileBuffer &buf)
   {
-    if (is_python_buffer(buf))
-    {
-      return EditorFeatures::should_python_auto_indent(line);
-    }
-    if (is_lua_buffer(buf))
-    {
-      return EditorFeatures::should_lua_auto_indent(line);
-    }
-    return EditorFeatures::should_auto_indent(line);
+    return Language::is_c_family_file(buf.filepath);
   }
 
   void dedent_current_line_one_level(FileBuffer &buf, int tab_size)
@@ -91,6 +83,19 @@ namespace
     const std::string trimmed = line.substr(start);
     line = new_indent_str + trimmed;
     buf.cursor.x = std::max(0, buf.cursor.x - (int)start + (int)new_indent_str.size());
+  }
+
+  // The preprocessor takes the whole line to column 0, which is one level out
+  // of wherever the caret happened to be.
+  void dedent_current_line_to_column_zero(FileBuffer &buf)
+  {
+    std::string &line = buf.line_mut(buf.cursor.y);
+    const size_t start = line.find_first_not_of(" \t");
+    if (start == std::string::npos)
+      return;
+
+    line.erase(0, start);
+    buf.cursor.x = std::max(0, buf.cursor.x - (int)start);
   }
 } // namespace
 
@@ -335,6 +340,21 @@ bool Editor::insert_char(char c)
       if (EditorFeatures::should_python_dedent(buf.line_mut(buf.cursor.y)))
       {
         dedent_current_line_one_level(buf, tab_size);
+      }
+    }
+
+    // A C++ label belongs one level out of the body it introduces (`case`,
+    // `default`, an access specifier), and a preprocessor directive goes all the
+    // way back to column 0 -- both what the project's clang-format produces.
+    if (auto_indent && is_c_family_buffer(buf) && (c == ':' || c == '#'))
+    {
+      if (EditorFeatures::should_cpp_dedent(buf.line_mut(buf.cursor.y)))
+      {
+        dedent_current_line_one_level(buf, tab_size);
+      }
+      else if (EditorFeatures::is_preprocessor_directive_start(buf.line_mut(buf.cursor.y)))
+      {
+        dedent_current_line_to_column_zero(buf);
       }
     }
 
@@ -863,9 +883,10 @@ void Editor::new_line()
       closing_line_str = EditorFeatures::get_indent_string(closing_indent, tab_size) + remaining;
       split_closing_bracket_line = true;
     }
-    else if (should_indent_after_line(buf, buf.line_mut(buf.cursor.y)))
+    else
     {
-      indent += tab_size;
+      indent = EditorFeatures::indent_for_new_line(
+          buf.filepath, buf.line_mut(buf.cursor.y), buf.cursor.x, tab_size);
     }
 
     if (!split_closing_bracket_line)

@@ -1,4 +1,6 @@
 #include "text_features.h"
+#include "column_utils.h"
+#include "language.h"
 #include <algorithm>
 #include <cctype>
 
@@ -284,6 +286,153 @@ bool EditorFeatures::should_lua_dedent(const std::string &line)
       return true;
   }
   return false;
+}
+
+namespace
+{
+  char matching_opener(char closer)
+  {
+    switch (closer)
+    {
+    case ')':
+      return '(';
+    case ']':
+      return '[';
+    default:
+      return '{';
+    }
+  }
+
+  // The line with its trailing `//` comment dropped and the contents of string
+  // and character literals blanked out, so a bracket scan reads syntax rather
+  // than text. Lengths and tabs are preserved, so a column into the result is a
+  // column into the line and the alignment target still measures right.
+  std::string code_only(const std::string &line)
+  {
+    std::string out = line;
+    char literal = '\0';
+    for (size_t i = 0; i < out.size(); i++)
+    {
+      const char c = out[i];
+      if (literal != '\0')
+      {
+        if (c == '\\' && i + 1 < out.size())
+        {
+          if (out[i + 1] != '\t')
+            out[i + 1] = ' ';
+          out[i] = ' ';
+          i++;
+          continue;
+        }
+        if (c == literal)
+          literal = '\0';
+        if (c != '\t')
+          out[i] = ' ';
+        continue;
+      }
+      if (c == '"' || c == '\'')
+      {
+        literal = c;
+        out[i] = ' ';
+        continue;
+      }
+      if (c == '/' && i + 1 < out.size() && out[i + 1] == '/')
+      {
+        out.erase(i);
+        break;
+      }
+    }
+    return out;
+  }
+
+  // Where the innermost bracket left open on `code` before `col` starts, or
+  // -1. A closer shuts the nearest opener of its own kind; this reads one line,
+  // so it is a bracket count rather than a parse.
+  int innermost_open_bracket(const std::string &code, int col)
+  {
+    std::vector<char> open;
+    std::vector<int> at;
+    for (int i = 0; i < col; i++)
+    {
+      const char c = code[i];
+      if (c == '(' || c == '[' || c == '{')
+      {
+        open.push_back(c);
+        at.push_back(i);
+        continue;
+      }
+      if (c != ')' && c != ']' && c != '}')
+        continue;
+
+      const char match = matching_opener(c);
+      for (int j = (int)open.size() - 1; j >= 0; j--)
+      {
+        if (open[j] != match)
+          continue;
+        open.erase(open.begin() + j);
+        at.erase(at.begin() + j);
+        break;
+      }
+    }
+
+    return at.empty() ? -1 : at.back();
+  }
+} // namespace
+
+int EditorFeatures::indent_for_new_line(
+    const std::string &path, const std::string &line, int caret_col, int tab_size)
+{
+  const int indent = get_indent_level(line);
+  const int step = std::max(1, tab_size);
+  const std::string code = code_only(line);
+  const int col = std::clamp(caret_col, 0, (int)code.size());
+
+  const int open = innermost_open_bracket(code, col);
+  if (open >= 0)
+  {
+    // A bracket the line carries an argument after is an argument list, and the
+    // next line belongs under that argument (clang-format's AlignAfterOpenBracket).
+    // One the line ends on opens a body instead, which steps in a level.
+    const size_t first = code.find_first_not_of(" \t", open + 1);
+    if (code[open] != '{' && first != std::string::npos && (int)first < col)
+      return compute_visual_column(line, (int)first, tab_size);
+    return indent + step;
+  }
+
+  if (Language::is_c_family_file(path))
+  {
+    const std::string trimmed = trim_right_ws(trim_left(code));
+    // A label (`case 1:`, `public:`) introduces an indented body; a statement
+    // does not, its brace standing on the next line at its own indent instead.
+    return !trimmed.empty() && trimmed.back() == ':' ? indent + step : indent;
+  }
+
+  if (Language::is_python_file(path))
+    return indent + (should_python_auto_indent(line) ? step : 0);
+  if (Language::is_lua_file(path))
+    return indent + (should_lua_auto_indent(line) ? step : 0);
+  return indent + (should_auto_indent(line) ? step : 0);
+}
+
+bool EditorFeatures::should_cpp_dedent(const std::string &line)
+{
+  std::string trimmed = trim_right_ws(trim_left(line));
+  // A one-line body leaves the label at the outer level all the same.
+  if (!trimmed.empty() && trimmed.back() == '{')
+    trimmed = trim_right_ws(trimmed.substr(0, trimmed.size() - 1));
+  if (trimmed.empty() || trimmed.back() != ':')
+    return false;
+
+  if (trimmed == "public:" || trimmed == "private:" || trimmed == "protected:")
+    return true;
+  if (trimmed == "default:")
+    return true;
+  return starts_with_keyword(trimmed, "case");
+}
+
+bool EditorFeatures::is_preprocessor_directive_start(const std::string &line)
+{
+  return trim_left(line) == "#";
 }
 
 int EditorFeatures::find_matching_bracket(

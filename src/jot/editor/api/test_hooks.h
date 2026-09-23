@@ -42,6 +42,12 @@ public:
   void delete_selection_for_test();
   void delete_char_for_test(bool forward);
   void insert_string_for_test(const std::string &str);
+  // Enter, as the keymaps spell it (see Editor::new_line), so a case can pin
+  // the line it creates and where the caret lands.
+  void new_line_for_test()
+  {
+    new_line();
+  }
   // Seeds the per-file inlay-hint cache directly (sorted on ingest like a
   // real server answer), so coordinate helpers can be unit-tested headless.
   void set_inlay_hints_for_test(const std::string &filepath, std::vector<LSPInlayHint> hints);

@@ -29,6 +29,26 @@ namespace Language
     return lower_extension(path) == ".lua";
   }
 
+  bool is_c_family_file(const std::string &path)
+  {
+    static const char *const kExtensions[] = {".c",   ".h",   ".cc",  ".hh",  ".cxx", ".hxx",
+                                              ".cpp", ".hpp", ".c++", ".h++", ".ipp", ".tpp",
+                                              ".tcc", ".inl", ".cu",  ".cuh", ".m",   ".mm"};
+    const std::string ext = lower_extension(path);
+    if (ext.empty())
+    {
+      return false;
+    }
+    for (const char *candidate : kExtensions)
+    {
+      if (ext == candidate)
+      {
+        return true;
+      }
+    }
+    return false;
+  }
+
   bool is_code_extension(const std::string &extension)
   {
     std::string ext = extension;
