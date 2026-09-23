@@ -56,6 +56,11 @@ def main() -> int:
         ("quote before a word", b'"int', '"int', '""int'),
         ("bracket pair", b"(", "()int", None),
         ("bracket pair then its closer", b"()", "()int", "())int"),
+        # Typing the opener again while the caret sits inside the pair it just
+        # opened: the closer under the caret is that pair's, so the second one
+        # nests rather than swallowing it.
+        ("opener nested in a pair", b"((", "(())int", "(()int"),
+        ("text inside a nested pair", b"((x", "((x))int", "((x)int"),
         ("quote pair inside a bracket", b'("', '("")', '("""'),
         # A closer whose neighbour is a bracket, not a word: it must not drag a
         # partner in. `{` opens its own pair, `}` steps over it, then the quote

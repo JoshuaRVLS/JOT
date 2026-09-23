@@ -28,10 +28,11 @@ public:
   // so the apostrophe of `"it's"` does not open a string of its own.
   static char open_quote_at(const std::string &line, int pos);
 
-  // Whether typing `c` at `pos` should also insert its partner. Brackets always
-  // pair unless their closer is already under the caret. A quote pairs only
-  // where it is the character being written rather than the end of one already
-  // open: inside a string, or beside a word, it is text.
+  // Whether typing `c` at `pos` should also insert its partner. A bracket pairs
+  // unless the matching closer is already under the caret and nothing to its
+  // left is waiting on it, in which case the closer is adopted instead. A quote
+  // pairs only where it is the character being written rather than the end of
+  // one already open: inside a string, or beside a word, it is text.
   static bool should_insert_pair(char c, const std::string &line, int pos);
 
   // Whether typing `c` at `pos` should step over the closer already there.

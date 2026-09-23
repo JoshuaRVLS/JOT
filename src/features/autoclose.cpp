@@ -15,6 +15,22 @@ bool is_quote(char c)
 {
   return c == '"' || c == '\'';
 }
+
+// Whether an opener of this kind is still waiting for the closer at `pos`
+// somewhere to its left on the same line. Such a closer is already spoken for,
+// so a typed opener there has to bring a partner of its own.
+bool opener_unmatched_before(const std::string &line, int pos, char opener, char closer)
+{
+  int depth = 0;
+  for (int i = 0; i < pos; i++)
+  {
+    if (line[i] == opener)
+      depth++;
+    else if (line[i] == closer && depth > 0)
+      depth--;
+  }
+  return depth > 0;
+}
 } // namespace
 
 bool AutoClose::should_auto_close(char c)
@@ -111,9 +127,15 @@ bool AutoClose::should_insert_pair(char c, const std::string &line, int pos)
     return true;
   }
 
-  // A bracket whose own closer already sits under the caret has nothing to
-  // escape, and pairing would leave the spare closer behind.
-  return next != closing;
+  if (next != closing)
+    return true;
+
+  // The matching closer already sits under the caret. When an opener to its
+  // left is still waiting on it, that closer is already that one's partner and
+  // the typed bracket has to open a pair inside it -- `(|)` becomes `((|))`
+  // rather than swallowing the closer. With nothing waiting on it the closer is
+  // unclaimed, and taking it is what keeps the spare off the line.
+  return opener_unmatched_before(line, at, c, closing);
 }
 
 bool AutoClose::should_skip_closing(char c, const std::string &line, int pos)

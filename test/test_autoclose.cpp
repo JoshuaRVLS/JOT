@@ -67,12 +67,22 @@ static bool pairs_at(char c, const std::string &line, int pos)
   return AutoClose::should_insert_pair(c, line, pos);
 }
 
-TEST_CASE("Auto-close pairs a bracket unless its closer is already under the caret",
+TEST_CASE("Auto-close pairs a bracket unless an unclaimed closer is under the caret",
           "[jot][autoclose]")
 {
   REQUIRE(pairs_at('(', "xy", 1));
-  REQUIRE_FALSE(pairs_at('(', "a)b", 1));
   REQUIRE(pairs_at('[', "", 0));
+  // An opener to the left is still waiting on the closer at the caret, so that
+  // closer is its partner and typing another opener nests inside it.
+  REQUIRE(pairs_at('(', "()", 1));
+  REQUIRE(pairs_at('{', "{}", 1));
+  REQUIRE(pairs_at('(', "(a)", 2));
+  // Nothing is waiting on the closer at the caret, so the typed opener takes it
+  // rather than leaving a spare beside it.
+  REQUIRE_FALSE(pairs_at('(', "a)b", 1));
+  REQUIRE_FALSE(pairs_at('(', "(a))", 3));
+  // A closer of another kind is not a claim on this one.
+  REQUIRE_FALSE(pairs_at('(', "{)", 1));
 }
 
 TEST_CASE("Auto-close leaves a quote beside a word alone", "[jot][autoclose]")
@@ -150,6 +160,46 @@ TEST_CASE("Typing a bracket leaves the caret inside its pair", "[jot][autoclose]
   auto &core = probe_editor().host().core;
   REQUIRE(core.buffer_content() == "a()bc");
   REQUIRE(core.cursor() == std::make_pair(0, 2));
+}
+
+TEST_CASE("Typing an opener inside a pair nests instead of eating the closer",
+          "[jot][autoclose]")
+{
+  // The `)` under the caret is the partner of the `(` in front of it, so the
+  // typed `(` opens a pair of its own and the outer closer stays put.
+  seed("", 0, 0);
+  type_text("((");
+
+  auto &core = probe_editor().host().core;
+  REQUIRE(core.buffer_content() == "(())");
+  REQUIRE(core.cursor() == std::make_pair(0, 2));
+
+  // And the outer closer is still there to step over.
+  type_text(")");
+  REQUIRE(core.buffer_content() == "(())");
+  REQUIRE(core.cursor() == std::make_pair(0, 3));
+}
+
+TEST_CASE("An opener adopts a closer nothing is waiting on", "[jot][autoclose]")
+{
+  seed("a)b", 0, 1);
+  type_text("(");
+
+  auto &core = probe_editor().host().core;
+  REQUIRE(core.buffer_content() == "a()b");
+  REQUIRE(core.cursor() == std::make_pair(0, 2));
+}
+
+TEST_CASE("Every caret nests inside the pair it sits in", "[jot][autoclose]")
+{
+  seed("() ()", 0, 1);
+  add_caret(0, 4);
+  type_text("(");
+
+  auto &core = probe_editor().host().core;
+  REQUIRE(core.buffer_content() == "(()) (())");
+  REQUIRE(core.cursor().second == 2);
+  REQUIRE(probe_editor().buffer_for_test().extra_carets[0].end.x == 7);
 }
 
 TEST_CASE("Typing a closer steps over the one already there", "[jot][autoclose]")
