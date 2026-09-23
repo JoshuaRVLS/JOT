@@ -242,6 +242,15 @@ deliberately does not, so a preview never depends on a file you cannot see.
 
 - One language server per language per workspace root, driven natively from
   C++ (no Python glue).
+- C and C++ are handed their project's compile flags. clangd finds a
+  `compile_commands.json` beside the sources itself; jot also points it at the
+  database a configure leaves in a build directory (`build/`, `out/`, …), which
+  clangd does not look in, and, when a workspace has no database at all,
+  generates one under jot's data directory (C++20 and gnu17 per file, the
+  workspace's `src/` and `include/` on the include path). Without flags a server
+  parses with the compiler's default standard, where valid modern C++ reads as
+  syntax errors - a constrained member as a missing `;`, a concept as an unknown
+  type - and the project itself is never written to.
 - Debounced file sync, diagnostics overlay, and next/previous diagnostic
   jumps.
 - Completion with fuzzy filtering and `textEdit` support, including the

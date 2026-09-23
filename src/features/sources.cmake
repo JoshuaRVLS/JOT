@@ -14,6 +14,7 @@ set(JOT_FEATURES_SOURCES
   features/cpp_assist.cpp
   features/cpp_definitions.cpp
   features/cpp_definitions_analysis.cpp
+  features/cpp_flags.cpp
   features/folding.cpp
   features/text_features.cpp
   features/textobjects.cpp

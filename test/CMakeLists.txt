@@ -13,6 +13,7 @@ add_executable(jot_tests
   test_http_file.cpp
   test_cpp_assist.cpp
   test_cpp_definitions.cpp
+  test_cpp_flags.cpp
   test_cursor.cpp
   test_cursor_blink.cpp
   test_cursor_blink_wiring.cpp

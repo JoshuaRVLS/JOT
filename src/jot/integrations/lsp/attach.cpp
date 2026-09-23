@@ -1,6 +1,7 @@
 // Editor-side LSP attachment: resolving the server for a file, launching and
 // reusing clients, and broadcasting document lifecycle notifications.
 #include "editor.h"
+#include "features/cpp_flags.h"
 #include "jot/editor_models.h"
 #include "jot/lua/api.h"
 #include "jot/lua/lua_loader.h"
@@ -180,6 +181,20 @@ LSPClient *Editor::ensure_lsp_for_file(const std::string &filepath)
                              + std::string(parameter_hints ? "true" : "false")
                              + ",\"deducedTypes\":"
                              + std::string(type_hints ? "true" : "false") + "}";
+  }
+
+  // clangd judges a C++ file against the project's own flags, and without them
+  // it falls back to the compiler's default standard, where modern code reads
+  // as broken (a `requires` clause as a missing ';', a concept as an unknown
+  // type). The database is pointed at when clangd's own search would miss it:
+  // a `compile_commands.json` in the build directory, or none anywhere, which
+  // is what cpp_flags generates.
+  if (language == "cpp" && !command.empty())
+  {
+    for (const auto &argument : CppFlags::clangd_args_for(root, filepath))
+    {
+      command.push_back(argument);
+    }
   }
 
   LSPClient *primary =
