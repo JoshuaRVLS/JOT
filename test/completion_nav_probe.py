@@ -48,7 +48,7 @@ BOX_TOP = re.compile(r"┌─+┐")
 
 # The bundled dark theme's selection background (PmenuSel), where the selected
 # row's band is painted. Truecolour cells are stored as 1000 + rgb.
-SELECTION_BG = 1000 + 0xFF79C0
+SELECTION_BG = 1000 + 0xE58DB9
 
 
 def rows(screen):
