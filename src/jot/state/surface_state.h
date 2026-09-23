@@ -12,24 +12,17 @@
 
 // The surfaces that float over the editor: the command palette, quick pick,
 // telescope, the text prompts (save / quit / rename), which-key, the menu bar
-// and home menu, the settings menu, the tree-sitter status modal, the popup
-// surface, and the remembered visibility that tells the Lua UI kit when one
-// closed (so a handler gets its fn(nil) exactly once).
-//
-// Split out of editor_state.h (which is now the umbrella over src/jot/state/);
-// the members and their comments moved verbatim.
+// and home menu, the settings menu, the status modals, the popup surface, and
+// the remembered visibility that tells the Lua UI kit when one closed.
 struct SurfaceState
 {
   bool show_command_palette = false;
-  // Scroll anchor of the visible palette window (follow-window: the selected
-  // row stays visible, but the window only moves when selection leaves it,
-  // so mouse hover over a visible row never shifts the list under the
-  // pointer). Kept separate from the selection like quick_pick_scroll.
+  // Scroll anchor of the visible palette window: the window only moves when
+  // selection leaves it, so hover over a visible row never shifts the list.
   int command_palette_scroll = 0;
   std::string command_palette_query;
-  // Query text remembered when the palette closes with Esc; restored on the
-  // next Ctrl+P open so an abandoned search can be picked up where it left
-  // off. Cleared when the palette closes with an empty input.
+  // Query text remembered when the palette closes with Esc, restored on the
+  // next Ctrl+P open; cleared when the palette closes with an empty input.
   std::string command_palette_last_query;
   std::vector<CommandPaletteSuggestion> command_palette_results;
   int command_palette_selected = 0;
@@ -52,18 +45,14 @@ struct SurfaceState
   bool show_save_prompt = false;
   std::string save_prompt_input;
   bool show_quit_prompt = false;
-  // Interactive LSP rename: the prompt is seeded with the identifier under the
-  // cursor and commits through lsp_rename_symbol.
-  // Uninitialised, this decides whether the rename prompt renders from
-  // whatever happened to be in memory -- it showed up over a blank editor.
+  // Interactive LSP rename: seeded with the identifier under the cursor, commits
+  // through lsp_rename_symbol. The flag keeps the prompt off a blank editor.
   bool show_rename_prompt = false;
   std::string rename_prompt_input;
 
-  // Which-key style keybind helper. It appears automatically when the user
-  // presses a chord that is a prefix of longer plugin keymap sequences (e.g.
-  // "Ctrl+T" when "Ctrl+T N" / "Ctrl+T D" exist) and lists the next chord
-  // options above the status line. which_key_path holds the canonical chords
-  // pressed so far (e.g. {"Ctrl+T", "N"}) -- never empty while open.
+  // Which-key style keybind helper, opened when a chord is a prefix of longer
+  // keymaps ("Ctrl+T" when "Ctrl+T N" exists). which_key_path holds the chords
+  // pressed so far, never empty while open.
   bool show_which_key = false;
   std::vector<std::string> which_key_path;
   int which_key_selected = 0;
@@ -104,22 +93,19 @@ struct SurfaceState
   int home_menu_panel_h = 0;
   std::vector<HomeMenuEntry> home_menu_entries;
 
-  // Cell-based settings menu (:settings, Ctrl+, in GUI mode). Lists every
-  // config key (defaults + Lua-registered) with its current value, filtered
-  // by the search bar above the list. Bools toggle on Enter, ints step and
-  // edit, enums cycle and open their choices, strings edit inline.
+  // Cell-based settings menu (:settings, Ctrl+, in GUI mode): every config key
+  // with its value, filtered by the search bar. Bools toggle, ints step and
+  // edit, enums cycle, strings edit inline.
   bool show_settings_menu = false;
-  // The search bar's text, and the entries it keeps: indices into
-  // settings_entries, in the menu's own (section, then alphabetical) order.
-  // settings_selected is a position in *this* list, so navigation walks
-  // matches only.
+  // The search bar's text, and the entries it keeps (indices into
+  // settings_entries). settings_selected is a position in *this* list, so
+  // navigation walks matches only.
   std::string settings_query;
   std::vector<int> settings_filtered;
   int settings_selected = 0;
-  // The rows actually painted: the selectable list above with a section
-  // header folded in wherever the group changes. settings_scroll is a row in
-  // *this* list -- headers take up room on screen, so a window measured in
-  // entries would run off the bottom of a grouped panel.
+  // The rows actually painted: the selectable list with a section header folded
+  // in wherever the group changes. settings_scroll is a row in *this* list, since
+  // headers take up screen room.
   std::vector<SettingsRow> settings_rows;
   int settings_scroll = 0;
   int settings_panel_x = 0;
@@ -127,9 +113,8 @@ struct SurfaceState
   int settings_panel_w = 0;
   int settings_panel_h = 0;
   std::vector<SettingsEntry> settings_entries;
-  // The choices drop-down an Enum row opens on Enter: the cursor in it, the
-  // box the render pass placed (the Lua surface paints the same rect), and
-  // the window's first option once a long list is scrolled.
+  // The choices drop-down an Enum row opens on Enter: the cursor in it, the box
+  // the render pass placed, and the window's first option once it scrolls.
   bool settings_dropdown_open = false;
   int settings_dropdown_index = 0;
   int settings_dropdown_scroll = 0;

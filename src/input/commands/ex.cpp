@@ -580,7 +580,7 @@ bool Editor::execute_ex_command(const std::string &input_line)
   }
   else if (lcmd == "debugmemory")
   {
-    // :debugmemory [expr] [bytes] — a trailing integer is the read size.
+    // :debugmemory [expr] [bytes] - a trailing integer is the read size.
     std::string expr = trim_copy(arg);
     int bytes = 128;
     size_t split = expr.find_last_of(" \t");

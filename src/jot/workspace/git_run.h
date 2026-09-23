@@ -74,7 +74,7 @@ namespace jot_git
   }
 
   // Like capture_ex, but merges stderr into the output (2>&1) so callers can
-  // surface git's error message — e.g. why a commit was rejected.
+  // surface git's error message - e.g. why a commit was rejected.
   inline Captured capture_errors(const std::string &root, const std::string &args)
   {
     return detail::run_pipe("git -C " + shell_util::shell_quote(root) + " " + args, true);

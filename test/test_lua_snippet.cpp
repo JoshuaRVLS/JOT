@@ -407,8 +407,7 @@ TEST_CASE("LSP snippet completions expand through the engine", "[snippet][lua][l
   SnipState state;
   state.set_text("foo");
   state.call_void("test_lsp_install");
-  // The native path replaces [1:1, 1:4) — the "foo" the completion covers —
-  // and the engine renders the raw snippet text with real tabstops.
+  // The native path replaces [1:1, 1:4) - the "foo" the completion covers - // and the engine renders the raw snippet text with real tabstops.
   REQUIRE(state.lsp_handle("${1:int} ${2:x}", 1, 1, 1, 4));
   REQUIRE(state.text() == "int x");
   REQUIRE(state.call_bool("test_active"));

@@ -396,7 +396,7 @@ return {
     },
   },
   {
-    id = "phpantom_lsp", display = "phpantom_lsp", detail = "A lightweight PHP language server with deep type intelligence — generics, Laravel support, and PHPStan annotations. W...", manager = "github", pkg = "",
+    id = "phpantom_lsp", display = "phpantom_lsp", detail = "A lightweight PHP language server with deep type intelligence - generics, Laravel support, and PHPStan annotations. W...", manager = "github", pkg = "",
     categories = {"LSP"},
     languages = {"PHP"},
     bin = {"phpantom_lsp"},

@@ -628,7 +628,7 @@ bool Editor::execute_ex_command_tail(const std::string &lcmd,
     }
     else
     {
-      set_message("Merge failed — conflicts? (resolve, then :gitmerge --continue)");
+      set_message("Merge failed, conflicts? (resolve, then :gitmerge --continue)");
     }
     refresh_git_status(true);
     git_panel_refresh();

@@ -104,7 +104,7 @@ private:
   std::vector<std::string> gui_font_families() const;
   // The quiet surface for routine news ("Saved", "3 lines joined"): the status
   // line shows it and the transient timer clears it. A toast is opt-in per call
-  // (`toast = true`) for news that genuinely wants attention — making it the
+  // (`toast = true`) for news that genuinely wants attention - making it the
   // default put a toast over the editor for every ordinary action.
   void set_message(const std::string &msg, bool toast = false);
   void set_transient_message(const std::string &msg, int duration_ms = 5000, bool toast = false);

@@ -1,5 +1,5 @@
 // LuaAPI plugin surface: commands, keymaps, autocmds, plugin panels and
-// pickers — everything user scripts register and the editor dispatches.
+// pickers - everything user scripts register and the editor dispatches.
 #include "editor.h"
 #include "host_api.h"
 #include "jot/lua/api.h"
@@ -396,5 +396,5 @@ std::vector<std::string> LuaAPI::plugin_picker_items(const std::string &callback
 // Extended native surface (jot.config / jot.git / jot.tasks / jot.symbols /
 // jot.debugger / jot.editor / jot.theme). Every function below reads or acts
 // on live Editor state directly, so Lua plugins get first-class access to the
-// same native capabilities the UI uses — no C++ rebuild needed for features.
+// same native capabilities the UI uses - no C++ rebuild needed for features.
 

@@ -286,7 +286,7 @@ void Editor::rebuild_sidebar_tree_cache()
 
   sidebar_render_cache_.rows.reserve(file_tree.size());
   // Tree indent guides (neo-tree style): every level owns a two-cell marker
-  // column — directories show their expander chevron, files a bare "│ " bar
+  // column - directories show their expander chevron, files a bare "│ " bar
   // or "└ " foot. Deeper rows reserve the level-0 column, then one slot per
   // ancestor. The connector under an expanded folder comes from the
   // children's own markers, so it never disappears. Row widths match the old

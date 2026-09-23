@@ -177,7 +177,7 @@ void Editor::run()
   // and resetting last_grid). If it didn't change, we still need the
   // first frame to be a full redraw, which UI's full_redraw_pending flag
   // already covers (set in the constructor). Either way, we never call
-  // ui->invalidate() here unconditionally — that would emit a second
+  // ui->invalidate() here unconditionally - that would emit a second
   // ESC[2J and a second full-redraw pass on top of the resize path.
   if (!gui_mode)
   {

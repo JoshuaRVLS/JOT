@@ -4,17 +4,9 @@
 #include <cstdint>
 #include <string>
 
-// neoscroll.nvim's animation model, ported for jot's frame-driven renderer.
-//
-// Upstream schedules the k-th of `n` lines at `duration * easing(k / n)`, i.e.
-// it spreads the requested distance over the duration with the easing curve,
-// and the timer only exists because Vim offers no per-frame callback. jot does
-// have one, so the port samples the same curve every frame instead
-// (position_fraction below): identical motion profile, no timer drift.
-//
-// The pieces that are *not* about the clock -- the easing functions, the
-// duration and the way a scroll arriving mid-animation merges into the one in
-// flight -- are upstream's, spelled the same way, and tested as such.
+// neoscroll.nvim's animation model: line k of n lands at duration * easing(k /
+// n), and jot samples the same curve every frame instead of on a timer. The
+// easing functions and the mid-animation merge are upstream's, spelled alike.
 namespace SmoothScroll
 {
   // Upstream's easing functions, in its own spelling.
@@ -54,16 +46,9 @@ namespace SmoothScroll
     bool continuous = false; // a burst long enough for upstream's lag clamp
   };
 
-  // Upstream's new_scroll() in-flight branch: a scroll that arrives while
-  // another is still animating extends it rather than restarting it.
-  // `relative` is the distance the running animation has covered so far and
-  // `lines` the newly requested distance (both signed, positive downwards).
-  // Returns the updated target and mutates `in_flight` (including the sticky
-  // continuous flag) exactly like scroll:new_scroll.
-  //
-  // Upstream records the lag clamp by advancing `relative_line` instead of
-  // moving the target; the visible effect of that branch -- travel stops two
-  // notches from where the viewport is now -- is what this returns.
+  // Upstream's in-flight branch: a scroll arriving mid-animation extends the
+  // running one instead of restarting it. Both distances are signed, positive
+  // downwards, and the lag clamp shows up as travel stopping two notches out.
   int merge_target(InFlight &in_flight, int relative, int lines);
 
   // Upstream's duration for the line-scroll mappings (<C-e>/<C-y>), i.e. what

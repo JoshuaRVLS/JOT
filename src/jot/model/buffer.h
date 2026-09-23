@@ -258,7 +258,7 @@ struct FileBuffer
   // The highlight query the per-line syntax cache was computed with. The
   // deferred boot-time query compile installs a (possibly different) query
   // shortly after first paint, so the cache must re-run when this pointer
-  // changes — otherwise stale colors stick until the next cache invalidation
+  // changes - otherwise stale colors stick until the next cache invalidation
   // (edit or save).
   TSQuery *syntax_query = nullptr;
   // True while an initial whole-file parse runs on the background worker

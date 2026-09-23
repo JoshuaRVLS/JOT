@@ -231,19 +231,11 @@ static bool find_smart_token_span(const std::string &line, int x, int &start, in
   return true;
 }
 
-// The element a pointer position on a chain names.
-//
-// `counter.stored`, `p->field` and `outer::thing` are one run of characters but
-// several symbols, and clangd answers about exactly one of them per position:
-// the receiver on its own name, the member on the dot or the arrow, the
-// qualifier on a `::` colon. Asking at the raw pointer cell therefore depends on
-// the pointer landing on precisely the cell of the name the user aimed at -- one
-// cell off and the answer is the neighbour's, which is how "Ctrl+click the
-// receiver" comes back with the member. Resolve the element here instead: an
-// identifier answers for itself, `.`/`->` name the member on their right, a `::`
-// colon names the qualifier on its left (what clangd answers for the separator
-// itself). The same span drives the Ctrl+hover underline, so the affordance
-// covers the symbol the click will actually ask about.
+// The element a pointer position on a chain names: an identifier itself, a `.`
+// or `->` the member on its right, a `::` the qualifier on its left. Asking at
+// the raw pointer cell made a one-cell miss answer for the neighbour, which is
+// how Ctrl+click on a receiver came back with the member. The same span drives
+// the Ctrl+hover underline, so the affordance covers what the click asks about.
 static bool chain_element_span(const std::string &line,
                                int start,
                                int end,
@@ -588,7 +580,7 @@ void Editor::handle_mouse(void *event_ptr)
   }
 
   // Command palette / quick pick / search panel: full mouse ownership while
-  // open — hover selects rows, clicks activate, and no event falls through
+  // open - hover selects rows, clicks activate, and no event falls through
   // to the buffer underneath.
   if (show_command_palette)
   {
@@ -628,16 +620,12 @@ void Editor::handle_mouse(void *event_ptr)
     }
   }
 
-  // The completion popup is a list floating over the pane, so the pointer
-  // belongs to it while it is over its own box, the way it belongs to the
-  // palette's list: motion selects the row under the pointer (band and ghost
-  // preview follow it the way they follow Up/Down) and a press takes that row --
-  // the same single click the palette's list acts on. The press is swallowed,
-  // border and footer included, so a click aimed at a row can never move the
-  // caret instead. Without this the list could not be aimed at with the mouse at
-  // all: motion in the pane hides the completion popup and a press places the
-  // caret, so reaching for a row dismissed it. The box and the window of items
-  // painted in it are the painter's (render_lsp_completion).
+  // The completion popup owns the pointer over its own box, the way the
+  // palette's list does: motion selects the row under the pointer and a press
+  // takes it, border and footer swallowed so a click aimed at a row cannot move
+  // the caret. Without this a row could not be aimed at at all, because motion
+  // in the pane hides the popup and a press places the caret. The box and the
+  // item window are the painter's (render_lsp_completion).
   if (lsp_completion_visible && !lsp_completion_items.empty() && lsp_completion_box_w > 0
       && event->x >= lsp_completion_box_x
       && event->x < lsp_completion_box_x + lsp_completion_box_w
@@ -1077,7 +1065,7 @@ void Editor::handle_mouse(void *event_ptr)
   // During an edge-panning drag the pointer may sit outside the code area:
   // extend rel_visual_x past the viewport instead of clamping it, so the
   // selection keeps growing into the newly revealed columns. Note rel_x
-  // is signed here — the clamp below only applied to gutter clicks.
+  // is signed here - the clamp below only applied to gutter clicks.
   int rel_x = event->x - code_start_x;
   if (!(bstate == 32 && mouse_selecting && mouse_drag_started))
   {
@@ -1328,7 +1316,7 @@ void Editor::handle_mouse(void *event_ptr)
       cancel_lsp_mouse_hover();
       return;
     }
-    // NOTE: no early return here — plain motion must fall through so the
+    // NOTE: no early return here - plain motion must fall through so the
     // Ctrl+hover tracking below runs on every motion event.
   }
 
@@ -1383,7 +1371,7 @@ void Editor::handle_mouse(void *event_ptr)
 
   // Plain dwell hover (no Ctrl): arm the debounced LSP hover request for
   // the token under the cursor. maybe_fire_lsp_mouse_hover() fires it
-  // after the dwell delay. Skipped while Ctrl is held — Ctrl+motion drives
+  // after the dwell delay. Skipped while Ctrl is held - Ctrl+motion drives
   // the underline above, and arming both would fight over the popup.
   {
     int hover_token_start = -1;
@@ -1668,15 +1656,10 @@ void Editor::handle_mouse(void *event_ptr)
 
   clamp_cursor(pane.buffer_id);
   buf.preferred_x = buf.cursor.x;
-  // Reveal the caret only when the pointer actually moved it: a press/release
-  // places it, and an in-flight drag extends the selection.
-  //
-  // Plain motion must never scroll. It reaches this tail on the Ctrl+hover path
-  // (the LSP-hover early returns above are gated on !ctrl), and the reveal then
-  // scrolled the viewport back to the caret -- so scrolling away from the cursor
-  // and moving the mouse with Ctrl held "teleported" the view to the cursor on
-  // every motion cell. Ordinary motion only escaped that by accident, through
-  // those early returns.
+  // Reveal the caret only when the pointer actually moved it: a press or release
+  // places it and an in-flight drag extends the selection. Plain motion must not
+  // scroll -- Ctrl+hover reaches this tail, and the reveal used to drag the
+  // viewport back to the caret on every motion cell.
   const bool caret_moved_by_pointer =
       bstate == 1 || bstate == 2 || (bstate == 32 && mouse_selecting && mouse_drag_started);
   if (caret_moved_by_pointer)

@@ -298,7 +298,7 @@ long long LuaAPI::process_memory_bytes()
     resident = (long long)counters.WorkingSetSize;
   }
 #else
-  // Linux /proc/self/statm: "size resident shared text lib data dt" — the
+  // Linux /proc/self/statm: "size resident shared text lib data dt" - the
   // second field is the resident set in pages.
   std::ifstream statm("/proc/self/statm");
   if (statm)
@@ -314,7 +314,7 @@ long long LuaAPI::process_memory_bytes()
   }
   if (resident < 0)
   {
-    // Fallback: peak RSS (KB on Linux/macOS) — close enough when statm is
+    // Fallback: peak RSS (KB on Linux/macOS) - close enough when statm is
     // unavailable (some sandboxes hide /proc).
     struct rusage usage
     {
@@ -345,8 +345,7 @@ bool LuaAPI::load_ui_kit_runtime(lua_State *L)
 bool LuaAPI::load_markdown_runtime(lua_State *L)
 {
   // The markdown preview feature is a module tree (features/markdown/*.lua):
-  // pre-load each module into package.loaded["jot_md.*"], then run init.lua —
-  // the only file that executes, registering commands, autocmds and keymaps.
+  // pre-load each module into package.loaded["jot_md.*"], then run init.lua - // the only file that executes, registering commands, autocmds and keymaps.
   static const char *kModules[] = {
       "features/markdown/config.lua",
       "features/markdown/inline.lua",
@@ -393,7 +392,7 @@ bool LuaAPI::load_snippet_runtime(lua_State *L)
 {
   // The snippet engine is a module tree (features/snippet/*.lua): pre-load each
   // module into package.loaded["jot_snip.*"] in dependency order, then run
-  // init.lua — the only file that executes, registering commands, keymaps and
+  // init.lua - the only file that executes, registering commands, keymaps and
   // the LSP snippet hook.
   static const char *kModules[] = {
       "features/snippet/config.lua",
@@ -420,4 +419,4 @@ bool LuaAPI::load_snippet_runtime(lua_State *L)
 }
 
 // Recursively converts one native FileNode (and its children) into a Lua
-// table — the exact tree the explorer sidebar renders.
+// table - the exact tree the explorer sidebar renders.

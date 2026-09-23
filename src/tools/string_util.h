@@ -5,7 +5,7 @@
 // whitespace trimming (trim_copy / ltrim_copy), and first-line extraction
 // (first_line_copy). Trimming is based on std::isspace so trailing \r from
 // CRLF files and \n from line-oriented parsing are handled uniformly. This
-// is the single source of truth — workspace code, tools, input commands,
+// is the single source of truth - workspace code, tools, input commands,
 // and the Lua bridge all include it instead of keeping private copies.
 
 #ifndef STRING_UTIL_H

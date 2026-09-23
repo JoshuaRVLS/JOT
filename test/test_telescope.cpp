@@ -114,7 +114,7 @@ TEST_CASE("Telescope Caches Entries And Refilters Queries Instantly", "[jot]")
   telescope.apply_results(entries);
 
   // Once the candidate list is cached (apply_results / a finished scan), a
-  // set_query filters purely in memory — it must never touch the filesystem
+  // set_query filters purely in memory - it must never touch the filesystem
   // or change the candidate pool.
   telescope.set_query("tel");
   REQUIRE(telescope.get_result_count() == 1);

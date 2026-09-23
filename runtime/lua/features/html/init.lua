@@ -1,4 +1,4 @@
--- HTML preview — the file being edited opened in a browser, served from its own
+-- HTML preview - the file being edited opened in a browser, served from its own
 -- tree so its relative stylesheets, scripts and images resolve, and reloaded
 -- when the buffer changes.
 --

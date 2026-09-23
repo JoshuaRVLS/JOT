@@ -690,6 +690,36 @@ TEST_CASE("Settings header rows are not clickable", "[jot]")
   REQUIRE_FALSE(e.settings_dropdown_open_for_test());
 }
 
+TEST_CASE("The settings panel fits the screen it is on", "[jot]")
+{
+  Editor &e = probe_editor();
+  open_menu(e);
+  e.set_home_menu_visible(false);
+
+  // A 60-cell floor used to win on anything narrower than 72 columns, so the
+  // right border, the divider and every value ran off the edge of the
+  // terminal. The panel is the screen's to spend, at any size.
+  for (const auto [screen_w, screen_h] :
+       {std::pair{120, 40}, {80, 24}, {44, 14}, {30, 10}, {20, 8}})
+  {
+    e.apply_resize_for_test(screen_w, screen_h);
+    e.request_redraw_for_test();
+    e.render_for_test();
+    int panel_x = 0;
+    int panel_y = 0;
+    int panel_w = 0;
+    int panel_h = 0;
+    e.settings_panel_rect_for_test(panel_x, panel_y, panel_w, panel_h);
+    INFO("screen " << screen_w << "x" << screen_h << ", panel " << panel_w << "x" << panel_h);
+    REQUIRE(panel_x >= 0);
+    REQUIRE(panel_y >= 0);
+    REQUIRE(panel_w >= 8);
+    REQUIRE(panel_h >= 3);
+    REQUIRE(panel_x + panel_w <= screen_w);
+    REQUIRE(panel_y + panel_h <= screen_h);
+  }
+}
+
 TEST_CASE("The settings wheel stays inside the matches the search bar kept", "[jot]")
 {
   Editor &e = probe_editor();

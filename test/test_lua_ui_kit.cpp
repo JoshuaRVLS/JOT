@@ -1507,7 +1507,7 @@ TEST_CASE("Status line renders the process memory segment")
 // Completion rows: the label is split into name / arguments / type / extra info
 // and the type is right-aligned into a column measured across the visible rows
 // (a port of colorful-menu.nvim's presentation). These assert the rendered rows
-// themselves — the alignment and the per-part colours are the whole point — and
+// themselves - the alignment and the per-part colours are the whole point - and
 // they go through the real handler rather than the builder, so a row that is
 // assembled wrong is still caught.
 TEST_CASE("Completion rows split the label and right-align the type")
@@ -1609,7 +1609,7 @@ TEST_CASE("Completion rows split the label and right-align the type")
   REQUIRE(cell_at(rows[1], "Config") - cell_at(rows[0], "int  X <stdio.h>") == 10);
 
   // Name in the row colour, parameter list dimmed, type and extra info in their
-  // own colours — and the spans must not overlap (the float painter never
+  // own colours - and the spans must not overlap (the float painter never
   // rewinds, so an overlap would double-draw).
   const auto &row0 = g.spans_by_line[1];
   bool saw_name = false, saw_args = false, saw_type = false, saw_extra = false;

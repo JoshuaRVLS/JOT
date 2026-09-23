@@ -35,7 +35,7 @@ local function normalize(snippet)
   return snippet
 end
 
--- add_snippets(ft, snippets[, opts]) — `ft` is a filetype or a list of them.
+-- add_snippets(ft, snippets[, opts]) - `ft` is a filetype or a list of them.
 -- `snippets` is either a list or a `{ [key] = snippet }` map (the keyed form
 -- LuaSnip 2.x uses for `snip_env` collections).
 function M.add_snippets(ft, snippets, opts)
@@ -76,7 +76,7 @@ function M.add_snippets(ft, snippets, opts)
   end
 end
 
--- filetype_extend(ft, parents) — snippets for `ft` also include the parents'.
+-- filetype_extend(ft, parents) - snippets for `ft` also include the parents'.
 function M.filetype_extend(ft, parents)
   local list = extends[ft]
   if not list then

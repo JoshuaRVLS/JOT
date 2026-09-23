@@ -117,7 +117,7 @@ jot.keymap.set("Alt+E", function() jot.emmet.expand() end, "Emmet: expand", "edi
 
 ## Native State And Actions
 
-The following functions are real native bridges — they read or act on live
+The following functions are real native bridges - they read or act on live
 editor state rather than routing through the command registry, so data-heavy
 features (status lines, git panels, custom task runners, symbol pickers) can
 be written entirely in Lua.
@@ -177,12 +177,12 @@ so it is the source of truth for the keys it sets.
 
 #### `:reload` / `:reloadconfig`
 
-- `:reload` — re-reads `settings.conf`, re-runs `config.lua`, live-applies
+- `:reload` - re-reads `settings.conf`, re-runs `config.lua`, live-applies
   everything, then reloads Lua plugins (`init.lua` + `plugins/`) and
   tree-sitter policy. One command to pick up any config/plugin change.
-- `:reloadconfig` — config only: `settings.conf` + `config.lua` + live
+- `:reloadconfig` - config only: `settings.conf` + `config.lua` + live
   apply, without touching plugins.
-- `:reloadplugins` — existing: plugins only.
+- `:reloadplugins` - existing: plugins only.
 
 Both reload commands are also reachable from the command palette, and
 `jot.editor.execute(":reload")` works from Lua.
@@ -225,7 +225,7 @@ native task popup.
 
 `jot.symbols.list([buffer])` runs the native symbol extractor over the given
 buffer (1-based index or path; defaults to the current buffer) and returns
-`{name, kind, detail, line, column}` rows — the same data the Outline panel
+`{name, kind, detail, line, column}` rows - the same data the Outline panel
 and symbol picker use. Build a picker or outline entirely in Lua with it:
 
 ```lua
@@ -252,7 +252,7 @@ end)
 
 `jot.editor.info()` returns `theme`, `path`, `buffer` (1-based index),
 `buffers` (count), `line`, `column`, `line_count`, `word` (identifier under
-the cursor), and `modified` for the current file — one call for status-line
+the cursor), and `modified` for the current file - one call for status-line
 and context-aware plugins. `jot.theme.current()` returns the active scheme
 name.
 
@@ -261,16 +261,16 @@ name.
 Every accessor below takes an optional buffer argument (1-based index or
 filepath; defaults to the current buffer):
 
-- `jot.buffer.current()` / `jot.buffer.count()` — active buffer index and total
-- `jot.buffer.text([buffer])` — full content as one string (`nil` for lazy
+- `jot.buffer.current()` / `jot.buffer.count()` - active buffer index and total
+- `jot.buffer.text([buffer])` - full content as one string (`nil` for lazy
   large files)
-- `jot.buffer.lines([buffer])` — the content as an array of line strings
+- `jot.buffer.lines([buffer])` - the content as an array of line strings
   (`nil` for lazy large files)
-- `jot.buffer.meta([buffer])` — `path`, `name`, `modified`, `line_count`
-- `jot.buffer.selection([buffer])` — `active` plus 1-based `start_line`/
+- `jot.buffer.meta([buffer])` - `path`, `name`, `modified`, `line_count`
+- `jot.buffer.selection([buffer])` - `active` plus 1-based `start_line`/
   `start_col`/`end_line`/`end_col` anchors
-- `jot.buffer.bookmarks([buffer])` — 1-based bookmark line numbers
-- `jot.buffer.folds([buffer])` — `{start, end, collapsed}` rows (1-based)
+- `jot.buffer.bookmarks([buffer])` - 1-based bookmark line numbers
+- `jot.buffer.folds([buffer])` - `{start, end, collapsed}` rows (1-based)
 
 ```lua
 local m = jot.buffer.meta()
@@ -342,7 +342,7 @@ end)
 
 `jot.lsp.diagnostics()` lists the last diagnostics each server published,
 keyed by server: `{language, root, files: [{path, diagnostics: [{line,
-column, end_line, end_col, message, severity, severity_name}]}]}` — useful
+column, end_line, end_col, message, severity, severity_name}]}]}` - useful
 when multiple servers report on the same file and you need attribution.
 `jot.lsp.results()` returns each server's last delivered answers
 (`hover`, `definitions`, `symbols`) as a polling-friendly snapshot.
@@ -358,19 +358,19 @@ Subscriptions are dropped on `:reloadplugins`.
 
 Currently emitted native events:
 
-- `lsp.hover` — `{contents, path, line, column}` (every hover answer)
-- `lsp.definition` — `{path, line, column, locations: [...]}`
-- `lsp.symbols` — `{path, symbols: [...]}`
-- `lsp.completion` — `{path, anchor_line, anchor_col, items: [...]}`
-- `git.refreshed` — the full repo snapshot (`root`, `branch`, all counts)
-- `diagnostics.changed` — `{path, count, items: [...]}` per publish round
-- `buffer.open` / `buffer.save` / `buffer.close` — `{path}`
-- `theme.switched` — `{name}`
-- `debugger.state_changed` — `{sessions: [{name, adapter, running, stopped,
+- `lsp.hover` - `{contents, path, line, column}` (every hover answer)
+- `lsp.definition` - `{path, line, column, locations: [...]}`
+- `lsp.symbols` - `{path, symbols: [...]}`
+- `lsp.completion` - `{path, anchor_line, anchor_col, items: [...]}`
+- `git.refreshed` - the full repo snapshot (`root`, `branch`, all counts)
+- `diagnostics.changed` - `{path, count, items: [...]}` per publish round
+- `buffer.open` / `buffer.save` / `buffer.close` - `{path}`
+- `theme.switched` - `{name}`
+- `debugger.state_changed` - `{sessions: [{name, adapter, running, stopped,
   active_thread_id, active_frame_id}]}`, emitted (deduped) whenever any
   debugger session's observable state changes
-- `config.changed` — `{key, value}` on every `jot.config.set`, or
-  `{key, removed=true}` on `unset` — live config reactions without polling
+- `config.changed` - `{key, value}` on every `jot.config.set`, or
+  `{key, removed=true}` on `unset` - live config reactions without polling
 
 ```lua
 local id = jot.events.subscribe("git.refreshed", function(ev)
@@ -390,12 +390,12 @@ jot.events.unsubscribe("git.refreshed", id)
 `jot.viewport.info()` mirrors the focused pane and its geometry so Lua
 panels can match the editor pixel-for-pixel:
 
-- `window` — `width`, `height`, `status_height`, `tab_height`
-- `sidebar` / `minimap` / `terminal` / `right_panel` — `visible` plus
+- `window` - `width`, `height`, `status_height`, `tab_height`
+- `sidebar` / `minimap` / `terminal` / `right_panel` - `visible` plus
   `width`/`height` where applicable; `right_panel.width` is the rendered
   (screen-clamped) width, not the configured one
-- `pane` — `x`, `y`, `width`, `height`, `buffer` (1-based), `active`
-- `buffer` — `line_count`, `first_line`/`last_line` (visible range),
+- `pane` - `x`, `y`, `width`, `height`, `buffer` (1-based), `active`
+- `buffer` - `line_count`, `first_line`/`last_line` (visible range),
   `visible_lines`, `cursor_line`, `cursor_col`, `scroll_x`
 
 `jot.viewport.line_at(y)` maps an absolute screen row back to the 1-based
@@ -405,7 +405,7 @@ inside the text area).
 Control mirrors scroll state: `scroll_top(line)` sets the first visible
 line (clamped to the buffer), `scroll_lines(delta)` scrolls by rows,
 `scroll_col(col)` sets the horizontal scroll, and `reveal()` scrolls the
-cursor into view — all operate on the focused pane's buffer.
+cursor into view - all operate on the focused pane's buffer.
 
 Selection on real buffers: `jot.buffer.select(start_line, start_col,
 end_line, end_col[, buffer])` creates a visual selection (clamped to the
@@ -443,7 +443,7 @@ end)
 
 ### Debugger live state
 
-`jot.debugger.state()` returns the live session list — one entry per
+`jot.debugger.state()` returns the live session list - one entry per
 started session with `name`, `adapter`, `program`, `running`, `stopped`,
 `active_thread_id`, `active_frame_id`, `output` (rolled log), `last_error`,
 plus `threads` (`{id, name, frames: [{id, name, path, line, column}]}`,
@@ -474,15 +474,14 @@ you need a *fresh* answer, use the one-shot request sinks. Each registers a
 callback, issues the same native DAP request the editor uses, and delivers
 the fresh result on the main thread when the adapter answers:
 
-- `jot.debugger.request_stack(cb[, session])` — `{session, thread_id,
+- `jot.debugger.request_stack(cb[, session])` - `{session, thread_id,
   frames: [{id, name, path, line, column}]}` (1-based). While a sink waits,
-  the native file-jump/cursor-move/scopes chain yields for that one response
-  — peek the stack without moving the editor.
-- `jot.debugger.request_variables(cb[, session])` — `{session, frame_id,
+  the native file-jump/cursor-move/scopes chain yields for that one response - peek the stack without moving the editor.
+- `jot.debugger.request_variables(cb[, session])` - `{session, frame_id,
   variables: [{name, value, type, variables_reference}]}`. Drives the full
   scopes → variables chain (asking the adapter for the first expandable
   scope's contents) and delivers the leaf values.
-- `jot.debugger.request_threads(cb[, session])` — `{session, threads:
+- `jot.debugger.request_threads(cb[, session])` - `{session, threads:
   [{id, name}]}`.
 
 The optional `session` is a 1-based session index (default: the current
@@ -505,7 +504,7 @@ end)
 
 ### Theme palette
 
-`jot.theme.palette()` returns the current theme's full slot table — every
+`jot.theme.palette()` returns the current theme's full slot table - every
 syntax and UI slot as `{fg, bg}` (e.g. `default`, `keyword`, `function`,
 `status`, `sidebar`, `tab_active`, `git_added`, …) plus the
 `syntax_*_explicit` booleans. Slots without a background color omit `bg`.
@@ -522,7 +521,7 @@ jot.status.register("accent", { side = "right", priority = 10, fg = accent,
 ### Cursor motions
 
 `jot.motion.*` runs the same native movement primitives the editor's own
-keys use — ideal for Lua macros and custom keymaps: `word_next()`,
+keys use - ideal for Lua macros and custom keymaps: `word_next()`,
 `word_prev()`, `line_start()` (smart start, like Home), `line_end()`,
 `file_start()`, `file_end()`, `matching_bracket()` (jump to the paired
 bracket), and `select_function()` (select the enclosing function body).
@@ -552,11 +551,11 @@ flow (returning success), and `restart_all()` restarts every live client.
 
 ### Buffer extras
 
-- `jot.buffer.filetype([buffer])` — the extension string driving syntax
+- `jot.buffer.filetype([buffer])` - the extension string driving syntax
   highlighting (e.g. `".cpp"`); combine with
   `jot.treesitter.language_for_extension` for the language name.
-- `jot.buffer.get_line(line[, buffer])` — one 1-based line as a string
-  (`nil` when out of range) — lighter than `lines()` for per-line reads.
+- `jot.buffer.get_line(line[, buffer])` - one 1-based line as a string
+  (`nil` when out of range) - lighter than `lines()` for per-line reads.
 
 ### Git diff panel
 
@@ -567,7 +566,7 @@ file (the same one `:gitdiff` opens) and returns whether it opened.
 
 `jot.filetree.root()` returns the workspace root. `jot.filetree.tree()`
 returns the exact tree the explorer sidebar renders (`{name, path, is_dir,
-expanded, depth, children: [...]}` per node, nested) — same native data, no
+expanded, depth, children: [...]}` per node, nested) - same native data, no
 disk re-walk. `jot.filetree.children(path)` returns the direct children of
 one node.
 
@@ -612,7 +611,7 @@ current completion state: `visible`, `path`, `prefix`, `anchor_line`,
 `case_sensitive`, `whole_word`, `regex`, `replace`, `replace_text`, `scoped`,
 `result_count`, and `result_index` (1-based position of the active match).
 `jot.search.matches()` returns every current match as
-`{line, column, len}` (1-based) — enough to build custom match lists, mini-maps,
+`{line, column, len}` (1-based) - enough to build custom match lists, mini-maps,
 and go-to-next/previous helpers without touching the native panel:
 
 ```lua
@@ -631,7 +630,7 @@ is open, `jot.picker.active()` tells you so; `jot.picker.info()` returns
 `title`, `query`, `selected`, `visible`, `total`; `jot.picker.items()` lists
 the currently shown `{label, detail, preview, filepath, line, column,
 severity}` rows. `accept()` runs the selected item and `close()` dismisses
-the picker — useful for custom keymaps over native pickers.
+the picker - useful for custom keymaps over native pickers.
 
 ### Syntax tokens
 
@@ -663,7 +662,7 @@ end)
 ```
 
 `jot.ui.command_palette([query])` opens the command palette (no-op when it
-is already open), optionally pre-filling the query — the same entry point as
+is already open), optionally pre-filling the query - the same entry point as
 `Ctrl+P`, so a Lua keymap can hand off to command completion. The palette is
 a centered floating panel with a result counter, highlighted input row,
 accent-bar selection, and an empty state; `Tab` completes, `Esc` closes, and
@@ -678,9 +677,8 @@ result counter, divider under the input, accent-bar selection, and matched
 query text highlighted inside labels (`PageUp`/`PageDown`/`Home`/`End` page
 and jump the selection).
 
-All floating modals — the command palette, quick picks, the tree-sitter
-status modal, popups, the LSP manager, and the save / rename / quit prompts —
-use one design language driven by theme slots: the editor behind the dialog is
+All floating modals - the command palette, quick picks, the tree-sitter
+status modal, popups, the LSP manager, and the save / rename / quit prompts - use one design language driven by theme slots: the editor behind the dialog is
 dimmed, and the panel surface, border, and title row all come from the theme's
 `bg_panel_border` slot, so switching colorschemes restyles every dialog at
 once. A prompt is one of these: `quit_prompt` gets the rect and the colors and
@@ -855,30 +853,30 @@ an SSE broadcast), and `jot.md` is the bundled Lua feature that renders the
 document and drives the session. The transport never parses markdown and the
 feature never touches a socket, so either half can be replaced. The same
 transport serves the HTML preview (`jot.html_preview`), which uses its file-root
-mode instead of a stored page — see below.
+mode instead of a stored page - see below.
 
 ### `jot.preview` (native)
 
-- `jot.preview.start{ host = "127.0.0.1", port = 0, file_root = nil }` — binds
+- `jot.preview.start{ host = "127.0.0.1", port = 0, file_root = nil }` - binds
   the server (`0` picks a free port). Returns `true, port` or `nil, error`.
   `file_root` is a directory, not a page: it switches the server into *serving a
   tree*, described under [HTML preview](#html-preview).
-- `jot.preview.stop()` — unbinds the server and closes every client.
-- `jot.preview.status()` — `{ running = bool, port = int, clients = int }`.
-- `jot.preview.set_page(html)` / `jot.preview.page()` — the full page served at
+- `jot.preview.stop()` - unbinds the server and closes every client.
+- `jot.preview.status()` - `{ running = bool, port = int, clients = int }`.
+- `jot.preview.set_page(html)` / `jot.preview.page()` - the full page served at
   `GET /`; the page shell is replaced as a whole.
-- `jot.preview.set_content(body)` — the rendered document body kept for the
+- `jot.preview.set_content(body)` - the rendered document body kept for the
   initial `GET /` response (the SSE `content` event carries it to live clients).
-- `jot.preview.set_document(rel_path, text)` — with a file root, the text to
+- `jot.preview.set_document(rel_path, text)` - with a file root, the text to
   serve *in place of the file on disk* at that relative path, which is how a
   buffer's unsaved changes reach the browser. `("", "")` clears it. Only the
   edited document is overridden; every other path still comes from disk.
-- `jot.preview.notify(event, data)` — broadcast an SSE event to every open
+- `jot.preview.notify(event, data)` - broadcast an SSE event to every open
   client (the feature uses `content` and `title`).
-- `jot.preview.sync(line)` — broadcast `event: sync` with a 1-based line, used
+- `jot.preview.sync(line)` - broadcast `event: sync` with a 1-based line, used
   to tell the page to scroll (data is sent raw, so several `data:` lines form a
   multi-line payload).
-- `jot.preview.take_scroll()` — consumes and returns the last line the page
+- `jot.preview.take_scroll()` - consumes and returns the last line the page
   asked the editor to scroll to (1-based), or `nil`.
 
 The server also serves `GET /image?path=...` for local images referenced by the
@@ -886,7 +884,7 @@ document.
 
 With a file root set, every `GET /<path>` is a file under that root (a request
 that tries to climb out of it is refused), and a response whose content type is
-HTML has a live-reload client appended before its `</body>` — an `EventSource`
+HTML has a live-reload client appended before its `</body>` - an `EventSource`
 on `/events` that calls `location.reload()` when the editor sends
 `jot.preview.notify("reload", ...)`.
 
@@ -900,16 +898,16 @@ end
 
 ### `jot.md` (bundled feature)
 
-- `jot.md.setup(opts)` — applies options; scalars go into the `markdown_preview_*`
+- `jot.md.setup(opts)` - applies options; scalars go into the `markdown_preview_*`
   config keys, `options = { mermaid = true, ... }` into the
   `markdown_preview_option_*` switches, and `preprocessor = function(text, path)`
   stays on the module. Edits apply live.
 - `jot.md.start([opts])`, `jot.md.stop()`, `jot.md.toggle()`, `jot.md.refresh([force])`
-- `jot.md.is_running()`, `jot.md.url()`, `jot.md.state()` — `{ running, port, url, path }`
-- `jot.md.render(text, { path, name })` — pure renderer returning
+- `jot.md.is_running()`, `jot.md.url()`, `jot.md.state()` - `{ running, port, url, path }`
+- `jot.md.render(text, { path, name })` - pure renderer returning
   `{ html, body, toc, title, options }` without touching the transport; handy
   for tests and for embedding a preview elsewhere.
-- `jot.md.config` — the option module (`get`, `option`, `setup`, `is_markdown_path`).
+- `jot.md.config` - the option module (`get`, `option`, `setup`, `is_markdown_path`).
 
 ```lua
 jot.md.setup({
@@ -927,18 +925,17 @@ jot.md.setup({
 `jot.html_preview` is the bundled feature that opens the current HTML file in a
 browser and reloads it as you edit. It shares the transport and the browser
 launcher with the markdown preview; what is its own is the decision of *what the
-server is pointed at*. A page is a tree — its `<link>`, `<script>` and `<img>`
-references are relative paths — so the session roots the server at the workspace
+server is pointed at*. A page is a tree - its `<link>`, `<script>` and `<img>`
+references are relative paths - so the session roots the server at the workspace
 (or the file's own directory) and sends the browser to the file's path inside
 it, rather than rendering one page the server holds.
 
-- `jot.html_preview.setup(opts)` — applies options into the `html_preview_*`
+- `jot.html_preview.setup(opts)` - applies options into the `html_preview_*`
   config keys (`auto_start`, `auto_close`, `refresh_interval`, `port`, `host`,
   `root`, `browser`, `open_browser`, `echo_preview_url`, `html_ext`).
-- `jot.html_preview.start([opts])`, `stop()`, `toggle()`, `refresh([force])`
-  — `refresh` pushes the buffer's text again and reloads the page.
-- `jot.html_preview.is_running()`, `url()`, `state()` — `{ running, port, url, path }`.
-- `jot.html_preview.config` — the option module (`get`, `setup`, `is_html_path`).
+- `jot.html_preview.start([opts])`, `stop()`, `toggle()`, `refresh([force])` - `refresh` pushes the buffer's text again and reloads the page.
+- `jot.html_preview.is_running()`, `url()`, `state()` - `{ running, port, url, path }`.
+- `jot.html_preview.config` - the option module (`get`, `setup`, `is_html_path`).
 - `jot.html_preview` also exposes the pure URL helpers (`relative_to`,
   `url_path`, `dirname`, `encode_path`), which is where a wrong URL would come
   from.
@@ -989,17 +986,17 @@ jot.snip.add_snippets("lua", {
 
 ### Registry
 
-- `jot.snip.add_snippets(ft, snippets[, opts])` — `ft` may be a filetype or a
+- `jot.snip.add_snippets(ft, snippets[, opts])` - `ft` may be a filetype or a
   list; `snippets` a list or a keyed map. `snippets` may also be a snippet
   definition table (`{ trig, nodes, snippetType, priority, condition, ... }`).
-- `jot.snip.filetype_extend(ft, parents)` — include another filetype's snippets.
+- `jot.snip.filetype_extend(ft, parents)` - include another filetype's snippets.
 - `jot.snip.get_snippets(ft[, include_auto])`, `jot.snip.get_autosnippets(ft)`
 - `jot.snip.cleanup(ft)`, `jot.snip.refresh_notify(ft)`, `jot.snip.invalidate_snippets()`
-- `jot.snip.reload()` — re-read every snippet pack.
+- `jot.snip.reload()` - re-read every snippet pack.
 
 ### Expansion and navigation
 
-- `jot.snip.expand([opts])` — expand the trigger before the caret. Passing
+- `jot.snip.expand([opts])` - expand the trigger before the caret. Passing
   `{ snippet = <def> }` expands that snippet regardless of the trigger.
 - `jot.snip.expand_or_jump()`, `jot.snip.expandable()`, `jot.snip.expand_auto()`
 - `jot.snip.jump(dir[, absolute])`, `jot.snip.jumpable(dir)`,
@@ -1019,10 +1016,10 @@ jot.snip.add_snippets("lua", {
 - `jot.snip.loaders.from_lua(root)`, `from_vscode(root)`, `from_snipmate(root)`,
   `load_all()`, `reload()`
 - `jot.snip.setup({ enabled = true, auto_expand = false, keymaps = {...},
-  snip_env = {...}, paths = "..." })` — scalars write the `snippet_*` config
+  snip_env = {...}, paths = "..." })` - scalars write the `snippet_*` config
   keys, the rest stay on the module.
 - `jot.snip.install_keymaps()` / `jot.snip.uninstall_keymaps()`
-- `jot.snip.lsp` — the LSP snippet-completion bridge; `jot.lsp.register_snippet_handler(fn)`
+- `jot.snip.lsp` - the LSP snippet-completion bridge; `jot.lsp.register_snippet_handler(fn)`
   (see below) hands `fn` the snippet text of an LSP completion item.
 
 ### `jot.lsp.register_snippet_handler`

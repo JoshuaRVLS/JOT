@@ -241,7 +241,7 @@ void Editor::handle_command_palette(int ch, bool is_ctrl, bool is_shift, bool is
     }
   }
   // Plain (or Shift-uppercased) printable: insert into the query. Modified
-  // printables never reach this branch — a lone Esc that the terminal merged
+  // printables never reach this branch - a lone Esc that the terminal merged
   // with the next keystroke arrives as Alt+<char>, and Ctrl+<char> has no
   // meaning in the palette.
   else if (ch >= 32 && ch < 127 && !is_alt && !is_ctrl)
@@ -255,7 +255,7 @@ void Editor::handle_command_palette(int ch, bool is_ctrl, bool is_shift, bool is
   {
     // Alt+<char> is either a real Alt chord (nothing in the palette uses it)
     // or a lone Esc that arrived merged with the next keystroke. Both mean
-    // "cancel", so dismiss just like Esc — typing a letter right after Esc
+    // "cancel", so dismiss just like Esc - typing a letter right after Esc
     // closes the palette instead of inserting that letter.
     close_palette();
   }

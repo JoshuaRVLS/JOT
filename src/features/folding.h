@@ -8,21 +8,10 @@
 
 namespace Folding
 {
-  // A prepared view over one fold-range vector.
-  //
-  // Every visibility question -- is this line hidden, is it a folded header,
-  // how many lines does that header hide, which buffer line sits on visible
-  // row N, which row does line L sit on -- depends only on the *collapsed*
-  // ranges. The free functions answer a question from scratch (a scan of the
-  // whole vector, or a freshly built index), which is fine once per event but
-  // not once per visible row: on a file with ~20k detected ranges (one per
-  // brace pair) a 34-row frame spent ~3.7ms in is_line_folded_header and
-  // ~1.4ms in is_line_hidden alone.
-  //
-  // A view indexes the collapsed ranges once and answers in O(log n) (O(1)
-  // per line for the hidden/header tests). Build one per frame per buffer and
-  // reuse it for every row; building it scans the range vector once, so a
-  // one-shot caller can still just call the free function.
+  // A prepared view over one fold-range vector. Every visibility question
+  // depends only on the *collapsed* ranges, and answering one from scratch per
+  // visible row cost ~5ms in a 34-row frame on a file with 20k ranges. Build one
+  // per frame per buffer: it indexes them once and answers in O(log n).
   class FoldView
   {
   public:
@@ -78,21 +67,10 @@ namespace Folding
     std::vector<Header> headers_;
   };
 
-  // The index prepared for a buffer's folds, built on first use and kept until
-  // the ranges change. See FoldRanges (types.h) for how a rebuild is decided.
-  //
-  // This is what everything that asks more than one fold question should use:
-  // a FoldView is immutable and answered from its own index, so handing the
-  // same one to the render pass, the cursor reveal and the mouse hit test costs
-  // a pointer, where building one per caller cost a pass over every detected
-  // range (~20k of them on a large file) per caller. FoldRanges bumps its
-  // revision on every write and the index is rebuilt when it changes; the
-  // checksum it records is what proves that never goes stale (see FoldRanges).
-  //
-  // The shared_ptr is deliberate: the index is replaced whenever the ranges
-  // change, and a caller that is mid-pass -- the frame's row loop, an event
-  // handler that toggles a fold and asks again -- must not be left holding a
-  // reference into the index that a write just retired.
+  // The index prepared for a buffer's folds, built on first use and rebuilt when
+  // the ranges change (FoldRanges' revision, checked by the checksum it records).
+  // Hand the same one to the render pass, the cursor reveal and the mouse hit
+  // test. The shared_ptr protects a mid-pass caller from a retired index.
   std::shared_ptr<const FoldView> view_of(const FoldRanges &folds);
 
   std::vector<FoldRange> detect_ranges(const std::vector<std::string> &lines,

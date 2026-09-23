@@ -241,11 +241,11 @@ TEST_CASE("jot-light is the same inks as jam and matcha on cream paper", "[jot][
   REQUIRE(jot_ui::is_exact_color(t.fg_default));
   REQUIRE(rgb_of(t.fg_default) == 0x3A2C3F);
   REQUIRE(rgb_of(t.bg_default) == 0xFFFAF4); // warm milk, not white
-  REQUIRE(rgb_of(t.fg_keyword) == 0xD92A76);
-  REQUIRE(rgb_of(t.fg_string) == 0x0E8A6F);
-  REQUIRE(rgb_of(t.fg_function_method) == 0x1B7FB5);
+  REQUIRE(rgb_of(t.fg_keyword) == 0xCA246C);
+  REQUIRE(rgb_of(t.fg_string) == 0x0D7C64);
+  REQUIRE(rgb_of(t.fg_function_method) == 0x186F9F);
   REQUIRE(rgb_of(t.fg_type) == 0x7B4BD1); // taro purple
-  REQUIRE(rgb_of(t.fg_active_border) == 0xD92A76);
+  REQUIRE(rgb_of(t.fg_active_border) == 0xCA246C);
 }
 
 TEST_CASE("flexoki carries kepano's palette, not an approximation", "[jot][theme]")
@@ -280,12 +280,14 @@ TEST_CASE("flexoki carries kepano's palette, not an approximation", "[jot][theme
     const Theme &t = e.theme_for_test();
     REQUIRE(rgb_of(t.fg_default) == 0x100F0F);  // black ink
     REQUIRE(rgb_of(t.bg_default) == 0xFFFCF0);  // paper
-    REQUIRE(rgb_of(t.fg_comment) == 0x6F6E69);  // base-600
-    REQUIRE(rgb_of(t.fg_keyword) == 0x66800B);  // green-600
-    REQUIRE(rgb_of(t.fg_string) == 0x24837B);   // cyan-600
+    // Six of kepano's steps sit under 4.5:1 on paper; the values below are his
+    // hues darkened until they clear it (audit 001, finding 3).
+    REQUIRE(rgb_of(t.fg_comment) == 0x6C6B67);  // base-600
+    REQUIRE(rgb_of(t.fg_keyword) == 0x5B720A);  // green-600
+    REQUIRE(rgb_of(t.fg_string) == 0x237F77);   // cyan-600
     REQUIRE(rgb_of(t.fg_number) == 0x5E409D);   // purple-600
-    REQUIRE(rgb_of(t.fg_function) == 0xBC5215); // orange-600
-    REQUIRE(rgb_of(t.fg_type) == 0xAD8301);     // yellow-600
+    REQUIRE(rgb_of(t.fg_function) == 0xB34E14); // orange-600
+    REQUIRE(rgb_of(t.fg_type) == 0x8A6801);     // yellow-600
     REQUIRE(rgb_of(t.bg_tab_hover) == 0xDAD8CE);
   }
 }
@@ -422,7 +424,7 @@ TEST_CASE("A file the user writes under a legacy name beats the alias", "[jot][t
   REQUIRE(e.theme_for_test().bg_default == 17);
   // The base it extends is still jot-light, so everything the user did not
   // override keeps the shipped look.
-  REQUIRE(rgb_of(e.theme_for_test().fg_keyword) == 0xD92A76);
+  REQUIRE(rgb_of(e.theme_for_test().fg_keyword) == 0xCA246C);
 
   const std::string name = mine.name();
   fs::remove(fs::path(getenv("JOT_CONFIG_HOME")) / "configs" / "colors" / (name + ".json"));

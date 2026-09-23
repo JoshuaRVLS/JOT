@@ -116,7 +116,7 @@ void LuaAPI::toast_show_from_lua(lua_State *L)
 
 void LuaAPI::toast_dismiss_from_lua(lua_State *L)
 {
-  // (id?) — dismiss a specific toast, or the newest when omitted.
+  // (id?) - dismiss a specific toast, or the newest when omitted.
   if (!call_toast_module(this, L, "dismiss", lua_gettop(L), 0))
   {
     return;

@@ -38,7 +38,7 @@ void Telescope::set_query(const std::string &q, TaskQueue *tq, std::function<voi
   invalidate_preview_cache();
 
   // Instant path: the tree was already scanned (cache valid), so typing
-  // filters purely in memory — no directory walk, no task hop. This is what
+  // filters purely in memory - no directory walk, no task hop. This is what
   // makes the picker feel like fzf on large projects.
   if (entries_valid_)
   {
@@ -87,7 +87,7 @@ void Telescope::scan_async(TaskQueue *tq, std::function<void()> on_update)
   {
     if (!active || scan_id != scan_id_.load() || generation->load() != scan_generation)
     {
-      // A newer scan is in flight — it owns scan_pending_ now.
+      // A newer scan is in flight - it owns scan_pending_ now.
       return;
     }
     // Scan landed: cache the raw listing once, then filter against the

@@ -101,7 +101,7 @@ void Editor::handle_lsp_code_action_results()
   }
   // The handler runs on every poll; only report when a request actually
   // completed (a real response with zero actions), never when nothing was
-  // pending — otherwise the message spams on every poll.
+  // pending - otherwise the message spams on every poll.
   if (!got_response)
   {
     return;

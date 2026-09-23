@@ -1,7 +1,7 @@
 // LuaAPI preview surface: the native half of the markdown preview transport.
 //
 // The Lua markdown feature (runtime/lua/features/markdown/) owns all of the
-// content policy — parsing, the page template, config, commands. This file
+// content policy - parsing, the page template, config, commands. This file
 // owns only the transport: it wraps PreviewServer (see
 // markdown/preview_server.h) and exposes it as jot.preview.*.
 #include "editor.h"

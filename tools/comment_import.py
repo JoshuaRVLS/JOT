@@ -2,8 +2,8 @@
 """Generate src/jot/integrations/comment_style_data.h.
 
 The per-extension comment style table is derived from comment.nvim's
-ft.lua (https://github.com/numtostr/comment.nvim, MIT) — the de-facto
-authoritative language -> commentstring map — combined with the language
+ft.lua (https://github.com/numtostr/comment.nvim, MIT) - the de-facto
+authoritative language -> commentstring map - combined with the language
 extensions declared in runtime/lua/treesitter/registry.lua, so every
 language jot can highlight also gets the right comment markers.
 

@@ -900,7 +900,7 @@ void UIGui::paint_float_overlays(float dt)
       fc.settled = true;
     }
     // Source of this float's pixels: the per-float capture published by
-    // render_floats (exact — later floats painted over the shared grid), or
+    // render_floats (exact - later floats painted over the shared grid), or
     // the live grid when no capture is available (terminal-style fallback).
     const bool have_cells = (int)ov.cells.size() == n
         && (n == 0 || (int)ov.cells[0].size() == ov.w);
@@ -1061,7 +1061,7 @@ void UIGui::paint_float_overlays(float dt)
 // Paints one float from its captured cells + resolved RGB (see
 // GuiFloatColors) at the layout position translated by (dx_px, dy_px). The
 // captured cells are stored at RELATIVE column index (row c holds the
-// grid's column x+c), so column c must land at pixel (x+c)*cell_w_ — the
+// grid's column x+c), so column c must land at pixel (x+c)*cell_w_ - the
 // rect's column base x*cell_w_ plus the translation. Glyphs/attrs come
 // from `cells`; colors come from `rgb` (fg/bg/underline, 9 floats per
 // cell), which paint_float_overlays eases toward the live grid's colors.

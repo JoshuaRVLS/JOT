@@ -440,8 +440,7 @@ std::string Editor::git_commit_message(const std::string &message)
     return "empty message";
   }
   // Smart commit: when the index is empty, stage everything first (tracked
-  // and untracked) so `c` in the git panel works right after editing files —
-  // the same flow as `a` (stage all) then commit. A deliberate staged
+  // and untracked) so `c` in the git panel works right after editing files - // the same flow as `a` (stage all) then commit. A deliberate staged
   // selection is committed as-is.
   jot_git::Captured cached = jot_git::capture_errors(git_root, "diff --cached --quiet");
   if (cached.ok())

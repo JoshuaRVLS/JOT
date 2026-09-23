@@ -1,21 +1,13 @@
 // Markdown preview server: a tiny HTTP/1.1 server that serves the rendered
 // markdown page to a browser, streams live updates over Server-Sent Events and
-// receives scroll positions back from the page (browser -> editor sync).
+// receives scroll positions back from the page (browser -> editor sync). It runs
+// on the editor's own libuv loop, so it adds no threads and every callback (and
+// Lua) stays on the main thread.
 //
-// It is driven by the editor's existing libuv loop (EventLoop), so it adds no
-// threads and no sockets of its own: every handle lives on the main loop and
-// every callback runs on the main thread, which is also where Lua executes.
-//
-// Routes:
-//   GET  /               the rendered page shell
-//   GET  /events         text/event-stream (live updates + scroll sync)
-//   POST /sync           body {"line":N} — the browser's top visible line
-//   GET  /sync?line=N    same, for clients that cannot POST
-//   GET  /image?path=..  a local image referenced by the document
-//   GET  /favicon.ico    204
-//
-// and, when a file root is set (set_file_root), the whole tree is served by
-// path instead -- see the file-root section below.
+// Routes: `GET /` the page shell, `GET /events` the event stream, `POST /sync`
+// and `GET /sync?line=N` the browser's top visible line, `GET /image?path=..` a
+// local image, `GET /favicon.ico` a 204. With a file root set the whole tree is
+// served by path instead.
 #ifndef JOT_MARKDOWN_PREVIEW_SERVER_H
 #define JOT_MARKDOWN_PREVIEW_SERVER_H
 
@@ -52,20 +44,10 @@ public:
   void set_content(std::string body);
   const std::string &content() const;
 
-  // ── file root ─────────────────────────────────────────────────────────────
-  //
-  // Serving a whole directory instead of one stored page. This is what an HTML
-  // preview needs and a rendered document does not: the page's own relative
-  // references -- a sibling `.css`, an `../img/logo.png`, a module import -- have
-  // to resolve against the same root they would if the file were opened
-  // directly, which is only true if the server serves the tree the file lives
-  // in.
-  //
-  // Every `GET /<path>` is then a file under that root (a request that tries to
-  // climb out of it is refused), and a response whose content type is HTML gets
-  // the live-reload client appended before its `</body>`, so the page reloads
-  // when `notify("reload", ...)` fires instead of needing the reader to hit
-  // refresh.
+  // Serving a whole directory instead of one stored page (what an HTML preview
+  // needs): the page's relative references have to resolve against the root the
+  // file lives in, so `GET /<path>` serves a file under it (a climb out is
+  // refused) and an HTML response gets the live-reload client appended.
   void set_file_root(std::string dir);
   const std::string &file_root() const;
 

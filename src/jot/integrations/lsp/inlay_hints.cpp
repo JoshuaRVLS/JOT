@@ -26,7 +26,7 @@ static constexpr int kInlayHintMarginLines = 100;
 // miss simply asks the server again when that file is viewed.
 static constexpr std::size_t kMaxInlayHintCachedFiles = 64;
 
-// Hint cells inserted before `byte_col` on `line` of `filepath` — the amount
+// Hint cells inserted before `byte_col` on `line` of `filepath` - the amount
 // the text at that position is shifted right on screen. Shared by the buffer
 // renderer's overlays, the hardware caret placement, and the mouse mapping
 // so every coordinate agrees on where hints sit.

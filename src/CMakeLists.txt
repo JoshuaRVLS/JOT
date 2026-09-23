@@ -200,7 +200,7 @@ if(JOT_TREESITTER)
     # package that install.sh may not have been allowed to install): build
     # the amalgamated runtime from source instead of giving up and falling
     # back to regex highlighting. NOTE: the top-level tree-sitter repo has
-    # no CMake project — the build lives in lib/, so add that directly.
+    # no CMake project - the build lives in lib/, so add that directly.
     include(FetchContent)
     FetchContent_Declare(tree_sitter_runtime
       GIT_REPOSITORY https://github.com/tree-sitter/tree-sitter.git

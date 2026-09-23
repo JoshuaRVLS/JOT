@@ -204,9 +204,9 @@ def main() -> int:
 
     if failures:
         for failure in failures:
-            print(f"resize probe: FAIL — {failure}", file=sys.stderr)
+            print(f"resize probe: FAIL - {failure}", file=sys.stderr)
         return 1
-    print("resize probe: PASS — the frame followed shrink, grow and a resize burst")
+    print("resize probe: PASS - the frame followed shrink, grow and a resize burst")
     return 0
 
 

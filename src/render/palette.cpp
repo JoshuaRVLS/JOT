@@ -29,7 +29,9 @@ namespace
   PaletteLayout command_palette_layout(int screen_w, int screen_h, size_t result_count)
   {
     const int max_items = std::min(8, (int)result_count);
-    const int w = std::max(40, screen_w);
+    // The list spans the screen: a floor above screen_w would paint rows past
+    // the right edge on a narrow terminal.
+    const int w = std::max(1, screen_w);
     const int h = std::clamp(max_items + 1, 2, std::max(2, screen_h - 1));
     return {0, screen_h - h, w, h};
   }

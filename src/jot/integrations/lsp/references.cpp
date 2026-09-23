@@ -142,7 +142,7 @@ void Editor::handle_lsp_references_results()
   }
   // The handler runs on every poll; only report when a request actually
   // completed (a real response with zero locations), never when nothing was
-  // pending — otherwise the message spams on every poll.
+  // pending - otherwise the message spams on every poll.
   if (!got_response)
   {
     return;

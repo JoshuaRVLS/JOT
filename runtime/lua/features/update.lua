@@ -339,7 +339,7 @@ end
 local function notify_result(level, primary, detail)
   local line = primary
   if detail and detail ~= "" then
-    line = line .. " — " .. one_line(detail)
+    line = line .. ": " .. one_line(detail)
   end
   pcall(jot.notify, line, 6000)
 end
@@ -450,7 +450,7 @@ local function check_chain(silent)
                 return
               end
               show_result("info", "Up to date",
-                          "origin/" .. branch .. " does not exist yet — push it from here")
+                          "origin/" .. branch .. " does not exist yet, push it from here")
               return
             end
             if behind > 0 then
@@ -458,7 +458,7 @@ local function check_chain(silent)
               show_result("warning",
                           behind .. " new " .. p .. " available",
                           "origin/" .. branch .. " is ahead of " .. sha
-                            .. " — run :update run to pull & rebuild")
+                            .. ", run :update run to pull & rebuild")
             elseif silent then
               quiet()
             else
@@ -577,7 +577,7 @@ local function run_update()
         local okr, started = pcall(jot.restart)
         if not okr or not started then
           show_result("error", "Auto-restart skipped",
-                      "Update applied — relaunch jot manually to load it.")
+                      "Update applied, relaunch jot manually to load it.")
         end
       end)
     elseif res.exit_code == 3 then

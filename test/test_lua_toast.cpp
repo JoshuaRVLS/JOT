@@ -425,7 +425,7 @@ TEST_CASE("Lua float rendering paints buffer lines into the editor grid")
   setenv("JOT_CACHE_HOME", cfgdir, 1);
   // A minimal Editor with a UI grid exercises the real render_floats() path:
   // the frame/border/title are painted, and the scratch-buffer lines (the
-  // toast body) must be painted inside the inset — this is the path the user
+  // toast body) must be painted inside the inset - this is the path the user
   // reported as missing (empty toast box).
   Terminal term; // inert until init(); safe to render into
   // A known 120x40 grid swapped in for the editor's own terminal-sized one:

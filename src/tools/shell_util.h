@@ -4,7 +4,7 @@
 // commands: argument quoting (shell_quote), stderr silencing
 // (null_redirect), popen/pclose wrappers (open_command_pipe /
 // close_command_pipe), and exit-status decoding (command_exit_code).
-// This is the single source of truth for these helpers — workspace code,
+// This is the single source of truth for these helpers - workspace code,
 // tools, input commands, and the Lua bridge all include it instead of
 // keeping private copies.
 

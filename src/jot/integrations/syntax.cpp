@@ -159,7 +159,7 @@ namespace
       {
         // First line starts at byte 0. (The previous loop body would have read
         // line(-1) here, shifting every line origin by +1 and making every
-        // token span end one byte early — dropping the last char of each word.)
+        // token span end one byte early - dropping the last char of each word.)
         offsets.push_back(0);
       }
       else

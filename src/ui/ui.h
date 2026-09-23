@@ -212,7 +212,7 @@ public:
   // Forget what was last written to the terminal: the next render() must
   // repaint every row from scratch instead of diffing against last_grid.
   // Used when the terminal surface may have changed without us (window
-  // refocus under a compositor, VT redraw after suspend) — the model is
+  // refocus under a compositor, VT redraw after suspend) - the model is
   // still correct, only the physical screen is stale, so unlike
   // invalidate() this emits no clear and touches no cursor state.
   void forget_last_frame();
@@ -335,7 +335,7 @@ public:
     return cursor_dirty;
   }
   // Whether the last frame left the terminal cursor hidden (palette open,
-  // popup covering the editor, etc.) — used to skip blink repaints when
+  // popup covering the editor, etc.) - used to skip blink repaints when
   // nothing visible would blink anyway.
   bool cursor_is_hidden() const
   {

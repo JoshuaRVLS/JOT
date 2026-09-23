@@ -637,7 +637,7 @@ Editor::~Editor()
 void Editor::set_message(const std::string &msg, bool toast)
 {
   // DEPRECATED: the statusline message channel is kept for compatibility but
-  // is no longer the primary surface — toasts (runtime/lua/features/ui/toast.lua)
+  // is no longer the primary surface - toasts (runtime/lua/features/ui/toast.lua)
   // are the message channel now and this function feeds them below. Once the
   // Lua UI kit owns the status line (it registers a status_line handler), stop
   // populating the statusline text so messages don't linger; the toast
@@ -664,7 +664,7 @@ void Editor::set_message(const std::string &msg, bool toast)
 
 void Editor::set_transient_message(const std::string &msg, int duration_ms, bool toast)
 {
-  // DEPRECATED: same channel as set_message — kept for compatibility, toasts
+  // DEPRECATED: same channel as set_message - kept for compatibility, toasts
   // are the message surface now.
   if (transient_message_timer != 0)
   {

@@ -1,7 +1,7 @@
 // Runtime loading of the bundled runtime files (lua/*.lua plus the
 // tree-sitter .scm queries). Resolution order is always:
 //   1. the user config dir  ($JOT_CONFIG_HOME / ~/.config/jot / %APPDATA%/jot)
-//   2. the developer source dir (JOT_LUA_SOURCE_DIR — where the repo lives)
+//   2. the developer source dir (JOT_LUA_SOURCE_DIR - where the repo lives)
 //   3. the install data dir (JOT_DEFAULT_DATA_DIR, plus a Windows fallback)
 //   4. the cache dir, auto-extracted from the binary's embedded bytes
 //      (JOT_CACHE_HOME / ~/.cache/jot / %LOCALAPPDATA%\jot\cache)
@@ -9,7 +9,7 @@
 // The config dir is user territory: jot never writes there, so any file that
 // exists is a hand-written override and is respected verbatim (a legacy
 // `.embedded` marker still marks copies jot itself materialized in the
-// pre-cache era — those are refreshed when the bundled runtime moves on).
+// pre-cache era - those are refreshed when the bundled runtime moves on).
 // The cache dir is disposable and kept in sync with the embedded bytes, so
 // a shipped binary always carries a working copy of the runtime even when
 // no lua/ directory exists on the machine.

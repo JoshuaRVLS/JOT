@@ -83,7 +83,7 @@ namespace commenting
                            bool block_boundary)
   {
     // Commenting always stamps every line of the range with its own markers
-    // (//, #, <!-- -->, ...) — the predictable behavior of vim/comment.nvim.
+    // (//, #, <!-- -->, ...) - the predictable behavior of vim/comment.nvim.
     // Unwrapping takes one of two shapes: the whole range sits in a single
     // hand-written block pair (/* ... */) whose middle lines carry no markers,
     // or every line carries its own line comment to strip.

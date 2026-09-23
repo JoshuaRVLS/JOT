@@ -6,8 +6,8 @@
 -- images by relative path, and those only resolve if the browser is talking to
 -- a server rooted at the tree the file lives in. So this serves the real tree
 -- (jot.preview.start{ file_root = ... }) and starts the browser on
--- `<root>/<relative path>` — the same URL `python -m http.server` at the project
--- root would give — with the previewed buffer's own text overriding the file on
+-- `<root>/<relative path>` - the same URL `python -m http.server` at the project
+-- root would give - with the previewed buffer's own text overriding the file on
 -- disk, so unsaved edits are what the page shows.
 --
 -- Reload is the server's job: every served HTML page carries a small EventSource

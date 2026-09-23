@@ -48,7 +48,7 @@ namespace
   // The background darkening is what actually carries the effect: SGR 2 only
   // affects the foreground on most terminals, and Windows Terminal's conpty
   // path drops the faint attribute entirely. Foreground dimming borrows the
-  // background scale — with a very dark result the renderer can skip SGR 2.
+  // background scale - with a very dark result the renderer can skip SGR 2.
   // The default background (-1) is mapped to a dark gray, not black, so the
   // theme doesn't collapse.
   constexpr int ui_dim_rgb_scale_pct = 55;

@@ -1,7 +1,7 @@
 -- Minimal JSON decoder.
 --
 -- Only what snippet packs need: VSCode `.code-snippets` / `.json` files and
--- `package.json` manifests. Kept dependency-free on purpose — there is no
+-- `package.json` manifests. Kept dependency-free on purpose - there is no
 -- JSON binding in the Lua runtime and adding one for two file formats would
 -- be the wrong trade.
 local M = {}

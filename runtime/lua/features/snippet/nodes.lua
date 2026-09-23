@@ -149,7 +149,7 @@ function M.s(c, snodes, opts)
   return node
 end
 
--- sn(context, nodes, opts) — a snippet node, only meaningful nested inside
+-- sn(context, nodes, opts) - a snippet node, only meaningful nested inside
 -- another snippet (or returned from a function/dynamic node).
 function M.sn(c, snodes, opts)
   local ctx = context(c)
@@ -166,7 +166,7 @@ function M.sn(c, snodes, opts)
   return node
 end
 
--- t(text, opts) — literal text (an opts.indent marks the text for reindenting).
+-- t(text, opts) - literal text (an opts.indent marks the text for reindenting).
 function M.t(text, opts)
   return assign_id({ type = "text", text = text, indent = opts and opts.indent })
 end
@@ -216,7 +216,7 @@ function M.d(pos, fn, opts)
   end
   local user_args = opts.user_args
   if user_args == nil and type(opts) == "table" and opts.user_args == nil then
-    -- 1.x shape: d(pos, fn, user_args) — anything that is not an option table.
+    -- 1.x shape: d(pos, fn, user_args) - anything that is not an option table.
     local looks_like_opts = false
     for _, key in ipairs({ "user_args", "docstring", "show_condition", "condition", "key" }) do
       if opts[key] ~= nil then
@@ -242,7 +242,7 @@ function M.d(pos, fn, opts)
   })
 end
 
--- c(pos, items, opts) — items are strings or node lists.
+-- c(pos, items, opts) - items are strings or node lists.
 function M.c(pos, items, opts)
   local choices = {}
   for index, item in ipairs(items or {}) do
@@ -287,7 +287,7 @@ function M.rep(a, b, c)
   })
 end
 
--- fmt(parts, opts) — "a {:>10} b" style formatting over text/node parts.
+-- fmt(parts, opts) - "a {:>10} b" style formatting over text/node parts.
 function M.fmt(parts, opts)
   return assign_id({
     type = "format",
@@ -306,7 +306,7 @@ function M.multi_snippet(delimiter, snodes, opts)
   })
 end
 
--- isn(pos, text, opts, indent) — insert node whose default is the given text
+-- isn(pos, text, opts, indent) - insert node whose default is the given text
 -- reindented relative to the snippet start.
 function M.isn(pos, text, opts, indent)
   return assign_id({

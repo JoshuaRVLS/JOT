@@ -7,30 +7,33 @@ jot ships four themes: its own pair, and a port of kepano's Flexoki.
 
 | Theme | Look |
 |---|---|
-| `jot-dark` (default) — *yoru ramune* | indigo night (`#131024`) under neon sakura-pink keywords, mint-ramune strings, soda-cyan functions and tangerine numbers |
-| `jot-light` — *mochi milk* | the same inks as strawberry jam, matcha and ramune blue on warm cream paper (`#fffaf4`) |
+| `jot-dark` (default) - *yoru ramune* | indigo night (`#131024`) under neon sakura-pink keywords, mint-ramune strings, soda-cyan functions and tangerine numbers |
+| `jot-light` - *mochi milk* | the same inks as strawberry jam, matcha and ramune blue on warm cream paper (`#fffaf4`) |
 | `flexoki-dark` | Flexoki's ink palette: black (`#100f0f`) paper, base-200 text, green keywords, cyan strings |
 | `flexoki-light` | the same scheme on Flexoki paper (`#fffcf0`) with the 600-step accents |
 
-### jot-dark — "yoru ramune" (night soda)
+### jot-dark - "yoru ramune" (night soda)
 
-A deep indigo night — not the usual neutral `#1c1c1c`, and not a grey-blue
-terminal default — lit by a candy-stand palette: neon **sakura pink**
+A deep indigo night - not the usual neutral `#1c1c1c`, and not a grey-blue
+terminal default - lit by a candy-stand palette: neon **sakura pink**
 (`#ff79c0`) for keywords, tags and every accent; **mint ramune** (`#79e8bd`)
 for strings; **soda cyan** (`#63d9ff`) for functions and builtins;
 **tangerine** (`#ff9f6e`) for numbers and constants; **dango gold**
 (`#ffd479`) for escapes, search hits and warnings; **taro purple**
 (`#c09bff`) for types, namespaces and the explorer's folders. Every piece of
-chrome is the same night sky lifted one step — sidebar `#181430`, status line
-`#1a1630`, raised rows `#282147` — so the panels feel like rooms in one house
+chrome is the same night sky lifted one step - sidebar `#181430`, status line
+`#1a1630`, raised rows `#282147` - so the panels feel like rooms in one house
 instead of three unrelated widgets.
 
-### jot-light — "mochi milk"
+### jot-light - "mochi milk"
 
 Warm milk paper (`#fffaf4`) with the dark theme's inks re-pitched for daylight:
-**strawberry jam** (`#d92a76`) keywords, **matcha** (`#0e8a6f`) strings,
-**ramune blue** (`#1b7fb5`) functions, **taro** (`#7b4bd1`) types and
-**persimmon** (`#c95a2b`) numbers. The surfaces (sidebar `#fdf1f2`, status line
+**strawberry jam** (`#ca246c`) keywords, **matcha** (`#0d7c64`) strings,
+**ramune blue** (`#186f9f`) functions, **taro** (`#7b4bd1`) types and
+**persimmon** (`#bc5428`) numbers. Every ink here is darkened from its
+bright-daylight value until it clears 4.5:1 on the paper it sits on, and the
+Flexoki pair is tuned the same way (its 600-step accents included).
+The surfaces (sidebar `#fdf1f2`, status line
 `#fbe9e7`, selection `#f8d8e3`) are blush tints of the same cream, so the whole
 window reads as one pastel confection rather than white boxes on white.
 
@@ -79,9 +82,9 @@ is neither is ignored, leaving the slot at whatever it inherited. Use `-1` or
 }
 ```
 
-The same two forms are accepted wherever the Lua API takes a colour — `set_hl`,
+The same two forms are accepted wherever the Lua API takes a colour - `set_hl`,
 `jot.theme.set_color`, and a decoration's `fg`, `bg`, `underline_fg`, `virt_fg`
-and `virt_bg` (`jot.decoration.set`) — so a plugin or a theme can name the exact
+and `virt_bg` (`jot.decoration.set`) - so a plugin or a theme can name the exact
 colour it means instead of hunting for the nearest index. `jot.decoration.list()`
 hands an exact colour back as the `#rrggbb` string it was set with, and a palette
 index back as a number; a value that is neither is ignored, leaving that colour
@@ -89,8 +92,8 @@ unset rather than painting a wrong one.
 
 Exact colours need a terminal that understands 24-bit colour (`COLORTERM`
 reports `truecolor`/`24bit`, or `TERM` ends in `-direct`); elsewhere jot folds
-each one down to the nearest palette entry — text, background and underline
-alike — so the theme still reads correctly on a 256-colour terminal. The
+each one down to the nearest palette entry - text, background and underline
+alike - so the theme still reads correctly on a 256-colour terminal. The
 `truecolor` setting forces the answer either way.
 
 ## Group names
@@ -108,18 +111,18 @@ one explicitly in a theme overrides the fallback.
 
 | Slot | What it colors | Falls back to |
 |---|---|---|
-| `keyword` | generic keywords | — |
+| `keyword` | generic keywords | - |
 | `keyword.control` | `if`, `for`, `while`, `return`, `break` | `keyword` |
 | `keyword.storage` | `static`, `const`, `class`, `struct` | `type` |
 | `keyword.directive` | `#include`, `#define`, imports | `constant` |
-| `string` | string literals | — |
+| `string` | string literals | - |
 | `string.escape` | `\n`, `\t` inside strings | `builtin` |
-| `comment` | comments | — |
-| `number` | numeric literals | — |
-| `function` | function definitions and calls | — |
+| `comment` | comments | - |
+| `number` | numeric literals | - |
+| `function` | function definitions and calls | - |
 | `function.method` | method calls/definitions | `function` |
 | `function.constructor` | `Foo()` constructions | `type` |
-| `type` | type identifiers | — |
+| `type` | type identifiers | - |
 | `type.builtin` | `int`, `float`, `auto` | `builtin` |
 | `variable` | plain identifiers | `default` |
 | `parameter` | function parameters | `default` |
@@ -177,8 +180,8 @@ as a small editor, so its `bg` should be the editor's `Normal` background.
 ### Inherit a base with `extends`
 
 A theme only needs to list what it overrides. Start from any bundled theme and
-keep its full look — file explorer, status bar, git colors, diagnostics, and
-syntax — by extending it:
+keep its full look - file explorer, status bar, git colors, diagnostics, and
+syntax - by extending it:
 
 ```json
 {
@@ -240,7 +243,7 @@ Rules:
   leaves that side untouched so a group can change only one side.
 - Any slot you omit falls back per the table above; base slots are
   `default`, `keyword`, `string`, `comment`, `number`, `function`, `type`.
-- JSON keys are matched against slot names directly — dotted and snake forms
+- JSON keys are matched against slot names directly - dotted and snake forms
   both work (`"keyword.control"` / `"keyword_control"`,
   `"constant.macro"` / `"constant_macro"`, `"property"` / `"field"`), and a
   leading `@` is ignored so tree-sitter capture names can be used as-is.

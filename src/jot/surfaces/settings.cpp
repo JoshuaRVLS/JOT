@@ -1,13 +1,9 @@
-// Settings menu model + input (cell-based; see render/settings.cpp for the
-// paint pass). The menu enumerates config.keys(), so every setting -- the
-// built-in defaults, settings.conf overrides and Lua-registered keys from
-// jot.config.set -- appears with its current value. Each row is edited the
-// way its type asks to be: booleans toggle, integers step (and take a typed
-// value), enumerated settings cycle or open their choices, strings open an
-// inline input row (type the new value, Enter applies, Esc cancels). A
-// search bar above the list filters rows by label or key. Changes flow
-// through apply_settings_value -> config.set + apply_config_live + save, the
-// same live-apply pipeline Lua uses.
+// Settings menu model + input (see render/settings.cpp for the paint pass). The
+// menu enumerates config.keys(), so the built-in defaults, settings.conf
+// overrides and Lua-registered keys all appear with their current value. Each
+// row is edited the way its type asks to be, and a search bar filters rows by
+// label or key. Changes flow through apply_settings_value -> config.set +
+// apply_config_live + save, the same live-apply pipeline Lua uses.
 #include "editor.h"
 #include "ui/gui/gui.h"
 
@@ -21,9 +17,9 @@
 
 namespace
 {
-// Friendly labels + types for the built-in settings. Keys absent from this
-// table (Lua-registered, plugin-owned) fall back to a string entry using
-// the raw key as the label, so the menu stays complete and Lua-extensible.
+// Friendly labels and types for the built-in settings. Keys absent here
+// (Lua-registered, plugin-owned) fall back to a string entry using the raw key
+// as the label, so the menu stays complete and Lua-extensible.
 struct KnownSetting
 {
   const char *key;
@@ -196,8 +192,7 @@ const KnownSetting kKnownSettings[] = {
 };
 
 // The selectable rows: a fixed set of choices, so Left/Right walks them and
-// Enter lists them. An overlay table so the type table above stays one line
-// per setting.
+// Enter lists them.
 struct EnumChoices
 {
   const char *key;
@@ -226,11 +221,9 @@ const EnumChoices kEnumChoices[] = {
     {"smooth_scroll_easing", kEasings, 7},
 };
 
-// What a numeric row's steppers move by, and the range a stepped or typed
-// value lands in. The ranges mirror the clamps the rest of the app already
-// applies (apply_config_live and the settings' own readers); a row that is
-// absent steps by one and cannot go below zero, which is what every count,
-// size and millisecond budget here wants.
+// What a numeric row's steppers move by, and the range a stepped or typed value
+// lands in. The ranges mirror the clamps the rest of the app applies, and a row
+// absent here steps by one with a floor of zero.
 struct IntRange
 {
   const char *key;
@@ -270,17 +263,10 @@ const IntRange kIntRanges[] = {
     {"zen_content_width", 10, 40, 400},
 };
 
-// The panel's sections, in the order they are listed. A section claims a key
-// by naming it, or by a prefix that ends in a separator (`_` or `.`) -- so
-// `colorizer_` takes the whole family of color-preview switches in one line
-// while `auto_save` claims only itself, and `tab_size` cannot be swallowed by
-// `tabline`. The first section to claim a key owns it; the section table also
-// *is* the listing order, so the entries only have to be sorted by their
-// section's index here to read in groups.
-//
-// The claim tables are hand-checked against the defaults config.cpp
-// registers: every one of them is claimed, so the final bucket holds only
-// what a user's own config or a plugin added.
+// The panel's sections, in listing order. A section claims a key by naming it,
+// or by a prefix that ends in a separator (`_` or `.`), so `colorizer_` takes the
+// whole color-preview family while `tab_size` cannot be swallowed by `tabline`.
+// The first section to claim a key owns it, and the table also is the order.
 struct SettingSection
 {
   const char *title;
@@ -396,11 +382,8 @@ int section_rank(const std::string &title)
 }
 
 // The search bar's matcher: every character of the query has to appear in the
-// row's label or key, in order, ignoring case and the punctuation between
-// words -- so "autosave" finds "Auto save" and "lspghost" finds
-// "lsp_completion_ghost_delay_ms". The list keeps the config's own order
-// rather than re-ranking: a menu that reshuffles under the cursor is worse
-// than one that only filters.
+// row's label or key, in order, ignoring case and punctuation between words. The
+// list keeps the config's own order rather than re-ranking.
 std::string match_key_of(const std::string &text)
 {
   std::string out;
@@ -503,9 +486,8 @@ void Editor::rebuild_settings_entries()
       e.options.assign(choices.options, choices.options + choices.count);
       break;
     }
-    // The themes are not a constant -- they depend on what is installed --
-    // so the one enumerated row whose choices are discovered is filled from
-    // the live registry here.
+    // The themes are not a constant (they depend on what is installed), so the
+    // one discovered row has its choices filled from the live registry here.
     if (key == "color_scheme")
     {
       e.type = SettingsEntry::Type::Enum;
@@ -524,11 +506,9 @@ void Editor::rebuild_settings_entries()
     e.section = section_of(key);
     settings_entries.push_back(std::move(e));
   }
-  // Grouped: the panel reads top-down by section, and inside a section the way
-  // config.keys() handed the keys over (which is alphabetical, since the config
-  // is a map). A stable sort is all this takes -- the entries never have to be
-  // re-derived, and a key that moves between sections lands where the table
-  // now says it belongs on the next open.
+  // Grouped: the panel reads top-down by section, and inside a section in the
+  // order config.keys() handed the keys over. A stable sort is all this takes,
+  // and a key that moves between sections lands where the table says next open.
   std::stable_sort(settings_entries.begin(),
                    settings_entries.end(),
                    [](const SettingsEntry &a, const SettingsEntry &b)
@@ -542,9 +522,8 @@ void Editor::refresh_settings_filter()
   settings_filtered.clear();
   settings_rows.clear();
   const std::string needle = match_key_of(settings_query);
-  // The entries are already in section order, so walking them in order keeps
-  // the groups together and a group is announced the moment it starts. A
-  // section the query emptied is simply never announced.
+  // The entries are already in section order, so walking them announces a group
+  // the moment it starts; a section the query emptied is never announced.
   std::string announced;
   for (int i = 0; i < (int)settings_entries.size(); i++)
   {
@@ -570,10 +549,8 @@ void Editor::refresh_settings_filter()
   }
   settings_selected =
       std::clamp(settings_selected, 0, std::max(0, (int)settings_filtered.size() - 1));
-  // A new query reads from the top; keeping the old window over a shorter
-  // list would leave it past the end. The render pass then keeps the
-  // selection visible, in the row units the picture uses (a section header
-  // takes a row of its own, so counting entries would run off the bottom).
+  // A new query reads from the top; keeping the old window over a shorter list
+  // would leave it past the end.
   settings_scroll = 0;
   needs_redraw = true;
 }
@@ -696,9 +673,8 @@ void Editor::apply_settings_value(const std::string &key, const std::string &val
   }
   else if (key == "gui_font_family")
   {
-    // One place handles rejecting an unknown name, and writes back the family
-    // that actually took effect so the file cannot keep a name that resolves
-    // to nothing.
+    // One place rejects an unknown name, and writes back the family that took
+    // effect so the file cannot keep a name that resolves to nothing.
     apply_gui_font_family(config.get("gui_font_family", ""));
   }
   apply_config_live();
@@ -899,9 +875,8 @@ bool Editor::handle_settings_input(int ch)
     }
     else
     {
-      // Fresh input: type the new value from scratch (empty + Enter
-      // cancels the edit). Seeding with the old value would force
-      // backspacing over it for every change.
+      // Fresh input: type the new value from scratch (empty + Enter cancels),
+      // since seeding the old value would force backspacing over it.
       cur->editing = true;
       cur->edit_input.clear();
       needs_redraw = true;
@@ -920,9 +895,8 @@ bool Editor::handle_settings_input(int ch)
     return true;
   }
 
-  // Typing filters: every printable character lands in the search bar (there
-  // is no other text field in the panel to compete with it), the way the
-  // palette and the quick pick behave.
+  // Typing filters: every printable character lands in the search bar, the way
+  // the palette and the quick pick behave (nothing else here takes text).
   if (ch >= 32 && ch < 1000)
   {
     settings_query.push_back((char)ch);
@@ -939,9 +913,8 @@ bool Editor::handle_settings_mouse(int x, int y, bool is_click)
   if (!show_settings_menu)
     return false;
 
-  // An open choices drop-down owns the pointer over its own box; anywhere
-  // else dismisses it (a motion just puts it away, a click also does what it
-  // would have done).
+  // An open choices drop-down owns the pointer over its own box; anywhere else
+  // dismisses it (a motion puts it away, a click also does what it would have).
   if (settings_dropdown_open)
   {
     const bool inside = x >= settings_dropdown_x && x < settings_dropdown_x + settings_dropdown_w
@@ -977,8 +950,7 @@ bool Editor::handle_settings_mouse(int x, int y, bool is_click)
     if (e.row_y != y || x < e.row_x || x >= e.row_x + e.row_w)
       continue;
     // The steppers and chevrons sit inside the value column: a press on one
-    // moves the value instead of opening the editor (which is what a press
-    // anywhere else on the row does).
+    // moves the value instead of opening the row's editor.
     if (e.step_down_x >= 0 && x == e.step_down_x)
     {
       if (e.row_pos >= 0)

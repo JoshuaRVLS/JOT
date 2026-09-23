@@ -8,7 +8,7 @@ right-hand panel.
 ## Quick start
 
 1. Build your program with debug symbols (`-g` for gcc/clang, `/Zi` + a PDB
-   for MSVC — on Linux `cmake -DCMAKE_BUILD_TYPE=Debug` is enough).
+   for MSVC - on Linux `cmake -DCMAKE_BUILD_TYPE=Debug` is enough).
 2. Start a session:
 
    ```text
@@ -67,7 +67,7 @@ the resulting address is read):
 ```text
 :debugmemory $pc           read 128 bytes at the program counter (default)
 :debugmemory &buf          read 128 bytes of a variable
-:debugmemory buf           same — variables resolve through evaluation
+:debugmemory buf           same - variables resolve through evaluation
 :debugmemory 0x7fff1000    read 128 bytes at a raw address
 :debugmemory &buf 64       read only 64 bytes
 :debugmemory &buf 1024     read up to 1024 bytes (the hard cap)
@@ -82,7 +82,7 @@ Each row shows three columns:
 
 The memory view only works while the program is stopped (paused at a
 breakpoint). If the adapter does not support it you get a status message
-("Debugger does not support memory view") — GDB 12+ and lldb-dap both do.
+("Debugger does not support memory view") - GDB 12+ and lldb-dap both do.
 (Note: GDB's `readMemory` only accepts literal addresses, which is why
 non-address inputs go through the `evaluate` request first.)
 
@@ -126,19 +126,19 @@ at `~/.config/jot/configs/debug.json`.
 ## How it works / troubleshooting
 
 Sessions are live subprocesses: DAP messages flow over stdin/stdout, and
-the panel is local only — sessions are not restored across editor restarts,
+the panel is local only - sessions are not restored across editor restarts,
 and the debuggee is terminated when you stop the session.
 
 Every session writes a transcript to `~/.config/jot/logs/debug_<name>.log`
 (SEND/RECV lines). If the panel says nothing and the session dies, check
-the log — or run `gdb --interpreter=dap` by hand and paste the same
+the log - or run `gdb --interpreter=dap` by hand and paste the same
 commands. Common causes:
 
-- **"Debugger adapter missing"** — `gdb` (or `lldb-dap`) is not on `PATH`.
-- **Breakpoints never hit** — the binary was built without `-g` debug
+- **"Debugger adapter missing"** - `gdb` (or `lldb-dap`) is not on `PATH`.
+- **Breakpoints never hit** - the binary was built without `-g` debug
   symbols, or the source path the adapter reports doesn't match an open
   buffer.
-- **Variables are empty** — nothing is paused yet; set a breakpoint and
+- **Variables are empty** - nothing is paused yet; set a breakpoint and
   `F5` first.
-- **"Debugger does not support …"** — the adapter's `initialize` response
+- **"Debugger does not support …"** - the adapter's `initialize` response
   didn't advertise the capability (GDB < 12 has no `readMemory`).

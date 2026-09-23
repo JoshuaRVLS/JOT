@@ -1,5 +1,5 @@
 // Lua host bindings: the jot.preview namespace (markdown preview transport).
-// Thin shims only — the LuaAPI methods in api_preview.cpp own the behavior;
+// Thin shims only - the LuaAPI methods in api_preview.cpp own the behavior;
 // api_bindings.cpp assembles these into the jot.preview table.
 #include "jot/lua/api.h"
 #include "jot/lua/api_internal.h"

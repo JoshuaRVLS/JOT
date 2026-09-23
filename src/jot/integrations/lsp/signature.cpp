@@ -69,7 +69,7 @@ void Editor::refresh_lsp_signature_if_in_call()
     return;
   }
   // Only auto-show inside a call's argument list, and not while the user is
-  // still typing the callee name right before the '(' — require the caret to
+  // still typing the callee name right before the '(' - require the caret to
   // sit past the open paren with the call text already behind it.
   const int open_col = innermost_open_paren_col(buf, buf.cursor.x);
   if (open_col < 0)

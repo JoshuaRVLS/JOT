@@ -9,7 +9,7 @@
 //
 // The strip lives on the panel's first interior row (panel_y + 1), so every
 // panel renderer draws it through render_right_panel_tab_strip() and the Lua
-// side_panel handler renders the same row from view.panel_tabs — the two
+// side_panel handler renders the same row from view.panel_tabs - the two
 // paths stay byte-identical.
 
 #include "editor.h"

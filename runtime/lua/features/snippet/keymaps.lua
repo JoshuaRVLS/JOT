@@ -1,12 +1,12 @@
 -- Engine keymaps.
 --
 -- Two groups:
---   * `Tab` / `Shift+Tab` — always registered (so a trigger under the cursor
+--   * `Tab` / `Shift+Tab` - always registered (so a trigger under the cursor
 --     expands), with an exact fallback to the editor's own Tab behavior via
 --     `jot.edit.tab` / `jot.edit.shift_tab`, and a hand-off to the LSP
 --     completion popup when one is open (the Lua keymap shadows the native
 --     accept-on-Tab otherwise).
---   * the choice keys — registered only while a session is live, so Ctrl+E is
+--   * the choice keys - registered only while a session is live, so Ctrl+E is
 --     not stolen from the file picker during normal editing.
 local session = require("jot_snip.session")
 local expand = require("jot_snip.expand")

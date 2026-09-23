@@ -85,7 +85,7 @@ namespace
 
   // Content of the same bundled file in the developer source dir (the tests
   // are compiled with JOT_LUA_SOURCE_DIR, and the embedded bytes are
-  // byte-identical to it — pinned by test_lua_ui_kit).
+  // byte-identical to it - pinned by test_lua_ui_kit).
   std::string bundled_content(const std::string &rel)
   {
     return read_file(fs::path(JOT_LUA_SOURCE_DIR) / rel);
@@ -186,7 +186,7 @@ TEST_CASE("lua loader: unknown files resolve to nothing")
 
 TEST_CASE("lua loader: embedded index carries tree-sitter queries")
 {
-  // The embed step must carry the .scm query files too — the treesitter
+  // The embed step must carry the .scm query files too - the treesitter
   // runtime reads them from disk via runtime_path.
   size_t size = 0;
   const unsigned char *q = jot_embedded::find("treesitter/queries/lua/highlights.scm", &size);

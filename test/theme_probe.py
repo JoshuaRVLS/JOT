@@ -61,9 +61,9 @@ FLEXOKI_LIGHT_STATUS = truecolour(0xF2F0E5)
 # The accent each theme inks its active pane border with, as it must appear in
 # the escape stream: 38;2;r;g;b, never 38;5;n.
 JOT_DARK_ACCENT = b"\x1b[38;2;255;121;192m"  # #ff79c0
-JOT_LIGHT_ACCENT = b"\x1b[38;2;217;42;118m"  # #d92a76
+JOT_LIGHT_ACCENT = b"\x1b[38;2;202;36;108m"  # #ca246c
 FLEXOKI_DARK_ACCENT = b"\x1b[38;2;58;169;159m"  # #3aa99f, cyan-400
-FLEXOKI_LIGHT_ACCENT = b"\x1b[38;2;36;131;123m"  # #24837b, cyan-600
+FLEXOKI_LIGHT_ACCENT = b"\x1b[38;2;35;127;119m"  # #237f77, cyan-600
 # A decoration's underline colour as SGR 58's 24-bit colon form.
 DECO_UNDERLINE = b"\x1b[58:2::68:204:153m"  # #44cc99
 # What an editor with no theme applied paints (the built-in ANSI default).

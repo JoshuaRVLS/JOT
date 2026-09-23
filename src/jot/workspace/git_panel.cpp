@@ -63,7 +63,7 @@ void Editor::toggle_git_panel()
   show_home_menu = false;
   refresh_git_status(true);
   git_panel_refresh();
-  set_message("Git panel — 2 files · 3 branches · 4 commits · 5 stash · ? keys");
+  set_message("Git panel: 2 files · 3 branches · 4 commits · 5 stash · ? keys");
   needs_redraw = true;
 }
 
@@ -81,7 +81,7 @@ void Editor::git_panel_refresh()
   const std::string root = git_root;
 
   // Files: capture `git status --porcelain` synchronously instead of relying
-  // on the async status refresh — the panel must show current files the
+  // on the async status refresh - the panel must show current files the
   // moment it opens, even when that refresh is still in flight. Falls back
   // to the (possibly stale) status map only when the command itself fails;
   // a clean tree (exit 0, empty output) must not look like a failure.
@@ -516,7 +516,7 @@ void Editor::git_panel_discard_or_delete()
     }
     if (is_untracked(file->status))
     {
-      set_message("Untracked file — delete it manually (not discarded)");
+      set_message("Untracked file: delete it manually (not discarded)");
       return;
     }
     if (jot_git::run_ok(root, "checkout -- " + shell_util::shell_quote(file->rel_path)))
@@ -547,7 +547,7 @@ void Editor::git_panel_discard_or_delete()
     }
     else
     {
-      set_message("Branch delete failed (unmerged?) — use :gitbranch -D");
+      set_message("Branch delete failed (unmerged?), use :gitbranch -D");
     }
     break;
   }
@@ -603,7 +603,7 @@ void Editor::git_panel_stash_pop()
   }
   if (git_panel.stashes.empty())
   {
-    set_message("Nothing to pop — stash is empty");
+    set_message("Nothing to pop, stash is empty");
     return;
   }
   if (jot_git::run_ok(git_root, "stash pop"))
@@ -675,7 +675,7 @@ void Editor::git_panel_push()
   }
   else
   {
-    set_message("Push failed — set an upstream first (git push -u origin " + git_branch
+    set_message("Push failed: set an upstream first (git push -u origin " + git_branch
                 + " from a terminal)");
   }
   git_panel_refresh();

@@ -36,7 +36,7 @@ bool Editor::handle_which_key_input(int ch, bool is_ctrl, bool is_shift, bool is
   }
 
   // Prefix-group view: a pressed chord ("Ctrl+T") prefixes longer Lua keymap
-  // sequences ("Ctrl+T N") — the panel lists the next-chord options.
+  // sequences ("Ctrl+T N") - the panel lists the next-chord options.
   if (!show_which_key)
   {
     return false;
@@ -122,7 +122,7 @@ bool Editor::handle_which_key_input(int ch, bool is_ctrl, bool is_shift, bool is
   auto candidates = event_internal::plugin_key_candidates(ch, is_ctrl, is_shift, is_alt, original_ch);
   // A child token is matched by its bare key. When the user keeps Ctrl held
   // while pressing the next chord (e.g. holds Ctrl through "Ctrl+T" then
-  // presses "N"), the chord arrives as "Ctrl+N" — match the letter part too.
+  // presses "N"), the chord arrives as "Ctrl+N" - match the letter part too.
   std::vector<std::string> match_forms = candidates;
   for (const auto &candidate : candidates)
   {

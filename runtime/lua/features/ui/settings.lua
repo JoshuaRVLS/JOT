@@ -1,20 +1,5 @@
--- Settings menu — part of the Lua UI kit.
--- Split out of features/ui.lua so each surface stays small and
--- focused; features/ui.lua is the orchestrator that requires
--- every module and registers the handlers.
---
--- The :settings surface (also Ctrl+, in the GUI) searches, lists and edits
--- every config key. Rendering it as Lua floats keeps it on top of the modal
--- scrim and above the sidebar, exactly like the other modal surfaces (quick
--- pick, telescope, ...). Native code still owns layout, filtering, selection,
--- editing and input; this module is purely visual -- it draws the glyphs into
--- the cells the native layout recorded (item.value_x, item.step_up_x, ...),
--- so what is painted and what the mouse hits are the same rects.
---
--- Rows are assembled as cell-positioned parts: each part is one run of text
--- with its own colors, and its span starts at the number of cells written
--- before it. That is what lets a chevron land on an absolute column without
--- guessing at byte offsets.
+-- The :settings surface (Ctrl+, in the GUI): the Lua painter for the native
+-- settings model, drawing into the cells the native layout recorded.
 local h = require("jot_ui.helpers")
 local close = h.close
 local cell_len = h.cell_len
@@ -26,9 +11,21 @@ local present_panel = h.present_panel
 local CHECK = "\u{F00C}"   -- nf-fa-check: the choice the config holds
 local SEARCH = "\u{F002}"  -- nf-fa-search: the search bar's magnifier
 
--- Builds one row out of positioned pieces. `finish(width)` pads to the panel's
--- inner width, and the pieces' spans are returned so the renderer can color
--- them independently.
+-- One row built out of positioned pieces, spans returned for the renderer.
+-- cut() marks a shortened label, as the native painter's truncate() does.
+local function truncate_marked(s, n)
+  if n <= 0 then
+    return ""
+  end
+  if cell_len(s) <= n then
+    return s
+  end
+  if n <= 3 then
+    return trunc_cells(s, n)
+  end
+  return trunc_cells(s, n - 3) .. "..."
+end
+
 local function row_builder()
   local parts = {}
   local used = 0
@@ -137,10 +134,8 @@ local function settings(p)
     end
     local is_selected = item.selected
     local is_editing = is_selected and item.editing
-    -- A section header rides the same row machinery with no value and no
-    -- affordances (the native side sends it with none); only its ink differs,
-    -- so the group names read as headings over the rows beneath them rather
-    -- than as settings. The native painter draws the same row the same way.
+    -- A section header rides the row machinery with no value and no
+    -- affordances (the native side sends it with none); only its ink differs.
     local row_fg = item.header and comment or (is_selected and selection_fg or fg)
     local row_bg = is_selected and selection_bg or bg
     -- The affordances take the row's own ink: on the selection bar the accent
@@ -150,11 +145,10 @@ local function settings(p)
 
     local b = row_builder()
     b.at(0, is_selected and "\u{F054}" or " ")
-    b.at(1, trunc_cells(item.label or "", key_w - 3))
+    b.at(1, truncate_marked(item.label or "", key_w - 3))
     local val_col = math.max(1, (tonumber(item.value_x) or (p.x + 1 + key_w)) - row0)
-    -- The value band's width comes from the native layout; a caller that does
-    -- not know it (the Lua-kit test's stub view) gets the whole inner row,
-    -- which is generous but never truncates a value to nothing.
+    -- The value band's width comes from the native layout; a caller without one
+    -- (the UI-kit test's stub) gets the whole inner row.
     local val_w = tonumber(item.value_w) or inner_w
     local down = tonumber(item.step_down_x) or -1
     local up = tonumber(item.step_up_x) or -1
@@ -162,15 +156,12 @@ local function settings(p)
       b.at(val_col, trunc_cells("> " .. (item.edit_input or ""), val_w),
            { fg = selection_fg, bg = selection_bg, bold = true })
     else
-      -- An enum row cycles with chevrons bracketing the choice; an int row
-      -- steps with nf-fa-minus / nf-fa-plus just past the number. The pieces
-      -- go in cell order -- the leading chevron sits before the value, not
-      -- after it -- or the row's columns would not line up with the cells the
-      -- native layout recorded for the mouse.
+      -- An enum row cycles with chevrons, an int row steps with nf-fa-minus /
+      -- plus; the pieces go in cell order so they land on the recorded cells.
       if item.type == "enum" and down >= 0 then
         b.at(down - row0, "\u{2039}", { fg = grip_fg, bg = row_bg })
       end
-      b.at(val_col, trunc_cells(item.value or "", val_w), { fg = value_fg, bg = row_bg })
+      b.at(val_col, truncate_marked(item.value or "", val_w), { fg = value_fg, bg = row_bg })
       if up >= 0 then
         if item.type == "enum" then
           b.at(up - row0, "\u{203A}", { fg = grip_fg, bg = row_bg })
@@ -211,7 +202,7 @@ local function settings(p)
       local b = row_builder()
       b.text(" ")
       b.at(1, current and CHECK or " ", { fg = cursor and selection_fg or accent })
-      b.at(3, trunc_cells(option, inner_box_w - 3))
+      b.at(3, truncate_marked(option, inner_box_w - 3))
       local text, spans = b.finish(inner_box_w)
       box_rows[#box_rows + 1] = {
         text = text,

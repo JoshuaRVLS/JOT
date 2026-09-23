@@ -1,7 +1,7 @@
 {
   "Normal": {"fg": "#e9e5fb", "bg": "#131024"},
   "NormalFloat": {"fg": "#e9e5fb", "bg": "#1c1832"},
-  "LineNr": {"fg": "#655e8c", "bg": "#131024"},
+  "LineNr": {"fg": "#7f78a5", "bg": "#131024"},
   "Comment": {"fg": "#8b83b0", "bg": "#131024"},
   "Keyword": {"fg": "#ff79c0", "bg": "#131024"},
   "String": {"fg": "#79e8bd", "bg": "#131024"},

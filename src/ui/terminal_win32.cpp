@@ -917,7 +917,7 @@ Event Terminal::read_event()
       // Bare modifier press/release records (e.g. VK_CONTROL with no
       // character) carry no actionable key: chords arrive as the letter's own
       // record with dwControlKeyState set, so they never reach this branch.
-      // The hold-Ctrl helper this used to surface has been removed — those
+      // The hold-Ctrl helper this used to surface has been removed - those
       // events exist only on Windows-Terminal-style consoles and have no
       // equivalent on POSIX/kitty-protocol terminals.
       if (mod_key.uChar.UnicodeChar == 0

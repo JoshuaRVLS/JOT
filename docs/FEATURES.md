@@ -1,15 +1,15 @@
-# jot — features, keybindings & commands
+# jot - features, keybindings & commands
 
 The full guide to what jot does and how to drive it. For the one-paragraph
 pitch and install steps, see the [README](../README.md).
 
 ## What makes jot different
 
-- **Modeless by default.** No insert/normal mode juggling — just type. Mouse
+- **Modeless by default.** No insert/normal mode juggling - just type. Mouse
   selection, tabs, split panes, a minimap, a command palette, and a workspace
   sidebar are all there out of the box.
 - **A native C++ core.** Buffers, panes, syntax highlighting, LSP, debugging,
-  Git, terminal emulation, and workspace state all run in the core — no
+  Git, terminal emulation, and workspace state all run in the core - no
   runtime scripting dependency drives the editor itself.
 - **Tree-sitter highlighting** with on-demand grammar installation, status and
   reload commands, fallback queries, and rich theme slots for semantic tokens.
@@ -18,11 +18,11 @@ pitch and install steps, see the [README](../README.md).
   install/remove helpers).
 - **An integrated terminal** with multiple shell tabs and a task runner for
   local and project-level commands.
-- **A debugger panel** speaking the Debug Adapter Protocol — GDB and LLDB
+- **A debugger panel** speaking the Debug Adapter Protocol - GDB and LLDB
   launch/attach flows, breakpoints, threads, stack, variables, memory,
   disassembly, and output.
 - **Git workflows** for status, diffs, staging, unstaging, committing, log,
-  blame, and refresh — all from inside the editor.
+  blame, and refresh - all from inside the editor.
 - **Lua plugins and JSON colorschemes** for customization, with behavior owned
   by the C++ core. The shipped schemes (`jot-dark`, `jot-light` and the
   Flexoki pair) are exact 24-bit palettes authored in hex; a theme file may also
@@ -49,7 +49,7 @@ jot --gui file.cpp
 The SDL2/OpenGL frontend renders the exact same cell grid as the terminal
 backend, but with a GPU and vsync'd to the monitor refresh, so typing is
 smooth at any refresh rate (60/120/144Hz...). It uses the same editor core,
-keybindings, LSP, panes and Lua UI — only the screen differs. Rendering is
+keybindings, LSP, panes and Lua UI - only the screen differs. Rendering is
 direct OpenGL 3.3 core with a FreeType glyph atlas (Nerd Font icons
 included). The GUI frontend is optional: it compiles in when SDL2 + FreeType
 are available (`JOT_GUI=OFF` to disable) and the terminal build is
@@ -65,8 +65,8 @@ The typeface and its size are independent settings:
 
 `gui_font_family` holds the choice (empty = the font jot ships with) and
 `gui_font_size` the size in px; both apply live and are also in `:settings`
-(Ctrl+,). A family is matched however it is spelled — `FiraCode`,
-`fira-code` and `Fira Code` are the same font — and its own regular, bold,
+(Ctrl+,). A family is matched however it is spelled - `FiraCode`,
+`fira-code` and `Fira Code` are the same font - and its own regular, bold,
 italic and bold-italic faces are loaded together, so bold and italic match
 the family rather than falling back to a different typeface. Families that
 ship only some of those styles render the missing ones with their regular
@@ -81,7 +81,7 @@ an explicit font file.
 
 ### Editing
 
-- Modeless text entry — typing edits immediately.
+- Modeless text entry - typing edits immediately.
 - Undo/redo, copy/cut/paste, select all, mouse selection, double-click word
   selection, triple-click line selection.
 - Smart multi-line paste that re-indents to the cursor.
@@ -89,8 +89,8 @@ an explicit font file.
   bracket colors, and an active bracket guide.
 - Markup tags (`.html`, `.htm`, `.jsx`, `.tsx`): typing `>` on an opening tag
   writes the closing tag for you, Enter between a pair splits it onto three
-  indented lines, and renaming a tag — from either end, including a name being
-  retyped from empty — carries the partner tag along with it.
+  indented lines, and renaming a tag - from either end, including a name being
+  retyped from empty - carries the partner tag along with it.
 - Emmet abbreviations on Tab (`div.card>ul>li*3`, `m10-20`), in markup and
   style sheets (see the `emmet` setting below).
 - The workspace's own CSS vocabulary, offered as you type: every class name the
@@ -139,7 +139,7 @@ an explicit font file.
 
 - Per-buffer search with case/whole-word/regex options, and a replace panel
   (current match or all).
-- Selection-scoped replace via `Ctrl+Shift+F` — or project-wide search when
+- Selection-scoped replace via `Ctrl+Shift+F` - or project-wide search when
   nothing is selected.
 - Go to line, bookmarks, and a fuzzy file finder (telescope) with mouse
   support. The picker is two boxes: the result list on the left (files only --
@@ -190,7 +190,7 @@ Detected:
 - **LaTeX**: xcolor expressions such as `red!30` (30% red mixed toward white).
 
 Only whole literals match: `#fff` inside `#ffffff`, or `red` inside
-`text-red-500`, is not a colour. Alpha channels are ignored — the opaque colour
+`text-red-500`, is not a colour. Alpha channels are ignored - the opaque colour
 is what gets shown.
 
 `colorizer_mode` picks how it is shown:
@@ -205,17 +205,16 @@ The preview is painted over the syntax colours but *under* the selection,
 search matches, diagnostics and the cursor, so it never hides what you are
 working on. It applies to the GUI and the terminal alike; the terminal needs a
 24-bit-capable one (`COLORTERM=truecolor`/`24bit`, or a `*-direct` `TERM`) to
-show the exact colour, and otherwise falls back to the closest xterm-256 entry
-— the `truecolor` setting can force either path.
+show the exact colour, and otherwise falls back to the closest xterm-256 entry - the `truecolor` setting can force either path.
 
 Every format has its own switch, so you only pay for what you want
 (`colorizer_hex`, `colorizer_hex_alpha`, `colorizer_hex_qml`,
 `colorizer_hex_no_hash`, `colorizer_hex_0x`, `colorizer_names`,
 `colorizer_tailwind`, `colorizer_xcolor`, `colorizer_functions`,
 `colorizer_xterm`, `colorizer_ls_colors`, `colorizer_css_vars`,
-`colorizer_sass`). The basic ones are on by default; the rest — including the
+`colorizer_sass`). The basic ones are on by default; the rest - including the
 looser hex forms, whose bare `RRGGBB` and `0x…` shapes are easy to mistake for
-identifiers — are opt-in.
+identifiers - are opt-in.
 
 Colours are parsed over the visible window only and memoised per line, so
 minified one-line files stay cheap. Variable definitions are the one exception:
@@ -237,7 +236,7 @@ deliberately does not, so a preview never depends on a file you cannot see.
   `additionalTextEdits` an item carries: accepting a symbol whose file does not
   import it yet writes the import with it (typescript/vtsls auto-import, and
   clangd's `#include`). The edits are positions in the document the request saw,
-  so they are remapped across the insert — an edit below the caret follows the
+  so they are remapped across the insert - an edit below the caret follows the
   lines the insert added, and one that would land inside the text being
   completed is dropped rather than written at a guessed column.
 - Hover on demand or
@@ -270,9 +269,9 @@ deliberately does not, so a preview never depends on a file you cannot see.
   `completion_dim_arguments`.
 
   Two notes: the type is only available when the server sends `detail` or
-  `labelDetails` in the initial response — jot never sends
+  `labelDetails` in the initial response - jot never sends
   `completionItem/resolve`, so servers that only fill those lazily show a plain
-  name — and a server with no profile still gets a correctly coloured row, just
+  name - and a server with no profile still gets a correctly coloured row, just
   with less split out.
 - Signature help popup, plus clangd-style inlay hints on already-written
   code: parameter names (`a: 1, b: 2`) before arguments and type hints after
@@ -281,7 +280,7 @@ deliberately does not, so a preview never depends on a file you cannot see.
   edits and follow scrolling; disable all hints with
   `jot.config.set("lsp_inlay_hints", false)` or just the type hints with
   `jot.config.set("lsp_inlay_type_hints", false)`.
-- Document symbols via LSP with regex fallback — as a picker or a persistent
+- Document symbols via LSP with regex fallback - as a picker or a persistent
   outline.
 - Status, start/stop/restart, a manager, and install/remove helpers for 100+
   servers (`:lspinstall <server>`, `:lspremove <server>`).
@@ -395,7 +394,7 @@ Local tasks override global ones of the same name. `:task` lists them,
 ### Image viewer
 
 Open image files in a right-side viewer that uses real terminal graphics when
-available — Kitty graphics first, Sixel (`img2sixel`) second, and a 256-color
+available - Kitty graphics first, Sixel (`img2sixel`) second, and a 256-color
 cell preview as the fallback. Configure with `image_viewer_backend = auto`
 (`kitty`, `sixel`, `cell`, or `off`).
 
@@ -405,15 +404,15 @@ cell preview as the fallback. Configure with `image_viewer_backend = auto`
 a tiny loopback HTTP server, and keeps the page and the editor in step in both
 directions:
 
-- **Live refresh** — every edit (debounced) and every save re-renders the
+- **Live refresh** - every edit (debounced) and every save re-renders the
   document and pushes just the new body to the open page over Server-Sent
   Events, so the scroll position and any diagram state survive the update. The
   full page is only replaced when the shell itself changes (title, theme, CSS).
-- **Two-way scroll sync** — while both sides are open, the editor's top visible
+- **Two-way scroll sync** - while both sides are open, the editor's top visible
   line is pushed to the page and the page's scroll position is pulled back into
   the editor, so scrolling either one follows the other. The cadence is
   `markdown_preview_refresh_interval` (ms).
-- **GFM by default** — headings with slug anchors, paragraphs, nested ordered
+- **GFM by default** - headings with slug anchors, paragraphs, nested ordered
   and task lists, tables with alignment, blockquotes and GitHub-style alerts
   (`[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`), fenced code
   with a copy button, `==mark==`, `++ins++`, `H~2~O`, `E=mc^2^`, footnotes,
@@ -422,7 +421,7 @@ directions:
   (default on), `code_copy` (on), `source_map` (on), plus `katex` math,
   `mermaid` / `plantuml` / `flowchart` diagrams, `echarts` and `vega` charts,
   `emoji` shortcodes and a floating `toc` panel.
-- **Customisable page** — `markdown_preview_theme` (`dark`/`light`/`auto`),
+- **Customisable page** - `markdown_preview_theme` (`dark`/`light`/`auto`),
   `markdown_preview_page_title`, `markdown_preview_custom_css` and a Lua
   `preprocessor(text, path)` hook that can rewrite the source before parsing.
 
@@ -433,8 +432,8 @@ URL, or any name from the built-in list; the platform opener is used when
 unset), and `markdown_preview_auto_start` / `markdown_preview_auto_close`
 tie the session to markdown buffers opening and closing.
 
-The preview is driven from Lua — `jot.md.start/stop/toggle/refresh`,
-`jot.md.url()`, `jot.md.is_running()` and `jot.md.setup{}` — over the native
+The preview is driven from Lua - `jot.md.start/stop/toggle/refresh`,
+`jot.md.url()`, `jot.md.is_running()` and `jot.md.setup{}` - over the native
 `jot.preview.*` transport, so a plugin can re-implement or extend any part of
 it. See [LUA_API.md](LUA_API.md#markdown-preview).
 
@@ -444,28 +443,28 @@ it. See [LUA_API.md](LUA_API.md#markdown-preview).
 you edit. It is the same loopback server as the markdown preview, pointed at the
 problem HTML actually has: a page is not one document but a tree.
 
-- **The real tree is served** — the server is rooted at the workspace (or at the
+- **The real tree is served** - the server is rooted at the workspace (or at the
   file's own directory, with `html_preview_root = "dir"`), and the browser is
   sent to the page's path inside it. Its `<link href="styles/site.css">`, its
   `<img src="../img/logo.png">` and its ES module imports resolve exactly as
   they would over any other static server, instead of 404ing against a one-page
   server.
-- **Unsaved edits are what the page shows** — the buffer's text overrides the
+- **Unsaved edits are what the page shows** - the buffer's text overrides the
   file on disk for the one path being edited. Everything else still comes from
   the file system, so an unsaved markup change previews without the page's
   stylesheet disappearing.
-- **Reload on change** — each served HTML page carries a small injected
+- **Reload on change** - each served HTML page carries a small injected
   EventSource client, so an edit (debounced by `html_preview_refresh_interval`,
   default 150 ms) and every save reload the page. A change that leaves the text
   where the page already was is not a reload, and the request path is confined
   to the root: a URL that tries to climb out of it is refused.
 
 Opening the browser is `html_preview_open_browser` (false serves it and prints
-the URL instead — the useful setting over SSH), `html_preview_browser` picks
+the URL instead - the useful setting over SSH), `html_preview_browser` picks
 which one, and `html_preview_auto_start` / `html_preview_auto_close` tie the
 session to HTML buffers opening and closing.
 
-Driven from Lua the same way the markdown preview is — `jot.html_preview`
+Driven from Lua the same way the markdown preview is - `jot.html_preview`
 (`start`, `stop`, `toggle`, `refresh`, `url()`, `is_running()`, `state()`,
 `setup{}`). See [LUA_API.md](LUA_API.md#html-preview).
 
@@ -473,30 +472,30 @@ Driven from Lua the same way the markdown preview is — `jot.html_preview`
 
 A full snippet engine, ported from LuaSnip's model. Snippets are matched
 against the text before the caret, expanded in place, and then navigated
-placeholder by placeholder with the caret — typing in one occurrence of a
+placeholder by placeholder with the caret - typing in one occurrence of a
 tabstop updates every mirror.
 
-- **Formats** — every snippet-text form the LSP and VSCode define: `$1`,
+- **Formats** - every snippet-text form the LSP and VSCode define: `$1`,
   `${1}`, `${1:default}`, `${1|one,two|}` choices, `${1/(.*)/\U\1/}` transforms
   (with `\u`/`\l`/`\U`/`\L`/`\E` and the `/upcase`, `/downcase`, `/capitalize`,
   `/camelcase`, `/pascalcase`, `/snakecase`, `/kebabcase` format field), and the
   `TM_*` / `LS_*` variables (`${TM_FILENAME}`, `${TM_LINE_NUMBER}`, …).
-- **Packs** — Lua snippet files (`snip_env` with `s()`, `t()`, `i()`, `c()`,
+- **Packs** - Lua snippet files (`snip_env` with `s()`, `t()`, `i()`, `c()`,
   `f()`, `d()`, `r()`, `rep()`, `fmt()`, …), VSCode `.json` / `.code-snippets`
   and snipMate `.snippets` files, looked up under `~/.config/jot/snippets`,
   `<workspace>/.jot/snippets` and anything in `snippet_paths`.
-- **Triggers** — plain word-boundary triggers, Lua-pattern triggers
+- **Triggers** - plain word-boundary triggers, Lua-pattern triggers
   (`regTrig`), function triggers, `priority`, `condition` / `show_condition`,
   autosnippets, and the `extends` graph so a filetype can inherit another's
   snippets.
-- **Keymaps** — `Tab` expands a trigger or jumps to the next placeholder,
+- **Keymaps** - `Tab` expands a trigger or jumps to the next placeholder,
   `Shift+Tab` jumps back, and `Ctrl+E` / `Ctrl+Shift+E` cycle a choice while the
   session is live. All four fall back to the editor's own behaviour when no
   snippet applies, so `Tab` still indents and `Shift+Tab` still outdents.
-- **LSP** — when a server answers a completion with `insertTextFormat = 2`,
+- **LSP** - when a server answers a completion with `insertTextFormat = 2`,
   jot hands the snippet text to the engine, so accepting it expands with real
   tabstops, mirrors and choices instead of a flat text insert.
-- **Commands** — `:Snippets` (pick one for the current filetype), `:Snippet
+- **Commands** - `:Snippets` (pick one for the current filetype), `:Snippet
   <trigger>` (expand a literal trigger), `:SnippetList`, `:SnippetReload`,
   `:SnippetToggle`.
 
@@ -528,26 +527,26 @@ plugin can register snippets at runtime or take over the engine. See
 
 - Click the gutter to toggle breakpoints; step, continue, pause, restart, and
   inspect threads, stack, variables, memory, disassembly, breakpoints, and
-  output — all in the debugger panel.
+  output - all in the debugger panel.
 
 ### Git
 
-**Git panel** (`:gitpanel`) — a native, lazygit-style git client in the
+**Git panel** (`:gitpanel`) - a native, lazygit-style git client in the
 right dock with four views (switch with `2`/`3`/`4`/`5`, matching lazygit's
 panel numbers):
 
-- **2 Files** — conflicts, staged, unstaged and untracked sections with
+- **2 Files** - conflicts, staged, unstaged and untracked sections with
   status-colored rows; `space` stages/unstages the selected file, `a`/`A`
   stage/unstage everything, `Enter` opens the file's diff (double-click
   too), `c` opens the commit-message prompt, `d` discards the file's
   working-tree changes (press twice to confirm), `s` stashes everything
   (including untracked), `y` copies the path.
-- **3 Branches** — `space` checks out, `n` creates a new branch (prompt),
+- **3 Branches** - `space` checks out, `n` creates a new branch (prompt),
   `m` merges the selected branch into the current one, `d` deletes it
   (twice to confirm).
-- **4 Commits** — recent history with hash/date/subject; `space` checks out
+- **4 Commits** - recent history with hash/date/subject; `space` checks out
   a commit (detached HEAD), `y` copies the hash.
-- **5 Stash** — `space` applies, `g` pops, `d` drops (twice to confirm).
+- **5 Stash** - `space` applies, `g` pops, `d` drops (twice to confirm).
 
 Global panel keys: `j`/`k` (or arrows) move, `,`/`.` page, `<`/`>` (or
 Home/End) jump to top/bottom, `f` fetches, `p`/`P` pull/push, `r`
@@ -571,7 +570,7 @@ stay one command away (`:gitstatus` `:gitdiff` `:gitdiffstaged` `:gitlog`
 For the full lazygit experience on top, `:lazygit` opens the
 [lazygit](https://github.com/jesseduffield/lazygit) TUI in an integrated
 terminal tab rooted at the workspace (or the current file's directory). It
-is an external binary, not bundled — install it with `brew install lazygit`,
+is an external binary, not bundled - install it with `brew install lazygit`,
 `apt install lazygit`, or the script on lazygit's README. Running `:lazygit`
 again re-focuses the open tab; quit lazygit with `q` to return to the
 editor.
@@ -585,7 +584,7 @@ panels, and a two-row status/message area.
 Borders mark where one region ends and another begins, and only there: a region
 draws a line only on the side facing another region, so the sidebar and the
 editor share a single `│`, a split has one separator rather than two, and a lone
-pane has no frame at all — focus is shown by the cursor and the active tab, never
+pane has no frame at all - focus is shown by the cursor and the active tab, never
 by the border. Floats (hover, completion, dialogs, telescope, the tool dock's
 panels) sit over buffer content on every side, so they keep a full box. Everything
 is drawn with flat corners; the colour comes from the theme's `WinSeparator` /
@@ -601,8 +600,7 @@ asks for a repaint only when one of them would come out different, so the bar
 ticks once a second while idle and an idle editor still paints nothing
 except when a label actually moved.
 
-The mouse is wired throughout —
-click to place the cursor, drag to select (with edge auto-scroll), double/
+The mouse is wired throughout - click to place the cursor, drag to select (with edge auto-scroll), double/
 triple-click for word/line selection (double-click stops at `.`, so `ext`
 in `ext.begin()` selects just `ext`), `Ctrl+D` to select the next occurrence
 (`Alt+Click` adds a caret, `Esc` clears extra carets), click tabs, drag split
@@ -618,7 +616,7 @@ that same element, so what is underlined is what the click will jump to.
 
 **Zen focus mode** (`F12` or `:zen`) strips the chrome: sidebar, right
 panel, and status line hide, and the pane area narrows to the
-`zen_content_width` config (default 100 columns) and centers — a
+`zen_content_width` config (default 100 columns) and centers - a
 distraction-free editing column. Toggling back restores the exact layout
 from before, and the F12 binding is rebindable via the usual `jot.keymap`
 API.
@@ -663,7 +661,7 @@ so the grammar is learnt once:
 | `Alt+C` | Code: `D` definition, `C` declaration, `T` type definition, `I` implementation, `H` switch header/source, `R` references, `N` rename, `A` code actions, `S` symbols, `W` workspace symbols, `K` documentation |
 
 Objects available today are `F` function, `C` class or type, `A`
-argument/parameter, `W` word, `L` line — the syntax objects come from tree-sitter,
+argument/parameter, `W` word, `L` line - the syntax objects come from tree-sitter,
 so they need a grammar for the file type.
 
 ### Navigation
@@ -734,7 +732,7 @@ the strip has not seen before lands in the order.
 
 A code pane spends its first row on a breadcrumb: the workspace root, the
 folders down to the file, the file, and then the symbols enclosing the caret
-(`Widget › render_thing`). The tail — the file and the current symbol — is inked
+(`Widget › render_thing`). The tail - the file and the current symbol - is inked
 and bold; the rest stays quiet. The row is the pane's own, so a split pays it
 twice and the panes line up either way. `winbar` picks the mode: `off` never
 shows it, `auto` (the default) shows it for code files only, `on` for every named
@@ -743,7 +741,7 @@ file.
 Every crumb is a press away from its siblings: a folder crumb lists what is
 inside it, a file crumb its folder, a symbol crumb the symbols sharing its scope,
 with the row the chain is already on marked by a dot. A **folder row wears a
-chevron and opens its own panel *beside* the one that offered it** — the cascade
+chevron and opens its own panel *beside* the one that offered it** - the cascade
 keeps every level it stepped through on screen, so the panels read as the path
 you walked (dropbar's model). The cascade follows the pointer: moving the
 selection onto a folder row opens that folder, moving onto a file row drops the
@@ -865,7 +863,7 @@ it -- the buffer stays fully visible while you type.
 **Markdown:** `:MarkdownPreview` `:MarkdownPreviewStop`
 `:MarkdownPreviewToggle`
 
-**HTTP client:** `:rest [name|last]` — run the request at the cursor in a
+**HTTP client:** `:rest [name|last]` - run the request at the cursor in a
 `.http` / `.rest` file (the IntelliJ / rest.nvim request syntax) through curl
 and land the answer in a `[Response]` tab. `:rest <name>` runs a `# @name` /
 `### name` request, `:rest last` re-sends the previous one. `{{var}}` fills
@@ -887,17 +885,17 @@ it wrong.
 `:gitrefresh`
 
 **Discord:** `:discord` (status) `:discord enable|disable|reconnect|disconnect`
-`:discord assets` (which artwork keys to upload) — Rich Presence showing the
+`:discord assets` (which artwork keys to upload) - Rich Presence showing the
 file, language, workspace, git branch and (when the remote is a browsable URL) a
 "View Repository" button, with idling / editing / debugging states and an idle
 timeout. On by default; every row is a template (see `discord_details_*` in
 `:settings`). Discord artwork has to be uploaded to your Discord application
-once — `packaging/discord-presence/ASSETS.md` walks through it, and
+once - `packaging/discord-presence/ASSETS.md` walks through it, and
 `:discord assets` lists exactly which keys the current window needs.
 
 ## Configuration
 
-User config lives in `~/.config/jot/` and is **Lua-first** — `config.lua`
+User config lives in `~/.config/jot/` and is **Lua-first** - `config.lua`
 defines settings (loaded before `init.lua` and plugins) and applies them
 **live**, no restart needed. `configs/settings.conf` is just the runtime-save
 overlay written by `jot.config.set` from Lua.
@@ -965,21 +963,21 @@ and `snippet_filetypes=` (a comma-separated `ext=filetype` override list, e.g.
 
 The caret is configured with two keys:
 
-- `cursor_style` — `block` (the default) or `bar`, both blinking; `steady_bar` /
+- `cursor_style` - `block` (the default) or `bar`, both blinking; `steady_bar` /
   `steady_block` keep that shape without blinking. The shape is emitted with the
   terminal's steady DECSCUSR form in the TUI and drawn directly in the GUI.
-- `cursor_blink_ms` — half of the blink cycle, in milliseconds: the caret is
+- `cursor_blink_ms` - half of the blink cycle, in milliseconds: the caret is
   visible for that long, then hidden for the same. `0` makes it solid. The
   phase is jot's own clock, shared by the terminal and GUI frontends, and it
   restarts visible whenever you type or move the caret.
 
-The mouse wheel can scroll smoothly. `smooth_scroll` is off by default — the
-wheel jumps a notch per event, as it always has — and `smooth_scroll=true`
+The mouse wheel can scroll smoothly. `smooth_scroll` is off by default - the
+wheel jumps a notch per event, as it always has - and `smooth_scroll=true`
 eases a notch over a few frames instead, using neoscroll.nvim's model:
 the same easing functions (`smooth_scroll_easing`, `linear` by default, plus
 `quadratic`, `cubic`, `quartic`, `quintic`, `circular` and `sine`), the same
 per-notch duration (100ms) scaled by `smooth_scroll_duration_multiplier` (1.0),
-and the same behaviour for a burst — a notch arriving mid-animation extends it,
+and the same behaviour for a burst - a notch arriving mid-animation extends it,
 reversing eases it to a stop, and a held wheel can never fall more than two
 notches behind the viewport. It only moves the viewport, so the caret and every
 other navigation path keep scrolling instantly, and moving the viewport another
@@ -988,7 +986,7 @@ it stands. The GUI frontend already slides its content pixel by pixel and is
 left alone.
 
 The caret's colours come from the theme (`cursor`, or `fg_cursor`/`bg_cursor`).
-Where the caret is painted by jot — the GUI — it uses whichever of the two
+Where the caret is painted by jot - the GUI - it uses whichever of the two
 contrasts with the cell underneath, so it stays visible over comments,
 selections and dimmed text. In the TUI the hardware cursor is drawn by the
 terminal emulator, which owns its colour; jot only sets its shape and position.
@@ -1002,7 +1000,7 @@ against cannot trigger on a conforming terminal.
 
 Emmet abbreviations expand on Tab in markup and style sheets. Typing an
 abbreviation and pressing Tab replaces it with the markup or declarations it
-stands for, with the caret left where the next thing goes — inside the element
+stands for, with the caret left where the next thing goes - inside the element
 the expansion built, or in the value it did not fill:
 
 ```text
@@ -1035,7 +1033,7 @@ property shorthands (`m`, `p`, `w`, `h`, `d`, `pos`, `bg`, `fz`, `ta`, `jc`,
 
 The class names a project uses and the custom properties it declares are spread
 across every file in the tree, which is exactly what a language server attached
-to one file cannot see — and what plain HTML and CSS have no server for at all.
+to one file cannot see - and what plain HTML and CSS have no server for at all.
 jot reads the tree itself: once when a workspace opens, and again after every
 save. The result is offered where the names belong, and nowhere else.
 
@@ -1053,7 +1051,7 @@ templating extensions), every `.name` in a selector position in a style sheet
 (`.css`, `.scss`, `.sass`, `.less`), and every `--name:` declaration. What is
 skipped: `node_modules`, `build`, `dist`, `target`, `vendor` and the other
 directories a generated name lives in, attributes that are commented out,
-templated values (`class={x}`, `{{ loop.index }}`), and any dotted word — a
+templated values (`class={x}`, `{{ loop.index }}`), and any dotted word - a
 class name has no `.` in it, and skipping the dot is what keeps `icon.svg` and
 `a.b` out of the list.
 
@@ -1083,7 +1081,7 @@ cmake --preset windows-msvc-vs2026-vcpkg
 cmake --build --preset windows-msvc-vs2026-vcpkg-debug
 ```
 
-The generated solution lands at `build\vs2026-x64\jot.sln` — open it directly
+The generated solution lands at `build\vs2026-x64\jot.sln` - open it directly
 or open the folder and pick the preset. Use 64-bit MSVC; the Windows target
 does not support `-A win32`. Lua is fetched at a pinned version when missing,
 and `libuv`/`utf8proc` are fetched automatically unless you provide them via
@@ -1174,7 +1172,7 @@ Build graph highlights: `jot_engine` is the aggregated static engine target;
 
 ## Notes and limitations
 
-- The workflow is modeless by design — typing edits text directly, selection is
+- The workflow is modeless by design - typing edits text directly, selection is
   mouse- or `Shift+Arrow`-driven, and common commands use standard Ctrl/Alt
   shortcuts.
 - The integrated terminal suits normal shell/task workflows but is not meant

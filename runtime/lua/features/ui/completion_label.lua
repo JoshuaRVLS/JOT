@@ -1,4 +1,4 @@
--- Completion row labels for the LSP popup — a port of colorful-menu.nvim.
+-- Completion row labels for the LSP popup - a port of colorful-menu.nvim.
 --
 -- Upstream rebuilds each row from the completion item's own fields so it reads
 -- like a declaration (`parse_config(…) -> Result<Config>`) instead of a bare name

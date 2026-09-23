@@ -309,7 +309,7 @@ public:
   // Ctrl+U shortcut while updates are available).
   void remove_keymap(const std::string &key, const std::string &mode = "");
   // Whether any keymap sequence ("Ctrl+T N") starts with the given chord
-  // ("Ctrl+T") — i.e. pressing the chord should reveal the which-key helper.
+  // ("Ctrl+T") - i.e. pressing the chord should reveal the which-key helper.
   bool plugin_keymap_is_prefix(const std::string &chord, const std::string &mode);
   // Rows shown by the helper under a prefix path (chords joined with a space,
   // e.g. "Ctrl+T" or "Ctrl+T N").
@@ -543,7 +543,7 @@ public:
   // as a toast. duration_ms <= 0 means "use the toast default".
   void emit_toast_event(const std::string &message, int duration_ms);
   // Direct delivery to the registered toast module (same LuaAPI instance that
-  // holds the module reference — the same path jot.toast.show uses). Returns
+  // holds the module reference - the same path jot.toast.show uses). Returns
   // the toast id, or 0 when no module is registered.
   int emit_toast_direct(lua_State *L, const std::string &message, int duration_ms);
   // jot.toast: store a reference to the Lua toast module table and forward
@@ -625,24 +625,18 @@ public:
                    bool ctrl,
                    bool shift,
                    bool alt);
-  // Float z-order layers. Floats open at 0 by default (editor chrome: sidebar,
-  // side panel, status line). A modal surface's own float opens on
-  // kModalFloatZindex instead, so it always paints above that chrome -- the
-  // chrome is repainted every frame, and creation order alone would put a
-  // background float on top of the modal that is open over it. Toasts sit
-  // above both (see runtime/lua/features/ui/toast.lua).
+  // Float z-order layers: floats open at 0 (editor chrome), a modal surface's own
+  // float opens on kModalFloatZindex so it always paints above that chrome, and
+  // toasts sit above both (see runtime/lua/features/ui/toast.lua).
   static constexpr int kModalFloatZindex = 50000;
 
-  // Starts a float pass: drops the per-frame overlay list and snapshots the
-  // float-free grid for the GUI backend. Call once per frame, before the first
-  // render_float_layer().
-  // Whether one of the modal surfaces (quick pick, a modal popup, the
-  // tree-sitter/LSP status modals, the telescope, the settings menu) is up
-  // right now. A modal owns the frame while it is open: it paints above the
-  // background floats (render_float_layer) and it is the only surface that
-  // takes the mouse (float_mouse).
+  // Whether a modal surface (quick pick, a popup, the status modals, the
+  // telescope, the settings menu) is up. A modal paints above the background
+  // floats and is the only surface that takes the mouse.
   bool modal_surface_open() const;
 
+  // Drops the per-frame overlay list and snapshots the float-free grid the GUI
+  // backend diffs against. Call once per frame, before the first float layer.
   void begin_float_pass();
   // Paints the visible floats inside the z-index window (inclusive), in paint
   // order. A modal frame splits its pass across kModalFloatZindex so the chrome

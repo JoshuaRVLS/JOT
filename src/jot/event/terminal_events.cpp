@@ -36,7 +36,7 @@ void Editor::handle_terminal_event(const Event &ev)
   // whatever is behind the window into the cached frame), and the
   // cell-diff renderer then skips repainting rows it believes are already
   // correct. Forgetting the last written frame forces every row back out
-  // on top of whatever is (or isn't) there — no ESC[2J clear, which races
+  // on top of whatever is (or isn't) there - no ESC[2J clear, which races
   // compositor surface teardown and blanks the window instead of fixing
   // it. The repaint is spread over three passes (~50ms apart): kitty with
   // dynamic opacity + Hyprland transparency needs more than one frame for

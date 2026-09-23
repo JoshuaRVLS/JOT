@@ -124,8 +124,8 @@ void LuaAPI::emit_toast_event(const std::string &message, int duration_ms)
     // The empty clear message is not a toast.
     return;
   }
-  // Deliver directly to the registered toast module on this instance — the
-  // same code path jot.toast.show uses — so a statusline message is guaranteed
+  // Deliver directly to the registered toast module on this instance - the
+  // same code path jot.toast.show uses - so a statusline message is guaranteed
   // to surface as a toast regardless of event-bus subscription timing. The
   // event bus remains a fallback when no module is registered.
   if (lua_state && toast_module_ref_ >= 0)

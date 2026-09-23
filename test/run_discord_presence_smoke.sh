@@ -60,7 +60,7 @@ for _ in $(seq 20); do
   sleep 0.1
 done
 if [ ! -S "$WORK/runtime/discord-ipc-0" ]; then
-  echo "discord smoke: FAIL — fake server never bound its socket" >&2
+  echo "discord smoke: FAIL - fake server never bound its socket" >&2
   exit 1
 fi
 
@@ -77,7 +77,7 @@ XDG_RUNTIME_DIR="$WORK/runtime" \
   >/dev/null 2>"$WORK/err.log"
 STATUS=$?
 if [ "$STATUS" -ne 124 ] && [ "$STATUS" -ne 0 ]; then
-  echo "discord smoke: FAIL — jot exited with $STATUS" >&2
+  echo "discord smoke: FAIL - jot exited with $STATUS" >&2
   sed -n '1,20p' "$WORK/err.log" >&2
   exit 1
 fi
@@ -92,24 +92,24 @@ text = re.sub(r"\x1b\][^\x07\x1b]*(\x07|\x1b\\)", "", text)
 sys.exit(0 if "Discord" in text else 1)
 PY
 then
-  echo "discord smoke: FAIL — no Discord chip in the terminal status line" >&2
+  echo "discord smoke: FAIL - no Discord chip in the terminal status line" >&2
   exit 1
 fi
-echo "discord smoke: ok — Discord chip visible in the terminal status line"
+echo "discord smoke: ok - Discord chip visible in the terminal status line"
 
 if [ ! -s "$FRAMES" ]; then
-  echo "discord smoke: FAIL — no IPC frames reached the fake Discord" >&2
+  echo "discord smoke: FAIL - no IPC frames reached the fake Discord" >&2
   echo "(the transport never connected)" >&2
   sed -n '1,20p' "$WORK/err.log" >&2
   exit 1
 fi
 
 if [ ! -s "$MARKER" ]; then
-  echo "discord smoke: FAIL — ':discord assets' did not complete" >&2
+  echo "discord smoke: FAIL - ':discord assets' did not complete" >&2
   sed -n '1,20p' "$WORK/err.log" >&2
   exit 1
 fi
-echo "discord smoke: ok — ':discord assets' ran clean"
+echo "discord smoke: ok - ':discord assets' ran clean"
 
 HANDSHAKE_OK=$(python3 - "$FRAMES" <<'PY'
 import json, sys
@@ -118,7 +118,7 @@ print("yes" if any(f["opcode"] == 0 and "client_id" in f["body"] for f in frames
 PY
 )
 if [ "$HANDSHAKE_OK" != "yes" ]; then
-  echo "discord smoke: FAIL — no handshake frame" >&2
+  echo "discord smoke: FAIL - no handshake frame" >&2
   cat "$FRAMES" >&2
   exit 1
 fi
@@ -133,7 +133,7 @@ for frame in frames:
         if activity:
             break
 if not activity:
-    print("discord smoke: FAIL — no activity was ever set", file=sys.stderr)
+    print("discord smoke: FAIL - no activity was ever set", file=sys.stderr)
     sys.exit(1)
 details = activity.get("details", "")
 assets = activity.get("assets", {})
@@ -147,8 +147,8 @@ if large != "rust":
 if small != "jot":
     problems.append(f"small image is {small!r}, expected 'jot'")
 if problems:
-    print("discord smoke: FAIL — " + "; ".join(problems), file=sys.stderr)
+    print("discord smoke: FAIL - " + "; ".join(problems), file=sys.stderr)
     print(json.dumps(activity, indent=2), file=sys.stderr)
     sys.exit(1)
-print(f"discord smoke: PASS — activity sent: {details!r} [{large}]")
+print(f"discord smoke: PASS - activity sent: {details!r} [{large}]")
 PY

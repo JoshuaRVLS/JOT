@@ -55,14 +55,11 @@ struct KeyEvent
   bool alt;
 };
 
-// Normalizes a raw termkey-style key code into the Event convention the
-// input layer dispatches on: modifier bits (0x20000 Ctrl / 0x40000 Alt /
-// 0x80000 Shift) and the 0x8000 uppercase bit are removed from `key` and
-// carried only in the ctrl/shift/alt booleans; control bytes 1-26 (minus
-// Tab/Enter) imply ctrl; shifted arrows 2008-2011 unwrap to 1008-1011;
-// uppercase letters lose 0x8000 (so shift+s -> key 'S', shift=true).
-// Shared by the terminal backend and the GUI frontend so both produce
-// identical events.
+// Normalizes a raw termkey-style key code into the Event convention the input
+// layer dispatches on: the modifier bits (0x20000 Ctrl, 0x40000 Alt, 0x80000
+// Shift) and the 0x8000 uppercase bit move into the ctrl/shift/alt booleans,
+// control bytes 1-26 (minus Tab/Enter) imply ctrl, and shifted arrows 2008-2011
+// unwrap to 1008-1011. Shared by both frontends, so their events are identical.
 KeyEvent decode_key_event(int raw_ch);
 
 struct MouseEvent
@@ -119,30 +116,15 @@ private:
   // flush().
   bool frame_bytes_dropped_ = false;
   int last_flush_bytes_ = 0;
-  // Columns on the right edge of every row that the renderer leaves unpainted.
-  // Zero (the default) uses the full width, which is what the layout wants:
-  // any margin shows up as a permanent blank strip down the right edge, and the
-  // bottom bar then stops one cell short of the corner it should meet.
-  //
-  // The wrap hazard the margin used to guard against is already handled: every
-  // frame disables autowrap (\x1b[?7l, see disable_autowrap) and each row is
-  // addressed with an absolute cursor move, so writing the last column neither
-  // wraps nor scrolls. The setting exists only as an escape hatch for a terminal
-  // that misbehaves there. UI::get_render_width() is defined as
-  // `width - render_margin()` and is the width every full-width panel (pane
-  // layout, status line, integrated terminal, image viewer, home menu) must use
-  // so its right border lands on the last paintable column.
+  // Columns on the right edge of every row the renderer leaves unpainted; zero
+  // (the default) uses the full width, since any margin is a blank strip down the
+  // right edge. It is an escape hatch only: autowrap is off and rows are addressed
+  // absolutely, so writing the last column neither wraps nor scrolls. Every
+  // full-width panel uses UI::get_render_width() = width - render_margin().
   int render_margin_ = 0;
-  // Per-frame chunking threshold for `flush()`. When > 0 and the
-  // output buffer has grown past this many bytes, `flush()` will
-  // emit the data in blocking `write()` chunks of this size
-  // instead of one big write. This is diagnosis-only; the default
-  // is 0 (one ordered flush per frame). Mid-frame `try_drain()` is
-  // no longer called from the renderer because mixing
-  // non-blocking writes with the blocking final flush was causing
-  // byte reordering and large-window cursor teleport. If chunking
-  // is needed, set JOT_RENDER_CHUNK_BYTES=<n> to enable chunked
-  // writes inside `flush()`.
+  // Per-frame chunking threshold for `flush()`: past this many bytes it writes in
+  // blocking chunks of this size instead of one write. Diagnosis-only, default 0
+  // (one ordered flush), set with JOT_RENDER_CHUNK_BYTES=<n>.
   size_t render_chunk_bytes_ = 0;
   // Set once at init (detect_truecolor). Defaults to false so the quantised
   // path is what any test that never runs init() exercises.
@@ -176,34 +158,20 @@ public:
     return height;
   }
 
-  // Probe the current terminal size from the OS and update width/height if
-  // it differs from the cached values. Returns true if either dimension
-  // changed. Safe to call any time after construction; this does NOT depend
-  // on SIGWINCH having been delivered. Use this before constructing or
-  // resizing the UI to ensure the first frame uses the real terminal size
-  // and not a stale or fallback value (e.g. the 80x24 constructor default).
-  //
-  // `force_probe = true` runs the ANSI cursor-position probe in addition to
-  // ioctl/$COLUMNS/$LINES. Use this once after entering alternate-screen
-  // raw mode and before the first UI::resize(...): the ioctl that was
-  // attempted in the normal flow can return stale dimensions if the
-  // foreground process group or controlling TTY changed when the alternate
-  // screen was switched in, and the cursor probe is the only reliable way
-  // to get the real rows/cols in that window. The probe is gated on
-  // isatty(STDIN_FILENO) && isatty(STDOUT_FILENO) so piped stdin/stdout
-  // still return promptly.
+  // Probes the terminal size from the OS and updates width/height, returning
+  // whether either changed; safe any time after construction and independent of
+  // SIGWINCH, so the first frame avoids the 80x24 constructor default.
+  // `force_probe` adds the ANSI cursor-position probe (gated on both fds being a
+  // tty), which is the only reliable read right after the alternate screen is
+  // entered and ioctl would report a stale size.
   bool refresh_size(bool force_probe = false);
 
   Event poll_event();
   void set_poll_timeout_ms(int timeout_ms);
   // Writes the buffered frame and reports whether the terminal took all of it.
-  //
-  // Returns false when the write gave up (a pty that stayed full past the
-  // timeout): the bytes that never went out are dropped rather than replayed,
-  // so the caller has to treat the screen as unknown. The renderer's diff
-  // baseline cannot decide this on its own -- it records the cells as painted
-  // when they were *queued*, so a half-written frame would leave those cells
-  // wrong until something else happened to redraw them.
+  // False when the write gave up (a pty full past the timeout): the bytes that
+  // never went out are dropped, so the caller must treat the screen as unknown
+  // and force a repaint -- the diff baseline cannot notice on its own.
   bool flush();
 
   void clear();

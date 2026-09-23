@@ -671,7 +671,7 @@ void DebuggerClient::handle_response(const Dap::Value &root)
   {
     // Evaluate-then-read chain (evaluate_and_read_memory): once the adapter
     // resolves the expression to an address (memoryReference field, or a
-    // literal address as the evaluated result — GDB reports "0x…" for $pc
+    // literal address as the evaluated result - GDB reports "0x…" for $pc
     // and &var), issue the readMemory right here. Errors surface as Error
     // events via the response handler below.
     const int count = pending_memory_read_count;

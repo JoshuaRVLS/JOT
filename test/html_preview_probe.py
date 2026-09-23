@@ -9,13 +9,13 @@ probe speaks HTTP to the port it bound.
 What that buys, per scene:
 
   * `GET /index.html` returns the buffer's text with the live-reload client
-    injected before `</body>` — the page the browser gets,
+    injected before `</body>` - the page the browser gets,
   * `GET /styles/site.css` returns the file from disk, unmodified: the relative
     reference in the page resolves, which is the whole reason the server is
     rooted at the tree instead of holding one page,
   * `GET /../secret.txt` is refused (the file root is a boundary, not a prefix),
-  * an edit that was never saved shows up in the served page — the buffer
-    overrides the file on disk — and the reload event reaches the open page.
+  * an edit that was never saved shows up in the served page - the buffer
+    overrides the file on disk - and the reload event reaches the open page.
 
 The port is fixed through the config file so the probe knows where to knock;
 `open_browser = false` keeps the pty session from trying to launch one.

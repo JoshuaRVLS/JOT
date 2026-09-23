@@ -1,4 +1,4 @@
--- Side Panel — part of the Lua UI kit.
+-- Side Panel - part of the Lua UI kit.
 -- Split out of features/ui.lua so each surface stays small and
 -- focused; features/ui.lua is the orchestrator that requires
 -- every module and registers the handlers.
@@ -6,9 +6,9 @@
 -- Serves every right-panel surface (debugger, git diff, symbols
 -- outline, plugin panels). The native side tags each row with a
 -- `kind`; the debugger panel (rows with kind, plus session tabs)
--- gets the rich treatment below — section headers, hexdump
+-- gets the rich treatment below - section headers, hexdump
 -- memory rows, typed variable coloring, thread markers and a
--- key-hint footer — while the other panels keep the generic
+-- key-hint footer - while the other panels keep the generic
 -- list rendering.
 local h = require("jot_ui.helpers")
 local close = h.close

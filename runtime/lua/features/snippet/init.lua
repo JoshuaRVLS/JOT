@@ -1,4 +1,4 @@
--- Snippet engine — a full port of the LuaSnip feature set onto jot.
+-- Snippet engine - a full port of the LuaSnip feature set onto jot.
 --
 -- Public surface (`jot.snip`), mirroring LuaSnip's `ls`:
 --   * constructors  s / sn / t / i / f / d / c / r / rep / fmt / isn / ms

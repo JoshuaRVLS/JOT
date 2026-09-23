@@ -492,7 +492,7 @@ struct SidePanelView
   int note_fg = 0;
   std::string error; // bottom error line (debugger), may be empty
   // Right-dock panel tabs (Git / Diff / Symbols / Debug / Plugin) rendered
-  // as the first row of the panel — the VSCode-style tab strip. Distinct
+  // as the first row of the panel - the VSCode-style tab strip. Distinct
   // from `tabs` (in-panel view/session tabs).
   std::vector<SidePanelTabView> panel_tabs;
   std::vector<SidePanelTabView> tabs;

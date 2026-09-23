@@ -346,12 +346,12 @@ void Editor::poll_tree_sitter_installs()
         job.verify_attempts++;
         if (job.verify_attempts < 4)
         {
-          job.progress = "installed — verifying…";
+          job.progress = "installed, verifying…";
           // Keep running to re-check next poll (filesystem / dlopen may need a moment).
         }
         else
         {
-          job.progress = "installed — parser not found: " + status.parser_message;
+          job.progress = "installed, parser not found: " + status.parser_message;
           job.running = false;
           job.succeeded = false;
           job.failed = true;

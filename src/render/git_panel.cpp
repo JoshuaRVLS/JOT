@@ -205,8 +205,8 @@ void Editor::render_git_panel()
 
   if (flat.empty())
   {
-    view.note = files_view ? "No changes — clean working tree"
-                           : "Nothing here — press r to refresh";
+    view.note = files_view ? "No changes, clean working tree"
+                           : "Nothing here, press r to refresh";
     view.note_fg = theme.fg_comment;
     if (lua_api && lua_api->has_lua_ui_handler("side_panel") && lua_api->emit_side_panel(view))
     {

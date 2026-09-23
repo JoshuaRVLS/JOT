@@ -195,7 +195,7 @@ struct Theme
   int fg_telescope_preview = 7;
   int bg_telescope_preview = 0;
   // Query (input) row: kept visually distinct from the selection highlight so
-  // the typed text stays readable — dark input bg like the command bar rather
+  // the typed text stays readable - dark input bg like the command bar rather
   // than the loud selection color. Defaults mirror fg_command/bg_command.
   int fg_telescope_query = 7;
   int bg_telescope_query = 0;

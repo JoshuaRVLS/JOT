@@ -106,14 +106,11 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
   ActiveBracketGuide bracket_guide = build_active_bracket_guide(buf, tab_size);
 
   refresh_folds(buf);
-  // Clamp before any depth math: scroll_offset can arrive stale (left over
-  // from a previous cursor/scroll state for a smaller viewport or folded
-  // region), and the seed below must describe the rows that are actually
-  // about to be drawn. Seeding from the unclamped value painted the whole
-  // viewport at the wrong absolute depth until the next frame.
-  // One prepared view for the whole frame: every per-row fold query below
-  // (which line a row shows, whether it is hidden, whether it is a folded
-  // header) reads this index instead of re-scanning every detected range.
+  // Clamp before any depth math: scroll_offset can arrive stale, and seeding
+  // from the unclamped value painted the whole viewport at the wrong depth
+  // until the next frame.
+  // One prepared view for the whole frame: every per-row fold query below reads
+  // this index instead of re-scanning every detected range.
   const auto fold_view = Folding::view_of(buf.fold_ranges);
   buf.scroll_offset = fold_view->clamp_scroll_offset(buf.scroll_offset, h, (int)buf.line_count());
 
@@ -1192,15 +1189,10 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
           apply_bracket_depth_delta(c, bracket_depth);
         }
       }
-      // Bracket color must depend on file position only, but the walk above can
-      // stop at the visible edge (and only sees the syntax window of a very long
-      // line), so the depth it reached is not necessarily the line's depth.
-      // Carrying that into the next row made the following lines change color
-      // with the window, and disagree with what a scrolled-to view paints for the
-      // same line. The prefix cache is the authoritative per-line value and is
-      // O(1) for sequential rows. Lazy buffers keep the carried value: the
-      // prefix walk would demand-load lines, which is what their bounded
-      // backscan avoids.
+      // Bracket color must depend on file position only, and the walk above can
+      // stop at the visible edge, so the depth it reached is not the line's. The
+      // prefix cache is authoritative and O(1) for sequential rows; lazy buffers
+      // keep the carried value, since the walk would demand-load lines.
       if (!buf.is_lazy() && line_idx + 1 < (int)buf.line_count())
       {
         bracket_depth = bracket_depth_at_line_start(buf, line_idx + 1);
@@ -1265,14 +1257,9 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
           int tail_x = current_x + (tail_start - start_visual);
           int max_tail = std::max(0, visible_len - (tail_start - start_visual));
           int draw_cells = std::min(tail_cells, max_tail);
-          // The tail repaint only fixes the BACKGROUND of the selected
-          // range: the characters were already painted with selection colors
-          // by the per-character walk above (is_in_selection). Repainting
-          // the glyph as well would draw a blank " " over the code and hide
-          // it behind a solid highlight box.
-          //
-          // The main-cursor cell keeps the default colors so the block
-          // cursor stays visible on a bare caret (see block_cursor above).
+          // The tail repaint only fixes the BACKGROUND of the selected range:
+          // the glyphs were already painted by the walk above, so repainting them
+          // would draw a blank over the code and hide it behind the box.
           const int cursor_cell_visual =
               (line_idx == buf.cursor.y)
                   ? compute_visual_column(line, buf.cursor.x, tab_size)
@@ -1388,28 +1375,13 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
         }
       }
 
-      // nvim-cmp-style ghost text: the selected completion's remaining
-      // insert text previewed dimmed (italic, like inlay hints) while the
-      // popup is open. With a thin caret (bar/line/underline) at the end
-      // of the line the caret cell is empty -- only the caret glyph -- so
-      // starting one cell right would leave a visible gap (`std::co| ut`);
-      // the ghost hugs the caret cell instead. A block caret fills its
-      // cell, so the ghost still starts right of it.
-      //
-      // It is painted in the pane that owns the popup, once the typing has
-      // paused, and only where the caret owns the line's tail: everything from
-      // the caret to the end of the line has to be blank. The preview is the rest
-      // of the word being typed, and accepting it inserts that word at the caret
-      // -- so inside a call the editor auto-closed (`printf(|)`) the text under
-      // the caret is the `)` itself, and before a `;` it is the `;`. Drawing there
-      // put the completion after a character it would land before, which is what
-      // made the preview read as the editor having eaten the bracket. The
-      // completion session belongs to the focused pane (render_lsp_completion
-      // anchors the popup there), so a split showing the same row -- its own caret
-      // included -- must not draw the same word again. The clock is the third
-      // gate: a preview that appears on every keystroke is a flicker, not a
-      // preview, so it lands on the pause (lsp_completion_preview_withheld, and
-      // lsp_completion_preview_due_soon for the frame that reveals it).
+      // nvim-cmp-style ghost text: the selected completion's remaining insert
+      // text, previewed dimmed while the popup is open. With a thin caret the
+      // ghost hugs the caret cell (starting one cell right left a gap); a block
+      // caret fills its cell, so the ghost still starts right of it.
+      // Three gates: the pane that owns the popup, a caret that owns a blank tail
+      // (the `)` of an auto-closed call must not read as eaten), and the idle
+      // pause, since a preview on every keystroke is a flicker.
       bool tail_is_blank = false;
       if (pane.active && line_idx == buf.cursor.y && !lsp_completion_ghost_text.empty()
           && config.get_bool("lsp_completion_ghost_text", true)

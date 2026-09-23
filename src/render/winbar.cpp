@@ -1,18 +1,12 @@
 // The breadcrumb winbar: the row a code pane spends above its text, and the
 // drop-down menu a crumb opens (dropbar.nvim's model, ported).
 //
-// The chain and what a crumb's menu offers come from features/winbar.h; this
-// file turns a chain into cells (build_winbar_layout), paints it (render_winbar
-// / render_winbar_menu) and owns the interaction -- a crumb is opened by a
-// press, a motion only ever moves the hover band, and the open cascade keeps
-// the pointer until it picks something or is dismissed.
-//
-// A folder row does not replace the menu it is on: it opens its own listing
-// beside it, anchored on the row itself, and the level that offered it stays on
-// screen -- so the cascade shows the whole path the pointer walked to reach a
-// file, and Enter on a folder is a step deeper rather than a jump. Everything
-// deeper than the level the pointer is on is dropped as soon as that level's
-// selection moves, which is what keeps the cascade honest about where "here" is.
+// The chain comes from features/winbar.h; this file turns it into cells, paints
+// it and owns the interaction (a press opens a crumb, motion only moves the
+// hover band).
+// A folder row opens its own listing beside the menu it is on, keeping the level
+// that offered it on screen, so the cascade shows the whole path the pointer
+// walked and deeper levels drop as soon as a level's selection moves.
 #include "editor.h"
 #include "jot/file_icons.h"
 #include "jot/lua/api.h"

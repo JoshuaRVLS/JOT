@@ -1,4 +1,4 @@
--- Tree Sitter — part of the Lua UI kit.
+-- Tree Sitter - part of the Lua UI kit.
 -- Split out of features/ui.lua so each surface stays small and
 -- focused; features/ui.lua is the orchestrator that requires
 -- every module and registers the handlers.

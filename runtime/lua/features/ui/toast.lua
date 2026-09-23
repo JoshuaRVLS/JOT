@@ -236,7 +236,7 @@ end
 
 -- Where the toast sits: top-right, stacked below its predecessors. When the
 -- right panel (git / debugger / outline dock) is visible the stack shifts
--- left of it, so toasts never hide the panel's top rows — a panel with few
+-- left of it, so toasts never hide the panel's top rows - a panel with few
 -- rows (e.g. the git branches view) would otherwise look empty while the
 -- toast is up.
 local function layout_toast(t)

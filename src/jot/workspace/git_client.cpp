@@ -3,7 +3,7 @@
 // A deliberately small file: :lazygit launches the lazygit TUI inside jot's
 // integrated terminal, rooted at the workspace (or the current file's
 // directory when jot was started on a single file). lazygit is an external
-// binary — jot never vendors it — so when it is missing the command says so
+// binary - jot never vendors it - so when it is missing the command says so
 // and points at the official install paths.
 
 #include "editor.h"
@@ -67,7 +67,7 @@ void Editor::open_git_client()
 
   if (!executable_on_path("lazygit"))
   {
-    set_message("lazygit not found — install it (brew install lazygit, or "
+    set_message("lazygit not found: install it (brew install lazygit, or "
                 "https://github.com/jesseduffield/lazygit)");
     return;
   }
@@ -78,7 +78,7 @@ void Editor::open_git_client()
     if (integrated_terminals[i] && integrated_terminals[i]->get_label() == "lazygit")
     {
       activate_integrated_terminal(i, true);
-      set_message("lazygit already open — focused");
+      set_message("lazygit already open, focused");
       needs_redraw = true;
       return;
     }
@@ -92,6 +92,6 @@ void Editor::open_git_client()
     return;
   }
   term->send_text("lazygit\r");
-  set_message("lazygit — quit with q to return to jot");
+  set_message("lazygit: quit with q to return to jot");
   needs_redraw = true;
 }

@@ -2,7 +2,7 @@
 --
 -- Listens for DiagnosticChanged and re-applies one decoration per
 -- diagnostic using the jot.decoration.* API: a wavy underline over the
--- reported range in the severity color (VSCode-style squiggle — the text
+-- reported range in the severity color (VSCode-style squiggle - the text
 -- itself keeps its syntax colors; only the underline is colored).
 --
 -- Decorations are anchored: they follow the text across edits, so inline

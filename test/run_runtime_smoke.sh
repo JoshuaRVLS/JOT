@@ -47,24 +47,24 @@ STATUS=$?
 # A healthy editor stays alive until the timeout kills it (124). A segfault
 # (139) or any early nonzero exit is a failure.
 if [ "$STATUS" -eq 139 ]; then
-  echo "runtime smoke: FAIL — process segfaulted" >&2
+  echo "runtime smoke: FAIL - process segfaulted" >&2
   sed -n '1,20p' "$WORK/err.log" >&2
   exit 1
 fi
 if [ "$STATUS" -ne 124 ]; then
-  echo "runtime smoke: FAIL — unexpected exit status $STATUS (expected 124 after timeout)" >&2
+  echo "runtime smoke: FAIL - unexpected exit status $STATUS (expected 124 after timeout)" >&2
   sed -n '1,20p' "$WORK/err.log" >&2
   exit 1
 fi
 
 if [ ! -f "$WORK/out.txt" ]; then
-  echo "runtime smoke: FAIL — no smoke output written (editor likely died before plugins loaded)" >&2
+  echo "runtime smoke: FAIL - no smoke output written (editor likely died before plugins loaded)" >&2
   sed -n '1,20p' "$WORK/err.log" >&2
   exit 1
 fi
 
 if ! grep -q "SMOKE_DONE" "$WORK/out.txt"; then
-  echo "runtime smoke: FAIL — smoke script did not finish" >&2
+  echo "runtime smoke: FAIL - smoke script did not finish" >&2
   tail -20 "$WORK/out.txt" >&2
   exit 1
 fi
@@ -72,7 +72,7 @@ fi
 # A 150ms jot.timer one-shot fires while the editor keeps running after the
 # script finishes; its callback appends TIMER_FIRED to the output file.
 if ! grep -q "TIMER_FIRED" "$WORK/out.txt"; then
-  echo "runtime smoke: FAIL — jot.timer callback never fired in the live loop" >&2
+  echo "runtime smoke: FAIL - jot.timer callback never fired in the live loop" >&2
   tail -20 "$WORK/out.txt" >&2
   exit 1
 fi
@@ -93,16 +93,16 @@ PASS_COUNT="$(sed -n 's/^PASS=\([0-9]*\)$/\1/p' "$WORK/out.txt" | tail -1)"
 [ -n "$PASS_COUNT" ] || PASS_COUNT=0
 
 if [ "${FAIL_COUNT:-0}" -ne 0 ]; then
-  echo "runtime smoke: FAIL — $FAIL_COUNT API call(s) errored (${PASS_COUNT} passed)" >&2
+  echo "runtime smoke: FAIL - $FAIL_COUNT API call(s) errored (${PASS_COUNT} passed)" >&2
   grep '=ERR:\|=MISSING:' "$WORK/out.txt" >&2
   exit 1
 fi
 
 if grep -qE "Lua API setup failed|callback error|event bus error|Plugin failed" "$WORK/err.log"; then
-  echo "runtime smoke: FAIL — Lua runtime errors in stderr" >&2
+  echo "runtime smoke: FAIL - Lua runtime errors in stderr" >&2
   grep -E "Lua API setup failed|callback error|event bus error|Plugin failed" "$WORK/err.log" >&2
   exit 1
 fi
 
-echo "runtime smoke: PASS — ${PASS_COUNT} API checks passed, 0 failed, no crashes"
+echo "runtime smoke: PASS - ${PASS_COUNT} API checks passed, 0 failed, no crashes"
 exit 0

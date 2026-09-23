@@ -1,16 +1,11 @@
-// Settings menu rendering: a quick-pick style centered panel over a search
-// bar, listing the config keys (defaults + Lua-registered) that match the
-// query, with their current values. Each row is drawn the way its type reads:
-// a toggle glyph for booleans, a stepper around the number for integers,
-// cycling chevrons around the choice for enumerated settings, and the raw
-// value for strings. Enter lists an enum row's choices in a drop-down.
-// Painted through the normal cell grid, so it works identically in the
-// terminal and GUI frontends (:settings / Ctrl+,).
+// Settings menu rendering: a quick-pick style panel over a search bar, listing
+// the config keys that match the query. A row is drawn the way its type reads:
+// a toggle glyph for booleans, steppers around a number, chevrons around an
+// enum's choice, the raw value for strings.
 //
-// The layout pass below runs for both painters: it places the rows, the value
-// columns and the affordances, and records them on the entries so the mouse
-// hit test reads exactly what was drawn. The Lua surface (features/ui/
-// settings.lua) draws the glyphs into those same rects.
+// The layout pass below runs for both painters and records the rows, value
+// columns and affordances on the entries, so the mouse hit test reads exactly
+// what was drawn and the Lua surface paints into those same rects.
 #include "editor.h"
 #include "jot/lua/api.h"
 #include "ui/components.h"
@@ -23,10 +18,9 @@
 
 namespace
 {
-// The text a row's value column shows. Booleans carry their state in a Nerd
-// Font toggle glyph (nf-fa-toggle_on / nf-fa-toggle_off) rather than colour,
-// which the selection bar would swallow; every other type shows the raw
-// stored value.
+// The text a row's value column shows. Booleans carry their state in a toggle
+// glyph (nf-fa-toggle_on / _off) rather than colour, which the selection bar
+// would swallow; every other type shows the raw stored value.
 std::string value_display(const SettingsEntry &e)
 {
   if (e.type == SettingsEntry::Type::Bool)
@@ -45,10 +39,9 @@ std::string truncate(const std::string &s, int max_len)
   return ui_take_cells(s, max_len - 3) + "...";
 }
 
-// The painted row the selected entry sits on. Sections put headers between the
-// rows, so the selection's position in the selectable list is not its position
-// on screen; every window decision (scroll, how much room the choices
-// drop-down has) has to be made in rows.
+// The painted row the selected entry sits on: sections put headers between the
+// rows, so a position in the selectable list is not a position on screen and
+// every window decision has to be made in painted rows.
 int display_row_of(const std::vector<SettingsRow> &rows, int entry_pos, int fallback)
 {
   for (int i = 0; i < (int)rows.size(); i++)
@@ -75,9 +68,8 @@ void Editor::render_settings_menu()
   // The painted rows: the matches plus a header wherever a section starts.
   const int row_count = (int)settings_rows.size();
 
-  // The choices drop-down (an Enum row opened with Enter) needs room under the
-  // row it belongs to, so the panel grows for it instead of covering the value
-  // the list is offering. A row with no room below opens its box upwards.
+  // The choices drop-down needs room under the row it belongs to, so the panel
+  // grows for it; a row with no room below opens its box upwards.
   SettingsEntry *dropdown_row = nullptr;
   if (settings_dropdown_open)
   {
@@ -88,14 +80,18 @@ void Editor::render_settings_menu()
   const int dropdown_wanted =
       dropdown_row ? std::min((int)dropdown_row->options.size(), 10) : 0;
 
-  const int w = std::min(std::max(60, screen_w - 12), 96);
-  const int max_rows = std::min(20, std::max(9, screen_h - 10));
-  int h = std::min(std::max(row_count + 6, 10), max_rows);
+  // The panel fits the screen it is on: on a narrow terminal the margin shrinks
+  // to nothing and the columns take what is left, rather than a 60-cell floor
+  // pushing the right border and every value past the edge.
+  const int margin = screen_w >= 80 ? 12 : 2;
+  const int w = std::min(std::max(std::min(20, screen_w), screen_w - margin), 96);
+  const int max_h = std::clamp(screen_h - 3, 3, 20);
+  int h = std::min(std::max(row_count + 6, 10), max_h);
   if (dropdown_row)
   {
     const int row_offset =
         std::max(0, display_row_of(settings_rows, settings_selected, 0) - settings_scroll);
-    h = std::min(max_rows, std::max(h, row_offset + dropdown_wanted + 5));
+    h = std::min(max_h, std::max(h, row_offset + dropdown_wanted + 5));
   }
   const int x = std::max(0, (screen_w - w) / 2);
   const int y = std::max(1, (screen_h - h) / 3);
@@ -111,21 +107,20 @@ void Editor::render_settings_menu()
   const int search_y = y + 1;
   const int list_y = y + 3;
   const int list_h = std::max(1, h - 5);
-  // The window runs over painted rows, headers included, because a header is
-  // a row the eye needs -- a window measured in entries could not fit the
-  // group names and would leave the bottom of the list off screen.
+  // The window runs over painted rows, headers included: a window measured in
+  // entries could not fit the group names.
   const int selected_display = display_row_of(settings_rows, settings_selected, 0);
   const int max_scroll = std::max(0, row_count - list_h);
   settings_scroll = std::clamp(settings_scroll, 0, max_scroll);
-  // Keep the selection visible: the input handler moves settings_selected;
-  // the window follows it here on the next frame (up before down, so a
-  // selection at the very bottom stays fully visible).
+  // Keep the selection visible: the input handler moves settings_selected and
+  // the window follows on the next frame (up before down, so the bottom row
+  // stays fully visible).
   if (selected_display < settings_scroll)
     settings_scroll = selected_display;
   if (selected_display >= settings_scroll + list_h)
     settings_scroll = selected_display - list_h + 1;
 
-  const int key_w = std::max(18, (int)(w * 0.55));
+  const int key_w = std::max(10, (int)(w * 0.55));
   const int val_x = x + 1 + key_w;
 
   // Invalidate hit rects first; only visible rows get fresh rects below, so
@@ -152,17 +147,15 @@ void Editor::render_settings_menu()
     e.row_w = w - 2;
     e.value_x = val_x;
     e.value_w = std::max(1, w - key_w - 4);
-    // The affordances belong to the row the cursor is on: the list stays
-    // quiet until a row is picked, and the steppers then travel with the
-    // number they move instead of floating at the column's far edge.
+    // The affordances belong to the row the cursor is on, so the list stays
+    // quiet until a row is picked and the steppers travel with their number.
     if (!selected)
       continue;
     if (e.type == SettingsEntry::Type::Int)
     {
-      // The steppers take the band's last four cells, so the number is drawn
-      // into what is left and the pair lands one cell past it. Both painters
-      // truncate the value to `value_w`, which is what keeps the recorded
-      // columns exactly where the glyphs end up.
+      // The steppers take the band's last four cells and the pair lands one cell
+      // past the number; both painters truncate to `value_w`, which keeps the
+      // recorded columns exactly where the glyphs end up.
       e.value_w = std::max(1, w - key_w - 8);
       const int text_end =
           e.value_x + ui_cell_count(truncate(value_display(e), e.value_w));
@@ -195,10 +188,9 @@ void Editor::render_settings_menu()
     for (const std::string &option : dropdown_row->options)
       box_w = std::max(box_w, ui_cell_count(option) + 4);
     box_w = std::min(box_w, std::max(10, w - 4));
-    // Room below the row (down to the panel's last usable row) and above it
-    // (from just under its title): the box opens on whichever side holds
-    // more, and its list scrolls when even that is short. It never covers the
-    // row itself -- the value being chosen has to stay readable.
+    // Room above the row and below it: the box opens on whichever side holds
+    // more and its list scrolls when even that is short. It never covers the row
+    // itself, since the value being chosen has to stay readable.
     const int below = std::max(0, (y + h - 2) - (dropdown_row->row_y + 1) + 1);
     const int above = std::max(0, dropdown_row->row_y - (y + 1));
     const int rows = std::max(1, std::min(dropdown_wanted, std::max(below, above)));
@@ -219,10 +211,9 @@ void Editor::render_settings_menu()
       settings_dropdown_scroll = settings_dropdown_index - rows + 1;
   }
 
-  // Lua UI handler takes over rendering when registered (the panel then
-  // paints as a float on top of the modal scrim, like every other modal
-  // surface). The layout + hit rects above are shared by both paths, so
-  // mouse clicks and cursor placement stay exact.
+  // A registered Lua UI handler takes over rendering (the panel then paints as a
+  // float over the modal scrim); the layout and hit rects above are shared by
+  // both paths.
   if (lua_api && lua_api->has_lua_ui_handler("settings"))
   {
     SettingsView view;
@@ -365,10 +356,8 @@ void Editor::render_settings_menu()
     const SettingsRow &r = settings_rows[(size_t)display];
     if (r.entry_pos < 0)
     {
-      // A section header: no chevron, no value, and none of the row's own
-      // emphasis -- the group's name in the panel's quiet ink, on the column
-      // the labels start at, so it reads as a heading over the rows beneath
-      // it rather than as a row of its own.
+      // A section header: no chevron, no value, no row emphasis, just the
+      // group's name in the panel's quiet ink on the label column.
       ui->fill_rect(
           {x + 1, list_y + row, std::max(1, w - 2), 1}, " ", theme.fg_comment, panel_theme.bg_command);
       ui->draw_text(x + 2,
@@ -470,10 +459,8 @@ void Editor::place_settings_cursor()
   if (!show_settings_menu)
     return;
   SettingsEntry *e = settings_selected_entry();
-  // The text cursor belongs to whichever text field owns the keyboard: the
-  // row being edited, else the search bar (where every typed character lands
-  // while the list is not being edited). An open drop-down has no text field
-  // of its own, so it hides the cursor entirely.
+  // The text cursor belongs to whichever text field owns the keyboard: the row
+  // being edited, else the search bar. An open drop-down hides it entirely.
   if (settings_dropdown_open)
   {
     ui->hide_cursor();

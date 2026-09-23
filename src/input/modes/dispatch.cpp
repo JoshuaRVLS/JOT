@@ -102,7 +102,7 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
     if (show_right_panel)
     {
       // Close the right dock (git / debugger / outline / plugin panels)
-      // instead of quitting — Ctrl+Q is the natural close-panel chord and
+      // instead of quitting - Ctrl+Q is the natural close-panel chord and
       // matches the panel's own q key.
       show_right_panel = false;
       active_right_panel_tab = RIGHT_PANEL_DEBUG;

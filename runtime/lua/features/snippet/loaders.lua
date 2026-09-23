@@ -1,12 +1,12 @@
 -- Snippet pack loaders.
 --
 -- Three formats, mirroring LuaSnip's `loaders` module:
---   * `from_lua`     — `<root>/snippets/*.lua`, run with the snippet symbols
+--   * `from_lua` - `<root>/snippets/*.lua`, run with the snippet symbols
 --                      as globals (`snip_env`); may return a list of snippets
 --                      or a `{ filetype = snippets }` map.
---   * `from_vscode`  — `<root>/snippets/**/*.json` and `*.code-snippets`
+--   * `from_vscode` - `<root>/snippets/**/*.json` and `*.code-snippets`
 --                      (plus `package.json` manifests).
---   * `from_snipmate`— `<root>/snippets/<filetype>.snippets`.
+--   * `from_snipmate` - `<root>/snippets/<filetype>.snippets`.
 --
 -- Roots are `<config>/snippets`, `<workspace>/.jot/snippets` and anything in
 -- `snippet_paths` (see config.lua).

@@ -15,8 +15,8 @@ namespace
   const char *const kFolderGlyph = "\uf07b";     // nf-fa-folder
   const char *const kRootFolderGlyph = "\uf07c"; // nf-fa-folder_open (workspace)
   // A menu never grows past this many rows: a folder with thousands of entries
-  // would otherwise build a menu taller than the screen and cost a directory
-  // read per frame. The list is alphabetical, so the cap keeps the beginning.
+  // would otherwise build a menu taller than the screen. The list is
+  // alphabetical, so the cap keeps the beginning.
   constexpr int kMaxMenuEntries = 300;
 
   std::string lower_copy(std::string s)
@@ -136,8 +136,8 @@ namespace Winbar
     {
       const int column = symbols[i].column;
       // A symbol's parent is the innermost symbol that starts further left: the
-      // flat index carries the name's indent in `column`, so the nesting a
-      // real outline shows comes back out of a stack walk.
+      // flat index carries the name's indent in `column`, so a stack walk gets
+      // back the nesting a real outline shows.
       while (!stack.empty() && symbols[(size_t)stack.back()].column >= column)
       {
         stack.pop_back();
@@ -276,25 +276,23 @@ namespace Winbar
     const fs::path file(filepath);
     const fs::path root(workspace_root);
 
-    // The path half: the workspace root (when the file is inside it), then the
-    // folders down to the file, then the file. A file outside the workspace -- or
-    // no workspace at all -- gets its own folder instead of a chain of ancestors
-    // the editor has no business walking.
+    // The path half: the workspace root (when the file is inside it), the folders
+    // down to the file, the file. A file outside the workspace gets its own
+    // folder instead of a chain of ancestors.
     std::vector<fs::path> folders;
     if (!root.empty() && inside_root(file, root))
     {
       // A workspace root can be spelled relative to the editor's own directory
-      // (`.` is the common one: a file opened with no workspace named). The
-      // crumb names the folder, so resolve it before reading its name -- a
-      // literal `.` on the row says nothing.
+      // (`.` when a file was opened with no workspace named), so resolve it
+      // before reading the name a literal `.` cannot give.
       fs::path root_path = root;
       const std::string root_name = root_path.filename().string();
       if (root_name.empty() || root_name == "." || root_name == "..")
       {
         std::error_code abs_ec;
-        // absolute()/lexically_normal() keep the trailing `.` (a bare "" or "."
-        // root resolves to "/cwd/.", then to "/cwd/"), and a path that ends in
-        // a separator has no filename -- step over it to get the folder's name.
+        // absolute()/lexically_normal() keep a trailing `.` (a bare "" root
+        // resolves to "/cwd/."), and a path ending in a separator has no
+        // filename, so step over it to get the folder's name.
         fs::path absolute = fs::absolute(root_path, abs_ec).lexically_normal();
         if (absolute.filename().empty())
         {

@@ -47,7 +47,7 @@ register_keymap("Ctrl+T", "", "Tabs")
 ```
 
 Press `Ctrl+T`: since it prefixes longer bindings, the helper opens above the
-status line with `N — New file`, `D — Close file`, and `W ▸` (a subgroup).
+status line with `N - New file`, `D - Close file`, and `W ▸` (a subgroup).
 Pressing the next chord runs the action (`N`/`D`) or descends (`W`, then `L`).
 `Esc` closes, `Backspace` steps back up a level, and arrow keys move a
 selection that `Enter` runs.
@@ -55,7 +55,7 @@ selection that `Enter` runs.
 Rules:
 
 - Single-chord keymaps behave exactly as before: a chord that *is* a binding
-  runs instantly — the helper only appears when the chord is a prefix of
+  runs instantly - the helper only appears when the chord is a prefix of
   longer sequences.
 - A bare keymap with an action wins over using the same chord as a group
   prefix (registering `"Ctrl+T"` with a callback shadows a `"Ctrl+T …"`
@@ -69,8 +69,8 @@ Rules:
 Most terminals cannot tell when you merely *hold* Ctrl, because pressing a
 modifier alone sends no bytes. Windows Terminal (and the classic Windows
 console) does report bare modifier presses, so when jot runs there, **holding
-Ctrl alone opens the helper listing every Ctrl+ binding** — the built-in ones
-plus your Lua keymaps — and releasing Ctrl dismisses it. Pressing a letter
+Ctrl alone opens the helper listing every Ctrl+ binding** - the built-in ones
+plus your Lua keymaps - and releasing Ctrl dismisses it. Pressing a letter
 while holding Ctrl runs that binding as usual. In terminals that cannot
 report modifier-only keys, prefix chords (the previous section) are the way
 to reach multi-step keymaps.

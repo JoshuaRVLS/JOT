@@ -1,14 +1,5 @@
--- Winbar — part of the Lua UI kit.
--- Split out of features/ui.lua so each surface stays small and
--- focused; features/ui.lua is the orchestrator that requires
--- every module and registers the handlers.
---
--- The breadcrumb row a pane spends above its text. The native side decides
--- what the chain is (the workspace root, the folders down to the file, then the
--- symbol ancestors of the cursor's line, plus each crumb's own column); this
--- module only paints it, so a crumb here is exactly the crumb the mouse
--- hit-tests. One cell short on the right, like the pane leaves to the
--- scrollbar.
+-- The winbar: the Lua painter for the breadcrumb row a pane spends above its
+-- text, one cell short on the right like the pane leaves to the scrollbar.
 local h = require("jot_ui.helpers")
 local close = h.close
 local cell_len = h.cell_len
@@ -74,9 +65,8 @@ local function winbar(p)
   local origin = p.x or 0
   local cursor = 0 -- column already painted, relative to the float
   for i, c in ipairs(p.crumbs or {}) do
-    -- The native layout leaves no gaps except the row's own padding, but
-    -- honoring `x` keeps this painter byte-aligned with the hit-test even if a
-    -- future layout adds a gap.
+    -- Honoring `x` keeps this painter aligned with the hit-test if the layout
+    -- ever adds a gap between crumbs.
     local x = (c.x or cursor) - origin
     if x > cursor then
       emit(string.rep(" ", x - cursor), row_fg, row_bg)

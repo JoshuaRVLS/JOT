@@ -120,7 +120,7 @@ TEST_CASE("Guide slots keep the row width at 2 cells per level", "[jot]")
     }
     return n;
   };
-  // depth 0: 2 cells, depth 1: 4 cells, depth 2: 6 cells — same widths as
+  // depth 0: 2 cells, depth 1: 4 cells, depth 2: 6 cells - same widths as
   // the old indent + chevron layout.
   REQUIRE(cells(row_guide(false, false, true, 0, "")) == 2);
   REQUIRE(cells(row_guide(false, false, false, 1, "")) == 4);

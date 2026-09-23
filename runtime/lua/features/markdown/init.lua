@@ -1,4 +1,4 @@
--- Markdown preview — a browser preview of the current markdown buffer with
+-- Markdown preview - a browser preview of the current markdown buffer with
 -- live updates and two-way scroll sync.
 --
 -- Commands:

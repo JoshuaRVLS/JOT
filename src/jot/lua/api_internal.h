@@ -167,7 +167,7 @@ namespace jot_lua
     return true;
   }
 
-  // Loads a bundled Lua *module* — a file whose chunk returns a table — and
+  // Loads a bundled Lua *module* - a file whose chunk returns a table - and
   // registers it in package.loaded["<ns>.<name>"] so other bundled files can
   // require() it by name. Resolution matches load_bundled_lua_file (user
   // override -> dev source dir -> install data dir -> embedded memory). This

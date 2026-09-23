@@ -9,15 +9,10 @@
 // The winbar: the breadcrumb row a code pane pays above its text, and the
 // drop-down menus its crumbs open (Bekaboo/dropbar.nvim's model, ported).
 //
-// This header is the model only -- where the crumbs come from and what a
-// crumb's menu offers. Nothing here knows about the screen; render/winbar.cpp
-// turns a chain into cells and input/mouse/winbar.cpp hit-tests them.
-//
-// A chain is the workspace root, the folders down to the file, the file, and
-// then the symbol ancestors of the cursor line. Symbol nesting is read from the
-// symbol's own column (the name's indent), which is what makes `Editor` ->
-// `render_tabline` a parent/child pair without a full parse tree: the index
-// (tools/symbols/index.h) is flat, so the depth is recovered here.
+// This header is the model only: where the crumbs come from and what a crumb's
+// menu offers. A chain is the workspace root, the folders down to the file, the
+// file, and the symbol ancestors of the cursor line, whose nesting is recovered
+// from each symbol's own column because the index is flat.
 namespace Winbar
 {
   // `winbar` setting: off = never, auto = code files only, on = every file.
@@ -63,9 +58,8 @@ namespace Winbar
                            const std::vector<SymbolMatch> &symbols,
                            int cursor_line);
 
-  // What clicking `crumbs[index]` offers: its siblings at that level. A folder
-  // crumb lists its children, a file crumb its folder's entries, a symbol crumb
-  // the symbols that share its parent scope.
+  // What clicking `crumbs[index]` offers: its siblings at that level (a folder's
+  // children, a file's folder, a symbol's scope).
   std::vector<Entry> menu_entries(const std::vector<Crumb> &crumbs,
                                   int index,
                                   const std::vector<SymbolMatch> &symbols);
@@ -90,9 +84,7 @@ namespace Winbar
                                    int index);
 
   // One crumb as it lands on the row: `crumbs` holds the chain, this holds the
-  // cells. The painter draws `crumbs[segment.crumb_index]` at these columns and
-  // the mouse hit-tests the same numbers, so a click can never land on a crumb
-  // other than the one under it.
+  // cells, and the painter and the hit test read the same numbers.
   struct WinbarSegment
   {
     int crumb_index = -1; // -1 for the "…" chip standing in for dropped crumbs
@@ -114,9 +106,8 @@ namespace Winbar
     std::vector<Crumb> crumbs;
     std::vector<WinbarSegment> segments;
     // Some leading crumbs did not fit: the row opens with a "…" chip and
-    // `first_crumb` is the first crumb that did (the tail -- the file and the
-    // cursor's symbol -- is always kept, that is the part that identifies the
-    // line).
+    // `first_crumb` is the first that did. The tail is always kept, since that
+    // is what identifies the line.
     bool truncated = false;
     int first_crumb = 0;
   };

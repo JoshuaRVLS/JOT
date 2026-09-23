@@ -416,7 +416,7 @@ function M.parse(text, opts)
   return body
 end
 
--- `parser.parse_snippet(context, text, opts)` — the LuaSnip entry point.
+-- `parser.parse_snippet(context, text, opts)` - the LuaSnip entry point.
 function M.parse_snippet(c, text, opts)
   local snodes = M.parse(text)
   local snippet = nodes.s(c, snodes, opts)

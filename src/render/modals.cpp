@@ -159,7 +159,7 @@ void Editor::render_tree_sitter_status_modal()
       detected_rows.push_back(
           {"",
            ts_display_name(buf.syntax_language_label),
-           "known filetype — no parser or rules",
+           "known filetype, no parser or rules",
            theme.fg_status_warning});
     }
   }
@@ -344,8 +344,7 @@ void Editor::render_lsp_status_modal()
     if (job.running)
     {
       install_rows.push_back({"",
-                              job.server,
-                              (job.removing ? "removing — " : "installing — ")
+                              job.server,                               (job.removing ? "removing: " : "installing: ")
                                   + (job.progress.empty() ? "running" : job.progress),
                               theme.fg_status_info});
     }

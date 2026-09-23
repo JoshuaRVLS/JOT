@@ -10,7 +10,7 @@
 --
 -- state carries the native layout box (x/y/w/h), the content (query, items,
 -- results, lines), and a `colors` table with the active theme. To restyle
--- any of these surfaces, edit the matching module under features/ui/ — no
+-- any of these surfaces, edit the matching module under features/ui/ - no
 -- recompile needed.
 --
 -- The kit is split into small per-surface modules (one file per surface

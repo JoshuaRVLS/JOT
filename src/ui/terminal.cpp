@@ -88,22 +88,13 @@ static bool get_terminal_size(int &width, int &height, int *cell_px_w = nullptr,
 
 static bool cursor_probe_size(int &width, int &height, int budget_ms = 200)
 {
-  // Move cursor to (999, 999) — most terminals clamp to the bottom-right
-  // corner — then ask for the cursor position with DSR (CSI 6 n). The
-  // terminal replies `\x1b[<rows>;<cols>R` which gives us the real
-  // viewport size even when ioctl and $COLUMNS/$LINES are stale.
-  //
-  // Wait on a strict total deadline (budget_ms) spread across the bytes of
-  // the reply so a terminal that never answers -- piped stdin, CI ptys,
-  // some tmux/SSH and embedded consoles that suppress DSR -- costs at most
-  // budget_ms instead of blocking startup. Terminals that do answer reply
-  // within a few milliseconds, well inside even the small confirmatory
-  // budget.
-  // Save the cursor (DECSC), park it and ask for the position in a single
-  // write, so the parked position is never a state the terminal can present on
-  // its own. The cursor is restored with DECRC at the end: homing it instead
-  // left the visible caret in the top-left corner until the next frame, which
-  // read as the caret flickering there whenever this probe ran.
+  // Park the cursor at (999, 999) and ask for its position with DSR (CSI 6 n):
+  // the reply gives the real viewport size even when ioctl and $COLUMNS are
+  // stale. Park and ask in one write, and restore with DECRC (homing left the
+  // caret visibly in the top-left corner until the next frame).
+  // The wait is a strict total deadline spread across the reply's bytes, so a
+  // terminal that never answers (piped stdin, CI ptys, some tmux/SSH) costs at
+  // most budget_ms instead of blocking startup.
   static const char kProbePark[] = "\x1b" "7" "\x1b[999;999H\x1b[6n";
   ::write(STDOUT_FILENO, kProbePark, sizeof(kProbePark) - 1);
 
@@ -510,17 +501,11 @@ bool Terminal::refresh_size(bool force_probe)
   // First source: ioctl and env vars.
   bool got = get_terminal_size(new_width, new_height, &cell_px_w_, &cell_px_h_);
 
-  // If the caller asked us to force-probe, or the ioctl/env path failed,
-  // try the ANSI cursor-position probe. The probe moves the cursor to
-  // (999, 999), asks for the current position with DSR (CSI 6 n), reads
-  // the terminal's reported rows;cols, then restores the cursor to home.
-  // This is the only way to recover when ioctl is returning stale
-  // dimensions (e.g. after the alternate screen was entered) or when the
-  // controlling TTY / foreground process group changed.
-  // The DSR probe parks and restores the cursor, so it is reserved for the
-  // cases that need it: no size at all, or a caller who knows a resize
-  // happened. Probing on every event was pure overhead on terminals whose
-  // ioctl reports nothing.
+  // On a forced probe, or when the ioctl/env path failed, fall back to the ANSI
+  // cursor-position probe: it is the only recovery from stale dimensions (after
+  // the alternate screen was entered, or when the controlling TTY changed).
+  // It parks and restores the cursor, so it stays reserved for those cases;
+  // probing on every event was pure overhead.
   if ((force_probe || !size_known_) && (force_probe || !got) && isatty(STDIN_FILENO)
       && isatty(STDOUT_FILENO))
   {
@@ -686,8 +671,8 @@ int Terminal::read_key()
           // Bracketed paste start: ESC [ 200 ~. Detect it on the assembled
           // sequence rather than with a destructive lookahead: the old
           // "third == '2', read a/b/tilde" peek consumed the '7' of a CSI-u
-          // report such as ESC [ 27 u — how a kitty-protocol terminal
-          // (Alacritty, WezTerm, …) encodes the Escape key — turning a
+          // report such as ESC [ 27 u - how a kitty-protocol terminal
+          // (Alacritty, WezTerm, …) encodes the Escape key - turning a
           // plain Esc press into control code 2 (Ctrl+B), which the command
           // palette typed as "b" and normal mode used to toggle the sidebar.
           if (bytes.size() >= 6 && bytes.compare(0, 6, "\x1b[200~") == 0)
@@ -1391,14 +1376,10 @@ void Terminal::enable_focus_reporting()
 
 void Terminal::disable_focus_reporting()
 {
-  // NOTE: ?1004l is deliberately NOT emitted here. On some terminals
-  // (kitty, foot) disabling focus reporting while unfocused races with the
-  // compositor's surface teardown: the mode-reset can discard the
-  // already-queued repaint, leaving the window blank until the next input.
-  // The mode is per-application and dies with the PTY anyway, and
-  // restore_terminal() leaves the host shell untouched either way.
-  // Kept as a no-op for API symmetry; see disable_mouse() for the modes
-  // that genuinely must be reset.
+  // NOTE: ?1004l is deliberately NOT emitted. On kitty and foot, disabling
+  // focus reporting while unfocused races the compositor's surface teardown and
+  // can discard the queued repaint, blanking the window until the next input.
+  // The mode is per-application and dies with the PTY anyway.
 }
 
 void Terminal::save_cursor()
