@@ -148,6 +148,14 @@ void LuaAPI::push_ui_colors(lua_State *L, int t)
   lua_set_int_field(L, c, "border", th.fg_panel_border);
   lua_set_int_field(L, c, "selection_fg", th.fg_selection);
   lua_set_int_field(L, c, "selection_bg", th.bg_selection);
+  // Tab strips (the right dock's panel tabs and the git/debugger view tabs) draw
+  // the same pairs the native strips do. Without them the Lua sides fall back to
+  // accent over selection_bg, which collide in a theme where the two are equal
+  // (jot-dark: both #e58db9), painting the active tab invisible.
+  lua_set_int_field(L, c, "fg_terminal_tab_focused", th.fg_terminal_tab_focused);
+  lua_set_int_field(L, c, "bg_terminal_tab_focused", th.bg_terminal_tab_focused);
+  lua_set_int_field(L, c, "fg_terminal_tab_inactive", th.fg_terminal_tab_inactive);
+  lua_set_int_field(L, c, "bg_terminal_tab_inactive", th.bg_terminal_tab_inactive);
   lua_set_int_field(L, c, "comment", th.fg_comment);
   // The breadcrumb winbar (render/winbar.cpp).
   lua_set_int_field(L, c, "winbar_fg", th.fg_winbar);

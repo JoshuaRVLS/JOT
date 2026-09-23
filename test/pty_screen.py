@@ -42,6 +42,11 @@ class Screen:
         # -- the bottom bar is meant to carry the status line's background, and
         # that is invisible in the text alone.
         self.bg = [[-1] * cols for _ in range(rows)]
+        # Foreground colour per cell, tracked the way bg is. A probe needs it for
+        # the failure that is invisible in text alone: a selected row painted in
+        # its own background colour reads as an empty row, and only the fg/bg
+        # pair tells that apart from a row that is simply dim.
+        self.fg = [[-1] * cols for _ in range(rows)]
         # Underline style per cell (0 none, 1 straight, 3 wavy), tracked the way
         # bg is so a probe can read *which* cells carry an underline -- the
         # Ctrl+hover affordance, for one, is only visible this way.
@@ -61,6 +66,7 @@ class Screen:
         # the escape stream itself rather than the reconstructed screen (e.g. a
         # colour the theme only emits as 38;2 rather than a palette index).
         self.raw = bytearray()
+        self.cur_fg = -1
         self.cur_bg = -1
         self.cur_underline = 0
         self.cur_italic = False
@@ -153,6 +159,7 @@ class Screen:
                 ch = "?"
             if self.y < self.rows and self.x < self.cols:
                 self.cells[self.y][self.x] = ch
+                self.fg[self.y][self.x] = self.cur_fg
                 self.bg[self.y][self.x] = self.cur_bg
                 self.underline[self.y][self.x] = self.cur_underline
                 self.italic[self.y][self.x] = self.cur_italic
@@ -181,6 +188,7 @@ class Screen:
         while k < len(args):
             a = args[k]
             if a == 0:
+                self.cur_fg = -1
                 self.cur_bg = -1
                 self.cur_underline = 0
                 self.cur_italic = False
@@ -192,17 +200,23 @@ class Screen:
                 self.cur_underline = 0
             elif a == 4:
                 self.cur_underline = 1
+            elif a == 39:
+                self.cur_fg = -1
             elif a == 49:
                 self.cur_bg = -1
             elif a in (38, 48) and k + 2 < len(args) and args[k + 1] == 5:
                 if a == 48:
                     self.cur_bg = args[k + 2]
+                else:
+                    self.cur_fg = args[k + 2]
                 k += 2
             elif a in (38, 48) and k + 4 < len(args) and args[k + 1] == 2:
                 # Truecolour: keep the channels, tagged so it cannot be mistaken
                 # for a palette index.
                 if a == 48:
                     self.cur_bg = 1000 + ((args[k + 2] << 16) | (args[k + 3] << 8) | args[k + 4])
+                else:
+                    self.cur_fg = 1000 + ((args[k + 2] << 16) | (args[k + 3] << 8) | args[k + 4])
                 k += 4
             k += 1
 
@@ -235,17 +249,20 @@ class Screen:
             mode = args[0] if args else 0
             if mode == 2:
                 self.cells = [[" "] * self.cols for _ in range(self.rows)]
+                self.fg = [[-1] * self.cols for _ in range(self.rows)]
                 self.bg = [[-1] * self.cols for _ in range(self.rows)]
                 self.underline = [[0] * self.cols for _ in range(self.rows)]
                 self.italic = [[False] * self.cols for _ in range(self.rows)]
             elif mode == 0:
                 for cx in range(self.x, self.cols):
                     self.cells[self.y][cx] = " "
+                    self.fg[self.y][cx] = self.cur_fg
                     self.bg[self.y][cx] = self.cur_bg
                     self.underline[self.y][cx] = self.cur_underline
                     self.italic[self.y][cx] = self.cur_italic
                 for cy in range(self.y + 1, self.rows):
                     self.cells[cy] = [" "] * self.cols
+                    self.fg[cy] = [-1] * self.cols
                     self.bg[cy] = [-1] * self.cols
                     self.underline[cy] = [0] * self.cols
                     self.italic[cy] = [False] * self.cols
@@ -254,10 +271,12 @@ class Screen:
             if mode == 0:
                 for cx in range(self.x, self.cols):
                     self.cells[self.y][cx] = " "
+                    self.fg[self.y][cx] = self.cur_fg
                     self.bg[self.y][cx] = self.cur_bg
                     self.italic[self.y][cx] = self.cur_italic
             elif mode == 2:
                 self.cells[self.y] = [" "] * self.cols
+                self.fg[self.y] = [-1] * self.cols
                 self.bg[self.y] = [-1] * self.cols
                 self.italic[self.y] = [False] * self.cols
 
