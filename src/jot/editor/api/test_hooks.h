@@ -362,6 +362,45 @@ public:
   {
     return integrated_terminal_panel_w();
   }
+  // Floating terminal (Alt+Shift+T, :termfloat). The box is registered
+  // shell-less (like add_terminal_for_test), so the geometry, the routing and
+  // the selection math run against a live vterm without a process.
+  void add_floating_terminal_for_test()
+  {
+    floating_terminal = std::make_unique<IntegratedTerminal>();
+    floating_terminal->mark_active_for_test();
+    floating_terminal->set_label("Floating terminal");
+    floating_terminal->set_focused(true);
+    show_floating_terminal = true;
+    // The box has to be painted by the next frame (the production open path
+    // marks the frame dirty too).
+    needs_redraw = true;
+  }
+  void toggle_floating_terminal_for_test()
+  {
+    toggle_floating_terminal();
+  }
+  void floating_terminal_key_for_test(int ch, bool ctrl = false, bool shift = false, bool alt = false)
+  {
+    handle_floating_terminal_input(ch, ctrl, shift, alt);
+  }
+  bool floating_terminal_mouse_for_test(int x, int y, bool click, bool motion, bool release)
+  {
+    return handle_floating_terminal_mouse(x, y, click, motion, release);
+  }
+  bool floating_terminal_visible_for_test() const
+  {
+    return show_floating_terminal;
+  }
+  // True while the shell object exists: hiding the box must not drop it.
+  bool floating_terminal_alive_for_test() const
+  {
+    return floating_terminal != nullptr;
+  }
+  TerminalBox floating_terminal_rect_for_test() const
+  {
+    return floating_terminal_rect();
+  }
   // Sidebar panel height as render_sidebar() computes it: the pane area
   // minus the terminal's real reserved footprint.
   int sidebar_panel_h_for_test() const

@@ -183,6 +183,8 @@ const KnownSetting kKnownSettings[] = {
     {"status_clock", "Statusline: local time", SettingsEntry::Type::Bool},
     {"status_session_time", "Statusline: session time", SettingsEntry::Type::Bool},
     {"tab_size", "Tab size", SettingsEntry::Type::Int},
+    {"terminal_float_height", "Floating terminal height (%)", SettingsEntry::Type::Int},
+    {"terminal_float_width", "Floating terminal width (%)", SettingsEntry::Type::Int},
     {"terminal_height", "Terminal panel height", SettingsEntry::Type::Int},
     {"toast.duration_ms", "Toast duration (ms)", SettingsEntry::Type::Int},
     {"toast.fade_ms", "Toast fade (ms)", SettingsEntry::Type::Int},
@@ -264,6 +266,8 @@ const IntRange kIntRanges[] = {
     {"right_panel_width", 1, 28, 80},
     {"snippet_history_size", 5, 1, 500},
     {"tab_size", 1, 1, 16},
+    {"terminal_float_height", 5, 20, 100},
+    {"terminal_float_width", 5, 20, 100},
     {"terminal_height", 1, 5, 20},
     {"toast.duration_ms", 250, 500, 60000},
     {"toast.fade_ms", 50, 0, 5000},
@@ -309,8 +313,9 @@ const char *const kCodeIntelFamilies[] = {"completion_", "cpp_",         "decora
                                          "diagnostics_",  "lsp_",         "treesitter_"};
 const char *const kAssistantFamilies[] = {"ai_"};
 const char *const kPanesKeys[] = {
-    "debugger_height",     "explorer_width", "idle_fps",   "image_viewer_backend",
-    "render_fps",          "right_panel_width", "show_explorer", "terminal_height",
+    "debugger_height",      "explorer_width",    "idle_fps",          "image_viewer_backend",
+    "render_fps",           "right_panel_width", "show_explorer",     "terminal_float_height",
+    "terminal_float_width", "terminal_height",
 };
 const char *const kMarkdownPreviewFamilies[] = {"markdown_preview_"};
 const char *const kHtmlPreviewFamilies[] = {"html_preview_"};

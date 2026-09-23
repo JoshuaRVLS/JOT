@@ -855,6 +855,16 @@ void Editor::handle_mouse(void *event_ptr)
     }
   }
 
+  // The floating terminal's box is above the panes and the dock on screen, so
+  // it takes the pointer first: a click inside selects in it, a click away
+  // dismisses it.
+  if ((is_click || is_motion || is_click_release)
+      && handle_floating_terminal_mouse(
+          event->x, event->y, is_click, is_motion, is_click_release))
+  {
+    return;
+  }
+
   // The bottom panel owns its columns: the view tabs (either view) and the
   // Problems list. It declines for the shell's own content.
   if ((is_click || is_motion || is_click_release)

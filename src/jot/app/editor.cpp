@@ -116,6 +116,8 @@ void Editor::apply_config_live()
   }
   lsp_change_debounce_ms = std::clamp(config.get_int("lsp_change_debounce_ms", 120), 25, 1000);
   integrated_terminal_height = std::clamp(config.get_int("terminal_height", 10), 5, 20);
+  floating_terminal_width = std::clamp(config.get_int("terminal_float_width", 85), 20, 100);
+  floating_terminal_height = std::clamp(config.get_int("terminal_float_height", 75), 20, 100);
   debugger_panel_height = std::clamp(config.get_int("debugger_height", 12), 6, 24);
   right_panel_width = std::clamp(config.get_int("right_panel_width", 42), 28, 80);
   image_viewer.configure_backend(config.get("image_viewer_backend", "auto"));
@@ -224,8 +226,14 @@ void Editor::initialize_state_defaults()
   terminal_resize_start_y = 0;
   terminal_resize_start_height = 0;
   current_integrated_terminal = -1;
+  // The floating terminal's shell dies with the state that owned it; its box
+  // and size are reset here so a fresh workspace starts closed.
+  show_floating_terminal = false;
+  floating_terminal.reset();
   last_terminal_task_name.clear();
   integrated_terminal_height = std::clamp(config.get_int("terminal_height", 10), 5, 20);
+  floating_terminal_width = std::clamp(config.get_int("terminal_float_width", 85), 20, 100);
+  floating_terminal_height = std::clamp(config.get_int("terminal_float_height", 75), 20, 100);
   show_debugger_panel = false;
   debugger_panel_height = std::clamp(config.get_int("debugger_height", 12), 6, 24);
   show_right_panel = false;

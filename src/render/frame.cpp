@@ -203,6 +203,12 @@ void Editor::render()
       ui->flush_cursor();
       return;
     }
+    if (show_floating_terminal)
+    {
+      place_floating_terminal_cursor();
+      ui->flush_cursor();
+      return;
+    }
     if (show_integrated_terminal && active_terminal && active_terminal->is_focused())
     {
       place_integrated_terminal_cursor();
@@ -364,6 +370,9 @@ void Editor::render()
     render_lsp_completion();
     render_lsp_signature();
     render_integrated_terminal();
+    // The floating box is the topmost native surface over the panes; the
+    // palette, menus and popups painted after it still come out on top.
+    render_floating_terminal();
     if (!terminal_zoom_active)
     {
       render_debugger_panel();
@@ -476,6 +485,10 @@ void Editor::render()
       {
         ui->hide_cursor();
       }
+    }
+    else if (show_floating_terminal)
+    {
+      place_floating_terminal_cursor();
     }
     else if (show_integrated_terminal && active_terminal && active_terminal->is_focused())
     {

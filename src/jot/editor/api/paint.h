@@ -101,6 +101,12 @@ private:
   // The bottom panel: one dock, two views (the shell and the diagnostics
   // list). The tab strip and the frame are shared; the body switches.
   void render_integrated_terminal();
+  // The floating terminal's box: centered over the active pane's text rows,
+  // sized by the terminal_float_* settings (a percentage of that area) and
+  // clamped to it, so it never shares a row with the pane chrome or covers the
+  // docks and the status line.
+  TerminalBox floating_terminal_rect() const;
+  void render_floating_terminal();
   void render_problems_view(int x, int w);
   // Width the panel's view tabs occupy, so the renderer and the click
   // hit-test walk the same two label offsets.

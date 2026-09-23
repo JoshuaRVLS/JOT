@@ -40,6 +40,16 @@ private:
   void end_terminal_resize_drag();
   void close_integrated_terminal(int index);
   void activate_integrated_terminal(int index, bool focus = true);
+  // The floating terminal: its own shell in a box over the active pane
+  // (src/jot/integrations/terminal_float.cpp). Esc hides it without ending the
+  // shell, so the next toggle returns to the same prompt.
+  void toggle_floating_terminal();
+  void open_floating_terminal();
+  void hide_floating_terminal(const std::string &message = "");
+  // The rectangle each terminal view draws in and reads its mouse positions
+  // from: the docked panel's content rows, or the floating box.
+  TerminalView docked_terminal_view();
+  TerminalView floating_terminal_view() const;
   void load_terminal_tasks();
   std::vector<std::string> list_terminal_task_names();
   void show_terminal_tasks();

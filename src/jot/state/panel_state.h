@@ -43,6 +43,17 @@ struct PanelState
   int terminal_resize_start_y = 0;
   int terminal_resize_start_height = 0;
 
+  // The floating terminal: a box centered over the active pane's text rows
+  // hosting its own shell (integrations/terminal_float.cpp). Visible means it
+  // owns the keys; hiding it leaves the process and its scrollback running.
+  // The two sizes are percentages of that area, 100 being all of it.
+  bool show_floating_terminal = false;
+  int floating_terminal_width = 85;
+  int floating_terminal_height = 75;
+  // Which view began the live selection: the anchors below are shared, and only
+  // the view that started the drag may paint the band.
+  bool terminal_sel_in_float = false;
+
   bool show_debugger_panel = false;
   int debugger_panel_height = 0;
 

@@ -483,6 +483,10 @@ bool Editor::execute_ex_command(const std::string &input_line)
   {
     toggle_terminal_zoom();
   }
+  else if (lcmd == "termfloat" || lcmd == "terminalfloat")
+  {
+    toggle_floating_terminal();
+  }
   else if (lcmd == "task")
   {
     if (arg.empty())

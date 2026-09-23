@@ -74,6 +74,12 @@ public:
   {
     return terminal_sel_cur_col;
   }
+  // Which view owns the live selection: the anchors are shared between the
+  // docked panel and the floating box.
+  bool terminal_sel_in_float_for_test() const
+  {
+    return terminal_sel_in_float;
+  }
   // Registers a shell-less terminal so mouse/key handlers have a live
   // vterm-backed target without spawning a process. `label` seeds a custom tab
   // name (what task/plugin terminals carry); empty keeps the generated one.

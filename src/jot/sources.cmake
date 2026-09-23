@@ -29,6 +29,7 @@ set(JOT_ENGINE_SOURCES
   jot/integrations/debugger_config.cpp
   jot/integrations/debugger_session.cpp
   jot/integrations/integrated_terminal.cpp
+  jot/integrations/terminal_float.cpp
   jot/integrations/lsp/attach.cpp
   jot/integrations/lsp/code_actions.cpp
   jot/integrations/lsp/completion.cpp

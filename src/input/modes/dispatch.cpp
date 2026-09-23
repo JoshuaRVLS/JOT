@@ -173,6 +173,14 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
     return;
   }
 
+  // The floating terminal owns the keys while its box is up: it is above the
+  // dock both on screen and here.
+  if (show_floating_terminal)
+  {
+    handle_floating_terminal_input(ch, is_ctrl, is_shift, is_alt);
+    return;
+  }
+
   IntegratedTerminal *active_terminal = get_integrated_terminal();
   if (show_integrated_terminal && active_terminal && active_terminal->is_focused())
   {
@@ -345,6 +353,13 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
     if (ch == 'X' || original_ch == 'X')
     {
       swap_panes();
+      return;
+    }
+    // The terminal family shares this block with the pane ops: T is the
+    // floating shell (the docked ones are Ctrl+` and Ctrl+Shift+T).
+    if (ch == 'T' || original_ch == 'T')
+    {
+      toggle_floating_terminal();
       return;
     }
   }

@@ -105,6 +105,8 @@ namespace CommandLineUtils
                                                       "terminalnew",
                                                       "termzoom",
                                                       "terminalzoom",
+                                                      "termfloat",
+                                                      "terminalfloat",
                                                       "task",
                                                       "tasknew",
                                                       "taskrerun",

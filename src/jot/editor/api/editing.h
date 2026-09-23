@@ -95,10 +95,22 @@ private:
   bool handle_integrated_terminal_mouse(
       int x, int y, bool is_click, bool is_motion, bool is_click_release);
   bool handle_integrated_terminal_scroll(int x, int y, bool is_scroll_up, bool is_scroll_down);
+  void handle_floating_terminal_input(int ch, bool is_ctrl, bool is_shift, bool is_alt);
+  bool handle_floating_terminal_mouse(
+      int x, int y, bool is_click, bool is_motion, bool is_click_release);
+  bool handle_floating_terminal_scroll(int x, int y, bool is_scroll_up, bool is_scroll_down);
+  void begin_floating_terminal_selection(int x, int y);
+  // One terminal view's rows, drawn from the vterm: the trimming, the
+  // scrollback window and the selection band live here so the docked panel and
+  // the floating box cannot drift apart.
+  void render_terminal_rows(const TerminalView &view, int term_fg, int term_bg);
   // Mouse selection in the integrated terminal: anchors live in full-space
   // row/col coordinates (see IntegratedTerminal::get_total_rows) so they
   // survive scrolls and redraws.
   void begin_terminal_selection(int x, int y);
+  void begin_terminal_selection_in(const TerminalView &view, int x, int y);
+  // The view the live selection belongs to (the anchors are shared state).
+  TerminalView terminal_selection_view();
   void update_terminal_selection_pos(int x, int y);
   void finish_terminal_selection();
   std::string terminal_selection_text();
@@ -114,6 +126,7 @@ private:
   // handler and frame navigation).
   void jump_to_debugger_frame(const DebuggerFrame &frame);
   void place_integrated_terminal_cursor();
+  void place_floating_terminal_cursor();
   void handle_mouse(void *event);
 
   void move_cursor(int dx, int dy, bool extend_selection = false);

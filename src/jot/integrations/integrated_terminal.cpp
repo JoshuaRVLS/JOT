@@ -421,42 +421,63 @@ void Editor::handle_integrated_terminal_input(int ch, bool is_ctrl, bool is_shif
   }
 }
 
+TerminalView Editor::docked_terminal_view()
+{
+  TerminalView view;
+  view.term = get_integrated_terminal();
+  // The dock inks no left border, so its content starts one cell in; the last
+  // cell is left to the panel's own edge.
+  view.x = 1;
+  view.y = bottom_panel_content_y();
+  view.w = std::max(1, integrated_terminal_panel_w() - 2);
+  view.h = std::max(1, bottom_panel_content_h());
+  view.floating = false;
+  return view;
+}
+
+TerminalView Editor::terminal_selection_view()
+{
+  return terminal_sel_in_float ? floating_terminal_view() : docked_terminal_view();
+}
+
 void Editor::begin_terminal_selection(int x, int y)
 {
-  IntegratedTerminal *term = get_integrated_terminal();
-  if (!term)
+  begin_terminal_selection_in(docked_terminal_view(), x, y);
+}
+
+void Editor::begin_terminal_selection_in(const TerminalView &view, int x, int y)
+{
+  if (!view.term)
   {
     return;
   }
-  const int content_h = std::max(1, bottom_panel_content_h());
-  int row = term->get_top_visible_row(content_h)
-            + std::clamp(y - bottom_panel_content_y(), 0, content_h - 1);
-  int col = std::max(0, x - 1);
+  const int row = view.term->get_top_visible_row(view.h) + std::clamp(y - view.y, 0, view.h - 1);
+  const int col = std::max(0, x - view.x);
   terminal_sel_anchor_row = row;
   terminal_sel_anchor_col = col;
   terminal_sel_cur_row = row;
   terminal_sel_cur_col = col;
   terminal_sel_active = true;
   terminal_sel_dragging = true;
+  // Only the view that began the drag paints the band (see the row renderer).
+  terminal_sel_in_float = view.floating;
 }
 
 void Editor::update_terminal_selection_pos(int x, int y)
 {
-  IntegratedTerminal *term = get_integrated_terminal();
-  if (!term || !terminal_sel_dragging)
+  const TerminalView view = terminal_selection_view();
+  if (!view.term || !terminal_sel_dragging)
   {
     return;
   }
-  const int content_h = std::max(1, bottom_panel_content_h());
-  int row = term->get_top_visible_row(content_h)
-            + std::clamp(y - bottom_panel_content_y(), 0, content_h - 1);
-  terminal_sel_cur_row = row;
-  terminal_sel_cur_col = std::max(0, x - 1);
+  terminal_sel_cur_row =
+      view.term->get_top_visible_row(view.h) + std::clamp(y - view.y, 0, view.h - 1);
+  terminal_sel_cur_col = std::max(0, x - view.x);
 }
 
 std::string Editor::terminal_selection_text()
 {
-  IntegratedTerminal *term = get_integrated_terminal();
+  IntegratedTerminal *term = terminal_selection_view().term;
   if (!term || !terminal_sel_active)
   {
     return "";
@@ -688,12 +709,21 @@ void Editor::watch_integrated_terminal_fd(IntegratedTerminal *term)
                              break;
                            }
                          }
+                         // The floating terminal is its own object, not a dock
+                         // tab, but its shell is polled by the same watcher.
+                         if (!matched && floating_terminal && floating_terminal->get_master_fd() == fd)
+                         {
+                           matched = floating_terminal.get();
+                         }
                          if (!matched)
                          {
                            event_loop_.unwatch_fd(fd);
                            return;
                          }
-                         if (matched->poll_output() && show_integrated_terminal)
+                         const bool on_screen = matched == floating_terminal.get()
+                                                    ? show_floating_terminal
+                                                    : show_integrated_terminal;
+                         if (matched->poll_output() && on_screen)
                          {
                            needs_redraw = true;
                          }
@@ -956,9 +986,26 @@ void Editor::render_integrated_terminal()
         tab_x, tab_y, " + ", theme.fg_terminal_tab_plus, theme.bg_terminal_tab_plus, true);
   }
 
-  int content_h = std::max(1, bottom_panel_content_h());
-  int content_w = std::max(1, panel_w - 2);
-  term->resize(content_h, content_w);
+  const TerminalView view = docked_terminal_view();
+  if (view.term)
+  {
+    view.term->resize(view.h, view.w);
+  }
+  render_terminal_rows(view, term_fg, term_bg);
+}
+
+void Editor::render_terminal_rows(const TerminalView &view, int term_fg, int term_bg)
+{
+  IntegratedTerminal *term = view.term;
+  if (!term)
+  {
+    return;
+  }
+
+  const int content_x = view.x;
+  const int content_y = view.y;
+  const int max_cols = std::max(1, view.w);
+  const int content_h = std::max(1, view.h);
   auto rows = term->get_recent_output_rows(content_h);
   auto all_blank = [](const std::vector<IntegratedTerminal::OutputRow> &v)
   {
@@ -977,13 +1024,12 @@ void Editor::render_integrated_terminal()
     rows.push_back({"[terminal inactive: shell failed or exited]", {}});
     rows.push_back({"[try :terminalnew or check $SHELL]", {}});
   }
-  int start_y = bottom_panel_content_y();
   // Full-space row of the top displayed line; display row i is full-space
   // row full_base + i when the window is full (synthetic placeholder rows
   // for a dead terminal map back to 0-based instead).
-  int full_base = term->get_top_visible_row(content_h);
-  int sel_start_row = std::min(terminal_sel_anchor_row, terminal_sel_cur_row);
-  int sel_end_row = std::max(terminal_sel_anchor_row, terminal_sel_cur_row);
+  const int full_base = term->get_top_visible_row(content_h);
+  const int sel_start_row = std::min(terminal_sel_anchor_row, terminal_sel_cur_row);
+  const int sel_end_row = std::max(terminal_sel_anchor_row, terminal_sel_cur_row);
   int sel_start_col =
       (sel_start_row == terminal_sel_anchor_row) ? terminal_sel_anchor_col : terminal_sel_cur_col;
   int sel_end_col =
@@ -992,7 +1038,10 @@ void Editor::render_integrated_terminal()
   {
     std::swap(sel_start_col, sel_end_col);
   }
-  const bool sel = terminal_sel_active && sel_end_row >= 0;
+  // Only the view that began the drag paints the band: the anchors are shared
+  // state, so a selection made in the floating box must not tint the dock.
+  const bool sel = terminal_sel_active && terminal_sel_in_float == view.floating
+                   && sel_end_row >= 0;
   const bool full_window = (int)rows.size() >= content_h;
   for (int i = 0; i < content_h; i++)
   {
@@ -1002,7 +1051,6 @@ void Editor::render_integrated_terminal()
       break;
     }
     std::string line = rows[idx].text;
-    int max_cols = std::max(1, panel_w - 2);
     int trim_from = std::max(0, (int)line.size() - max_cols);
     if ((int)line.size() > max_cols)
     {
@@ -1037,9 +1085,9 @@ void Editor::render_integrated_terminal()
       auto &styled = rows[idx].cells;
       if (!styled.empty())
       {
-        int sx = 1;
+        int sx = content_x;
         int start_cell = std::max(0, (int)styled.size() - max_cols);
-        for (int j = start_cell; j < (int)styled.size() && sx < 1 + max_cols; j++)
+        for (int j = start_cell; j < (int)styled.size() && sx < content_x + max_cols; j++)
         {
           auto colors = IntegratedTerminal::resolve_cell_colors(styled[j], term_fg, term_bg);
           // No clamp here: a cell colour is an index, but the shell's default
@@ -1047,7 +1095,7 @@ void Editor::render_integrated_terminal()
           int fg = colors.fg;
           bool sel_cell = row_sel && j >= sel_left && j < sel_right;
           int bg = sel_cell ? theme.bg_selection : colors.bg;
-          ui->draw_text(sx, start_y + i, styled[j].ch, fg, bg);
+          ui->draw_text(sx, content_y + i, styled[j].ch, fg, bg);
           sx++;
         }
         drew_styled = true;
@@ -1060,18 +1108,18 @@ void Editor::render_integrated_terminal()
       {
         // Byte-granular highlight for plain rows (no vterm cells): each
         // byte occupies one column, so the anchor's column maps directly.
-        int sx = 1;
-        for (size_t k = 0; k < line.size() && sx < 1 + max_cols; k++, sx++)
+        int sx = content_x;
+        for (size_t k = 0; k < line.size() && sx < content_x + max_cols; k++, sx++)
         {
           int ccol = trim_from + (int)k;
           bool sel_cell = ccol >= sel_left && ccol < sel_right;
-          ui->draw_text(sx, start_y + i, line.substr(k, 1), term_fg,
+          ui->draw_text(sx, content_y + i, line.substr(k, 1), term_fg,
                         sel_cell ? theme.bg_selection : term_bg);
         }
       }
       else
       {
-        ui->draw_text(1, start_y + i, line, term_fg, term_bg);
+        ui->draw_text(content_x, content_y + i, line, term_fg, term_bg);
       }
     }
   }

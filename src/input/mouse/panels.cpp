@@ -321,6 +321,14 @@ void Editor::handle_mouse_input(int x,
     return;
   }
 
+  // The floating terminal scrolls its own scrollback; it declines when the
+  // wheel is outside its box.
+  if ((is_scroll_up || is_scroll_down)
+      && handle_floating_terminal_scroll(x, y, is_scroll_up, is_scroll_down))
+  {
+    return;
+  }
+
   // The panel's Problems view scrolls its own list; the handler declines when
   // the panel shows the shell instead.
   if ((is_scroll_up || is_scroll_down)

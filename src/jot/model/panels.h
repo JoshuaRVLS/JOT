@@ -57,4 +57,31 @@ enum BottomPanelView
   BOTTOM_PANEL_PROBLEMS
 };
 
+class IntegratedTerminal;
+
+// A rectangle in screen cells, for surfaces whose geometry is not a pane or a
+// dock: the floating terminal's box. Same shape as the editor's PaneArea, kept
+// here so a class-body declaration can name it without the UI headers.
+struct TerminalBox
+{
+  int x = 0;
+  int y = 0;
+  int w = 0;
+  int h = 0;
+};
+
+// One place a terminal is on screen: the content rows of the bottom dock or the
+// floating terminal's box. The two share the row rendering, the scroll window
+// and the mouse selection, so those take a view rather than each hardcoding a
+// geometry.
+struct TerminalView
+{
+  IntegratedTerminal *term = nullptr;
+  int x = 0; // first content cell
+  int y = 0;
+  int w = 0;
+  int h = 0;
+  bool floating = false;
+};
+
 #endif

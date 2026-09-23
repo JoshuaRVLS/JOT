@@ -41,6 +41,10 @@ struct EngineState
   Terminal terminal;
   std::vector<std::unique_ptr<IntegratedTerminal>> integrated_terminals;
   int current_integrated_terminal = 0;
+  // The floating terminal (Alt+Shift+T, :termfloat): its own shell, shown as a
+  // box over the pane area instead of in the bottom dock. Null until opened;
+  // hiding it (Esc) keeps the process alive for the next toggle.
+  std::unique_ptr<IntegratedTerminal> floating_terminal;
   std::vector<TerminalTask> terminal_tasks;
   std::string last_terminal_task_name;
 

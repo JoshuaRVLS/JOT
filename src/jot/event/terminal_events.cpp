@@ -135,6 +135,14 @@ void Editor::handle_terminal_event(const Event &ev)
       return;
     }
 
+    // The floating terminal owns the keys while its box is up: it is above the
+    // dock both on screen and here.
+    if (show_floating_terminal)
+    {
+      handle_floating_terminal_input(ch, is_ctrl, is_shift, is_alt);
+      return;
+    }
+
     IntegratedTerminal *active_terminal = get_integrated_terminal();
     if (show_integrated_terminal && active_terminal && active_terminal->is_focused())
     {

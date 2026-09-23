@@ -405,6 +405,16 @@ Install helpers also cover Rust, Go, Lua, and Bash.
   `:termzoom`, toggles the terminal across the whole pane area. `Esc` exits
   fullscreen too. While zoomed, the sidebar and right dock are hidden so
   nothing overlaps the fullscreen terminal.
+- **Floating terminal**: `Alt+Shift+T` or `:termfloat` opens a second shell in a
+  box centered over the active pane's text rows. It takes 85% by 75% of that
+  area by default, `terminal_float_width` and `terminal_float_height` being a
+  percentage each, and it stays inside the pane's text rows: below the
+  breadcrumb and above the status line, so nothing paints over its frame. The
+  box owns the keys while it is up, the wheel walks its scrollback and a
+  click-drag selects text to copy. `Esc`, the chord again, or a click outside
+  the box hides it and leaves the shell running, working directory and
+  scrollback included, so the next toggle returns to the same prompt; a shell
+  that has exited restarts on the next key where it was first started.
 - **Mouse selection**: click and drag in the terminal to highlight text
   (drag beyond the panel edges is clamped to the visible rows); releasing
   copies the selection to the system clipboard.
@@ -801,6 +811,7 @@ so they need a grammar for the file type.
 | `Ctrl+M` or `Alt+M` | Toggle minimap |
 | `Ctrl+T` or `Alt+T` | Theme chooser |
 | `` Ctrl+` `` | Open / focus / hide terminal panel |
+| `Alt+Shift+T` | Open / hide the floating terminal (Esc hides it) |
 | `F12` | Toggle zen focus mode (hide chrome, center buffer) |
 | `Alt+Shift+A C` | AI: open or close the chat |
 | `Alt+Shift+A N` | AI: start a fresh chat |
@@ -966,7 +977,7 @@ it -- the buffer stays fully visible while you type.
 `:CodeCompanionStatus` `:CodeCompanion <text>` (rewrite the selection or line)
 `:CodeCompanionPrompt <name>`
 
-**Terminal & tasks:** `:term` `:termnew` `:task [name]` `:tasknew <name>`
+**Terminal & tasks:** `:term` `:termnew` `:termfloat` `:task [name]` `:tasknew <name>`
 `:taskrerun`
 
 **Markdown:** `:MarkdownPreview` `:MarkdownPreviewStop`
@@ -1042,6 +1053,8 @@ Built-in defaults include `explorer_width=25`, `minimap_width=15`,
 `auto_save=false`, `auto_save_interval_ms=2000`, `lsp_change_debounce_ms=120`,
 `lsp_inlay_hints=true`, `lsp_inlay_type_hints=true`, `cpp_definitions=true`
 (the C++ declaration/definition checks), `terminal_height=10`,
+`terminal_float_width=85` and `terminal_float_height=75` (the floating
+terminal's box, a percentage of the active pane's text rows each),
 `debugger_height=12`, `status_clock=true`, and `status_session_time=true`. The colour preview adds `colorizer=true`,
 `colorizer_mode=background`, `colorizer_hex=true`, `colorizer_hex_alpha=false`,
 `colorizer_hex_qml=false`, `colorizer_hex_no_hash=false`,

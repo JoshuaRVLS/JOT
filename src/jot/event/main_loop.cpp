@@ -359,6 +359,16 @@ void Editor::run()
                               if (term && fd >= 0 && term->get_master_fd() != fd)
                                 event_loop_.unwatch_fd(fd);
                             }
+                            // The same fallback for the floating terminal's
+                            // shell, which is nobody's dock tab.
+                            if (floating_terminal)
+                            {
+                              const int fd = floating_terminal->get_master_fd();
+                              if (floating_terminal->poll_output() && show_floating_terminal)
+                                needs_redraw = true;
+                              if (fd >= 0 && floating_terminal->get_master_fd() != fd)
+                                event_loop_.unwatch_fd(fd);
+                            }
                             poll_tree_sitter_installs();
                             poll_lsp_installs();
                           });

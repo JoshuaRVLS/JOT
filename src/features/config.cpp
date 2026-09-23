@@ -223,6 +223,12 @@ void Config::load_defaults()
   settings["right_panel_width"] = "42";
   settings["zen_content_width"] = "100";
   settings["terminal_height"] = "10";
+  // The floating terminal (Alt+Shift+T, :termfloat): a box centered over the
+  // active pane's text rows, sized as a percentage of that area (100 = all of
+  // it), clamped to the area and to a 20x5 floor
+  // (integrations/terminal_float.cpp).
+  settings["terminal_float_width"] = "85";
+  settings["terminal_float_height"] = "75";
   settings["debugger_height"] = "12";
   // Discord Rich Presence (ported from iCrawl/discord-vscode; the template
   // placeholders are documented in packaging/discord-presence/ASSETS.md).
