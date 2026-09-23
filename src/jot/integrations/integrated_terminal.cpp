@@ -94,7 +94,12 @@ void Editor::create_integrated_terminal(const std::string &label, const std::str
   
   auto term = std::make_unique<IntegratedTerminal>();
   term->set_label(label);
-  if (!term->open_shell(cwd))
+  // A terminal belongs to the workspace, so with no directory named it starts
+  // at the workspace root. It used to inherit jot's process cwd, which is that
+  // same directory only when the workspace came in as an argument (main chdirs
+  // into it): a workspace resumed with no arguments, or opened later from the
+  // home menu, left the shell in whatever directory jot was launched from.
+  if (!term->open_shell(cwd.empty() ? root_dir : cwd))
   {
 #ifdef _WIN32
     set_message("Failed to open integrated terminal: ConPTY unavailable (Windows 10 1809+ required)", false);

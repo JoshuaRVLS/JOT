@@ -346,7 +346,15 @@ bool IntegratedTerminal::open_shell(const std::string &cwd)
     focused = true;
     return true;
   }
-  if (!session_ || !session_->open(cwd, rows, cols))
+  // No cwd is the editor reusing this terminal (the shell exited and the panel
+  // was clicked, or a toggle brought it back): the new shell starts where the
+  // last one did, so it does not migrate to whatever directory the editor
+  // happens to be in now.
+  if (!cwd.empty())
+  {
+    working_dir = cwd;
+  }
+  if (!session_ || !session_->open(working_dir, rows, cols))
   {
     return false;
   }

@@ -44,6 +44,11 @@ private:
   bool active;
   bool focused;
   std::string label;
+  // The directory this terminal's shell was started in. A reopen after the
+  // shell exited comes back here (open_shell with no cwd), so a terminal that
+  // was opened for a task keeps that task's directory instead of following the
+  // workspace.
+  std::string working_dir;
   VTerm *vterm;
   VTermScreen *screen;
   int rows;
