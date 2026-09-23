@@ -6,6 +6,7 @@
 #include "editor.h"
 #include "folding.h"
 #include "render/buffer_internal.h"
+#include "render/gutter.h"
 #include "tree_sitter/manager.h"
 #include "ui/text.h"
 #include <algorithm>
@@ -102,7 +103,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
     return;
   }
 
-  int line_num_width = 7;
+  const int line_num_width = gutter::width(buf.line_count());
   ActiveBracketGuide bracket_guide = build_active_bracket_guide(buf, tab_size);
 
   refresh_folds(buf);
@@ -318,9 +319,9 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
       const bool row_is_cursor_line =
           highlight_cursor_line && line_idx == buf.cursor.y && pane.active;
       const int gutter_bg = row_is_cursor_line ? theme.bg_cursor_line : theme.bg_default;
-      // Paint the whole gutter band (fold column, number and number-right
-      // spacing) in one pass so breakpoint/severity markers and the number
-      // drawn next sit on a seamless tint.
+      // Paint the whole gutter band (number and the spacing to its right) in
+      // one pass so the number and the severity tint beside it sit on a
+      // seamless tint.
       if (row_is_cursor_line)
       {
         int gutter_end = std::min(x + 1 + line_num_width, x + w); // exclusive
@@ -330,29 +331,13 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
         }
       }
 
-      int line_diag_severity = line_diagnostic_severity(buf, line_idx);
-      int diag_fg = line_diag_severity > 0 ? diagnostic_severity_color(theme, line_diag_severity)
-                                           : theme.fg_line_num;
-      if (line_diag_severity > 0)
-      {
-        // VSCode-like gutter accent, kept to a sliver: a full cell of the
-        // severity colour reads as a bar next to the number, and the eighth
-        // block narrows it to a line without needing a second column.
-        ui->draw_text(x + 1, draw_y, "▏", diag_fg, gutter_bg, true);
-      }
-      else
-      {
-        ui->draw_text(x + 1, draw_y, " ", theme.fg_line_num, gutter_bg);
-      }
-
-      char num_buf[16];
-      int display_line_number = line_idx + 1;
-      if (relative_line_numbers && line_idx != buf.cursor.y)
-      {
-        display_line_number = std::abs(line_idx - buf.cursor.y);
-      }
-      snprintf(num_buf, sizeof(num_buf), "%4d ", display_line_number);
-      int ln_bg = row_is_cursor_line ? theme.bg_cursor_line : theme.bg_line_num;
+      // The number is the gutter's first cell and is not padded on its left:
+      // there is no marker column, so a file that mixes 1- and 4-digit numbers
+      // does not read as a ragged left margin before the digits. Line 5 draws
+      // at the same column line 5000 does, and the code column is fixed by
+      // line_num_width, so the gap to the code is what absorbs the difference.
+      const int line_diag_severity = line_diagnostic_severity(buf, line_idx);
+      const int ln_bg = row_is_cursor_line ? theme.bg_cursor_line : theme.bg_line_num;
       int ln_fg = theme.fg_line_num;
       if (line_idx == buf.cursor.y)
       {
@@ -360,9 +345,18 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
       }
       else if (line_diag_severity > 0)
       {
-        ln_fg = diag_fg;
+        // A diagnostic has no bar of its own any more: the number carries the
+        // severity in its colour.
+        ln_fg = diagnostic_severity_color(theme, line_diag_severity);
       }
-      ui->draw_text(x + 2, draw_y, num_buf, ln_fg, ln_bg);
+      int display_line_number = line_idx + 1;
+      if (relative_line_numbers && line_idx != buf.cursor.y)
+      {
+        display_line_number = std::abs(line_idx - buf.cursor.y);
+      }
+      char num_buf[16];
+      snprintf(num_buf, sizeof(num_buf), "%d ", display_line_number);
+      ui->draw_text(x + 1, draw_y, num_buf, ln_fg, ln_bg);
       // No fold marker column: the fold still shows in the "… N lines" suffix
       // on the header row, and the column it used to take goes to the code.
       const bool folded_header = fold_view->folded_header(line_idx);

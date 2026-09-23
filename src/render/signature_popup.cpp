@@ -4,6 +4,7 @@
 #include "editor.h"
 #include "folding.h"
 #include "jot/lua/api.h"
+#include "render/gutter.h"
 #include "render/overlay_internal.h"
 #include "ui/text.h"
 #include <cctype>
@@ -139,7 +140,7 @@ void Editor::render_lsp_signature()
   {
     draw_w = std::max(1, draw_w - minimap_width);
   }
-  const int line_num_width = 7;
+  const int line_num_width = gutter::width(buf.line_count());
   int visible_h = std::max(1, pane_viewport_h(pane));
   int visible_w = std::max(12, draw_w - 2 - line_num_width);
 

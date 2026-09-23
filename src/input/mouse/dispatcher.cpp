@@ -4,6 +4,7 @@
 // hover, breakpoint and fold toggles, minimap and tab clicks).
 #include "column_utils.h"
 #include "editor.h"
+#include "render/gutter.h"
 #include "folding.h"
 #include "input/mouse/mouse_internal.h"
 
@@ -951,8 +952,13 @@ void Editor::handle_mouse(void *event_ptr)
   if (inside_pane && is_click)
     focus_state = FOCUS_EDITOR;
 
-  const int line_num_width = 7;
+  const int line_num_width = gutter::width(buf.line_count());
   const int code_start_x = pane.x + 1 + line_num_width;
+  // Where a breakpoint is toggled: the gutter's margin, the single cell between
+  // the number field and the code. The number field is the gutter's first cell,
+  // so there is no marker column left of it to click - and a digit has to place
+  // the caret rather than toggle something the screen never paints.
+  const int breakpoint_x = code_start_x - 1;
   const int content_top = pane_content_top(pane);
   const int content_bottom = pane.y + pane.h - 1;
 
@@ -1038,7 +1044,7 @@ void Editor::handle_mouse(void *event_ptr)
   if (click_y < 0)
     return;
   if (is_motion && !mouse_selecting && !mouse_drag_started && inside_pane && event->y >= content_top
-      && event->y < content_bottom && event->x == pane.x + 1 && !buf.filepath.empty())
+      && event->y < content_bottom && event->x == breakpoint_x && !buf.filepath.empty())
   {
     update_debugger_breakpoint_hover(current_pane, pane.buffer_id, click_y);
     cancel_lsp_mouse_hover();
@@ -1048,7 +1054,7 @@ void Editor::handle_mouse(void *event_ptr)
   {
     clear_debugger_breakpoint_hover();
   }
-  if (is_click && event->x == pane.x + 1 && !buf.filepath.empty()
+  if (is_click && event->x == breakpoint_x && !buf.filepath.empty()
       && toggle_debugger_breakpoint(buf.filepath, click_y))
   {
     clear_debugger_breakpoint_hover();
@@ -1309,8 +1315,8 @@ void Editor::handle_mouse(void *event_ptr)
   click_y = second_click_y;
   if (is_motion && !mouse_selecting && !mouse_drag_started)
   {
-    if (inside_pane && event->y >= content_top && event->y < content_bottom && event->x == pane.x + 1
-        && !buf.filepath.empty())
+    if (inside_pane && event->y >= content_top && event->y < content_bottom
+        && event->x == breakpoint_x && !buf.filepath.empty())
     {
       update_debugger_breakpoint_hover(current_pane, pane.buffer_id, click_y);
       cancel_lsp_mouse_hover();

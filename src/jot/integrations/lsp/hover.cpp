@@ -2,6 +2,7 @@
 // hover with a delay, cursor-triggered hover, the native popup (with
 // diagnostics leading the content), and jump-to-definition with a back stack.
 #include "editor.h"
+#include "render/gutter.h"
 #include "jot/editor_models.h"
 #include "jot/lua/api.h"
 #include "lsp/client.h"
@@ -583,7 +584,7 @@ void Editor::handle_lsp_hover_result(const LSPHoverResult &hover)
   }
 
   const SplitPane &pane = get_pane();
-  constexpr int line_num_width = 7;
+  const int line_num_width = gutter::width(buf.line_count());
   int row = hover.origin_line - buf.scroll_offset;
   int max_row = std::max(0, pane_viewport_h(pane));
   int anchor_y = pane_content_top(pane) + std::clamp(row, 0, max_row);

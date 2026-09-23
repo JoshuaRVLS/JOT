@@ -1,6 +1,7 @@
 // Right-click context menu: hit-testing the file tree / sidebar rows
 // and opening the menu at the click position.
 #include "editor.h"
+#include "render/gutter.h"
 #include "column_utils.h"
 #include "folding.h"
 #include "input/mouse/mouse_internal.h"
@@ -216,8 +217,7 @@ bool Editor::open_context_menu_for_mouse(int x, int y)
     }
   }
 
-  const int line_num_width = 7;
-  const int code_start_x = pane.x + 1 + line_num_width;
+  const int code_start_x = pane.x + 1 + gutter::width(buf.line_count());
   const int content_top = pane_content_top(pane);
   const int visible_rows = std::max(1, pane_viewport_h(pane));
   if (y >= content_top && y < content_top + visible_rows)

@@ -10,6 +10,7 @@
 // through and the view "teleported" to the cursor on every motion cell, in both
 // the terminal and the GUI.
 #include "editor.h"
+#include "render/gutter.h"
 #include "jot/model/panes.h" // pane_content_top
 
 #include <catch2/catch_test_macros.hpp>
@@ -41,7 +42,8 @@ namespace
 
   // A buffer the probe can place arbitrary pointer positions on: the caller
   // names the lines and the columns are indexed from the code pane's first
-  // cell (pane.x + 1 + the 7-cell line-number band). Each case gets its own
+  // cell (pane.x + 1 + the gutter, whose width follows the line count - see
+  // render/gutter.h). Each case gets its own
   // path -- load_file focuses an already-open buffer instead of re-reading it,
   // so a shared name would keep the previous case's lines.
   void load_lines(Editor &e, const std::vector<std::string> &lines, const std::string &name)
@@ -58,7 +60,7 @@ namespace
 
   int code_col(Editor &e, int col)
   {
-    return e.pane_for_test().x + 8 + col;
+    return e.pane_for_test().x + 1 + gutter::width(e.buffer_for_test().line_count()) + col;
   }
 
   // The screen row that renders buffer line 0: found by clicking, since the
@@ -110,11 +112,12 @@ namespace
     e.render_for_test();
   }
 
-  // A point inside the pane's code area (past the 9-cell gutter, a few rows
-  // into the text), on the pane the editor is actually drawing.
+  // A point inside the pane's code area, on a word of the long probe file's
+  // lines ("int value_N = N;" - column 5 is inside the identifier), on the pane
+  // the editor is actually drawing.
   int code_x(Editor &e)
   {
-    return e.pane_for_test().x + 20;
+    return code_col(e, 5);
   }
   int code_y_upper(Editor &e)
   {

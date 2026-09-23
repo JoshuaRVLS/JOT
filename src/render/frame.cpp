@@ -4,6 +4,7 @@
 #include "editor.h"
 #include "folding.h"
 #include "jot/lua/api.h"
+#include "render/gutter.h"
 #include "render/pane_edges.h"
 #include "ui/text.h"
 #include <algorithm>
@@ -15,9 +16,6 @@
 
 namespace
 {
-  // Marker column + line number + gap. Must match the gutter the buffer
-  // renderer draws (render/buffer.cpp) or the caret lands off the text.
-  constexpr int kLineNumberGutterWidth = 7;
   std::string ellipsize_right(const std::string &s, int max_len)
   {
     if (max_len <= 0)
@@ -60,7 +58,7 @@ namespace
       draw_w = std::max(1, draw_w - minimap_width);
     }
 
-    const int code_start_x = pane.x + 1 + kLineNumberGutterWidth;
+    const int code_start_x = pane.x + 1 + gutter::width(buf.line_count());
     const int code_end_x = pane.x + draw_w - 2;
     const int min_y = pane_content_top(pane);
     int max_y = pane.y + pane.h - 1;
