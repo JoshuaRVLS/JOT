@@ -1,6 +1,7 @@
 #include "terminal.h"
 #include "jot/keybind_catalog.h"
 #include "string_util.h"
+#include "ui/input_reader.h"
 #include "ui/xterm_palette.h"
 
 #include <cctype>
@@ -35,90 +36,12 @@ static bool probe_terminal_size_via_ioctl(int fd, struct winsize &ws)
   return ioctl(fd, TIOCGWINSZ, &ws) != -1;
 }
 
-static bool read_char_with_timeout(char &out, int timeout_ms);
-
 // A CSI sequence whose head was consumed and then abandoned -- the size probe
 // hitting its deadline, a mouse report straddling a timeout -- leaves its tail
-// in the tty, where the next read takes it for typing ("9R", ";12;3M").
-static bool g_csi_tail_open = false;
-static std::chrono::steady_clock::time_point g_csi_tail_deadline{};
-
-// What an owed tail looks like, so the bytes we skip are provably the sequence
-// we started reading and never a keystroke that raced it.
-enum class TailShape
-{
-  AnyCsi,    // parameters and intermediates, then any final byte
-  CursorPos, // digits, `;` or `?`, then `R`: the size probe's DSR reply
-};
-
-static TailShape g_csi_tail_shape = TailShape::AnyCsi;
-
-// One byte a drain read but did not claim, handed back to the next reader.
-static int g_csi_pushback = -1;
-
-static bool tail_byte_ok(char c, TailShape shape, bool &is_final)
-{
-  const unsigned char u = static_cast<unsigned char>(c);
-  is_final = false;
-  if (shape == TailShape::CursorPos)
-  {
-    if ((u >= '0' && u <= '9') || u == ';' || u == '?')
-      return true;
-    if (u != 'R')
-      return false;
-    is_final = true;
-    return true;
-  }
-  if (u >= 0x20 && u <= 0x3f)
-    return true;
-  if (u < 0x40 || u > 0x7e)
-    return false;
-  is_final = true;
-  return true;
-}
-
-// How long the drain waits for a tail at all, and how long the claim it leaves
-// behind stays open when the tail arrives later than that.
-constexpr int kTailPerByteMs = 20;
-constexpr int kTailBudgetMs = 50;
-constexpr int kTailWindowMs = 1000;
-
-// Eats the rest of a sequence whose head was consumed and dropped. A byte that
-// is not part of that sequence is handed back rather than eaten, so a keystroke
-// landing mid-drain still reaches the editor.
-static void discard_csi_tail(TailShape shape, int per_byte_ms = kTailPerByteMs,
-                             int budget_ms = kTailBudgetMs)
-{
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(budget_ms);
-  char c = 0;
-  bool is_final = false;
-  for (int i = 0; i < 64; i++)
-  {
-    const auto now = std::chrono::steady_clock::now();
-    if (now >= deadline)
-      break;
-    const int remain =
-        (int)std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
-    if (!read_char_with_timeout(c, std::min(per_byte_ms, std::max(1, remain))))
-      break;
-    if (!tail_byte_ok(c, shape, is_final))
-    {
-      g_csi_pushback = static_cast<unsigned char>(c);
-      break;
-    }
-    if (is_final)
-    {
-      g_csi_tail_open = false;
-      return;
-    }
-  }
-  // The tail is not here yet. Claim it: read_key() eats the same shape, hands
-  // back anything else, and abandons the claim at the deadline.
-  g_csi_tail_open = true;
-  g_csi_tail_shape = shape;
-  g_csi_tail_deadline =
-      std::chrono::steady_clock::now() + std::chrono::milliseconds(kTailWindowMs);
-}
+// in the tty, where the next read takes it for typing ("9R", ";12;3M"). Every
+// read of the input fd goes through this one reader, which owns finishing or
+// claiming those tails (see ui/input_reader.h).
+static jot_ui::InputReader g_input(STDIN_FILENO);
 
 // cell_px_* are left at 0 when the terminal does not report a
 // pixel size (the env fallback cannot know it).
@@ -206,7 +129,7 @@ static bool cursor_probe_size(int &width, int &height, int budget_ms = 200)
     {
       break;
     }
-    if (read(STDIN_FILENO, &buf[i], 1) != 1)
+    if (!g_input.read_fd(buf[i], -1))
       break;
     if (buf[i] == 'R')
     {
@@ -230,7 +153,7 @@ static bool cursor_probe_size(int &width, int &height, int budget_ms = 200)
   }
   if (partial_reply)
   {
-    discard_csi_tail(TailShape::CursorPos);
+    g_input.abandon(jot_ui::OwedTail::CursorPos);
   }
 
   ::write(STDOUT_FILENO, "\x1b" "8", 2); // DECRC: put the caret back
@@ -245,78 +168,6 @@ static bool cursor_probe_size(int &width, int &height, int budget_ms = 200)
     return true;
   }
   return false;
-}
-
-// The next byte of input: one a drain handed back, or one off the tty.
-static bool read_raw_byte(char &out)
-{
-  if (g_csi_pushback >= 0)
-  {
-    out = static_cast<char>(g_csi_pushback);
-    g_csi_pushback = -1;
-    return true;
-  }
-  return read(STDIN_FILENO, &out, 1) == 1;
-}
-
-static bool read_char_with_timeout(char &out, int timeout_ms)
-{
-  if (g_csi_pushback < 0)
-  {
-    struct pollfd pfd;
-    pfd.fd = STDIN_FILENO;
-    pfd.events = POLLIN;
-    pfd.revents = 0;
-
-    int ready = poll(&pfd, 1, std::max(0, timeout_ms));
-    if (ready <= 0 || !(pfd.revents & POLLIN))
-    {
-      return false;
-    }
-  }
-
-  return read_raw_byte(out);
-}
-
-static bool read_paste_until_end(std::string &out)
-{
-  out.clear();
-  while (true)
-  {
-    char c = 0;
-    if (!read_char_with_timeout(c, 1000))
-      return false;
-    if (c == '\x1b')
-    {
-      char a = 0, b = 0, c2 = 0, d = 0;
-      if (read_char_with_timeout(a, 20) && a == '[' && read_char_with_timeout(b, 20) && b == '2'
-          && read_char_with_timeout(c2, 20) && c2 == '0' && read_char_with_timeout(d, 20)
-          && d == '1')
-      {
-        char tilde = 0;
-        if (read_char_with_timeout(tilde, 20) && tilde == '~')
-          return true;
-        out.push_back('\x1b');
-        out.push_back(a);
-        out.push_back(b);
-        out.push_back(c2);
-        out.push_back(d);
-        out.push_back(tilde);
-      }
-      else
-      {
-        out.push_back('\x1b');
-        out.push_back(a);
-        out.push_back(b);
-        out.push_back(c2);
-        out.push_back(d);
-      }
-    }
-    else
-    {
-      out.push_back(c);
-    }
-  }
 }
 
 static int termkey_modifier_flags(int mod)
@@ -696,7 +547,7 @@ int Terminal::read_termkey_result()
     if (result == TERMKEY_RES_AGAIN)
     {
       char next;
-      if (read_char_with_timeout(next, termkey_get_waittime(termkey_)))
+      if (g_input.read(next, termkey_get_waittime(termkey_)))
       {
         termkey_push_bytes(termkey_, &next, 1);
         continue;
@@ -715,30 +566,12 @@ int Terminal::read_termkey_result()
 int Terminal::read_key()
 {
   // Finishing a sequence whose tail had not arrived when its head was read and
-  // dropped (see discard_csi_tail). Only that shape is eaten: a keystroke that
-  // gets there first is handed back and delivered as usual.
-  while (g_csi_tail_open)
-  {
-    if (std::chrono::steady_clock::now() >= g_csi_tail_deadline)
-    {
-      g_csi_tail_open = false;
-      break;
-    }
-    char tail = 0;
-    bool is_final = false;
-    if (!read_char_with_timeout(tail, 20))
-      break;
-    if (!tail_byte_ok(tail, g_csi_tail_shape, is_final))
-    {
-      g_csi_pushback = static_cast<unsigned char>(tail);
-      break;
-    }
-    if (is_final)
-      g_csi_tail_open = false;
-  }
+  // dropped (see g_input). Only that shape is eaten: a keystroke that gets
+  // there first is handed back and delivered as usual.
+  g_input.settle();
 
   char c;
-  if (!read_raw_byte(c))
+  if (!g_input.read(c, -1))
     return -1;
 
   std::string bytes;
@@ -747,12 +580,12 @@ int Terminal::read_key()
   if (c == '\x1b')
   {
     char second;
-    if (read_char_with_timeout(second, 5))
+    if (g_input.read(second, 5))
     {
       bytes.push_back(second);
       if (second == '\x1b')
       {
-        if (!read_char_with_timeout(second, 5))
+        if (!g_input.read(second, 5))
         {
           if (!termkey_)
           {
@@ -766,7 +599,7 @@ int Terminal::read_key()
       if (second == '[')
       {
         char third;
-        if (read_char_with_timeout(third, 5))
+        if (g_input.read(third, 5))
         {
           bytes.push_back(third);
           // Focus reporting (DECSET 1004): CSI I = focus-in, CSI O =
@@ -786,11 +619,11 @@ int Terminal::read_key()
             int mouse_pos = 0;
             while (mouse_pos < 31)
             {
-              if (!read_char_with_timeout(mouse_seq[mouse_pos], 5))
+              if (!g_input.read(mouse_seq[mouse_pos], 5))
               {
                 // The report's head is already consumed, so its tail is ours
                 // too; and a truncated report is not an Escape press.
-                discard_csi_tail(TailShape::AnyCsi);
+                g_input.abandon(jot_ui::OwedTail::MouseReport);
                 return -1;
               }
               if (mouse_seq[mouse_pos] == 'M' || mouse_seq[mouse_pos] == 'm')
@@ -806,12 +639,12 @@ int Terminal::read_key()
 
           while (third < 0x40 || third > 0x7e)
           {
-            if (!read_char_with_timeout(third, 5))
+            if (!g_input.read(third, 5))
             {
               // A CSI is provably in progress (a bare `ESC [` would not have
               // entered this loop), so its tail is ours to eat, not to hand on
               // to libtermkey as a fragment whose remainder types itself.
-              discard_csi_tail(TailShape::AnyCsi);
+              g_input.abandon(jot_ui::OwedTail::CsiBody);
               return -1;
             }
             bytes.push_back(third);
@@ -826,7 +659,7 @@ int Terminal::read_key()
           // palette typed as "b" and normal mode used to toggle the sidebar.
           if (bytes.size() >= 6 && bytes.compare(0, 6, "\x1b[200~") == 0)
           {
-            if (read_paste_until_end(paste_event_buffer))
+            if (g_input.read_paste(paste_event_buffer))
             {
               return 1020;
             }
@@ -844,9 +677,15 @@ int Terminal::read_key()
       else if (second == 'O')
       {
         char third;
-        if (read_char_with_timeout(third, 5))
+        if (g_input.read(third, 5))
         {
           bytes.push_back(third);
+        }
+        else
+        {
+          // An SS3 sequence is `ESC O <final>`: the byte still owed is its
+          // final one, and without this it would be read back as typing.
+          g_input.abandon(jot_ui::OwedTail::FinalByte);
         }
       }
     }

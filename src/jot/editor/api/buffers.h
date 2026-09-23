@@ -13,6 +13,10 @@ private:
   void copy();
   void cut();
   void paste();
+  // Pastes exactly this text, without consulting the OS clipboard: a terminal
+  // paste's payload is what was pasted, and that clipboard can hold something
+  // else entirely.
+  void paste_text(const std::string &text);
 
   void save_state();
   void undo();

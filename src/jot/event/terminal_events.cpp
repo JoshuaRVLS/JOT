@@ -21,7 +21,7 @@ void Editor::handle_terminal_event(const Event &ev)
     }
     cancel_lsp_mouse_hover();
     clipboard = ev.paste.text ? ev.paste.text : "";
-    paste();
+    paste_text(clipboard);
     return;
   }
 

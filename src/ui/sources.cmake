@@ -8,6 +8,7 @@ set(JOT_UI_SOURCES
 )
 
 set(JOT_UI_POSIX_SOURCES
+  ui/input_reader.cpp
   ui/terminal.cpp
 )
 

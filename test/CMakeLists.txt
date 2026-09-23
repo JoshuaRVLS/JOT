@@ -34,6 +34,7 @@ add_executable(jot_tests
   test_imageviewer.cpp
   test_syntax.cpp
   test_terminal.cpp
+  test_input_reader.cpp
   test_lsp.cpp
   test_lsp_install.cpp
   test_lsp_policy.cpp

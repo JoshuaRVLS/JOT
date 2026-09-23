@@ -437,6 +437,15 @@ void Editor::cut()
 
 void Editor::paste()
 {
+  // The register first, then whatever the OS clipboard has: pressing paste with
+  // neither an event payload nor anything newer must still paste the register.
+  std::string source_clipboard = clipboard;
+  read_xclip_clipboard(source_clipboard);
+  paste_text(source_clipboard);
+}
+
+void Editor::paste_text(const std::string &text)
+{
   // An image tab's buffer is an empty placeholder: pasting into it would fill
   // that placeholder, and a later save would write it over the picture.
   if (image_viewer.is_image_file(get_buffer().filepath))
@@ -444,9 +453,7 @@ void Editor::paste()
     return;
   }
 
-  std::string source_clipboard = clipboard;
-  read_xclip_clipboard(source_clipboard);
-  if (source_clipboard.empty())
+  if (text.empty())
     return;
   save_state();
   auto &buf = get_buffer();
@@ -459,9 +466,8 @@ void Editor::paste()
 
   const std::string paste_text =
       (auto_indent && smart_paste_indent)
-          ? smart_indent_paste_text(
-                source_clipboard, buf.line(buf.cursor.y), buf.cursor.x, tab_size)
-          : source_clipboard;
+          ? smart_indent_paste_text(text, buf.line(buf.cursor.y), buf.cursor.x, tab_size)
+          : text;
 
   std::vector<std::string> paste_lines = split_paste_lines(paste_text);
   if (!buf.extra_carets.empty() && paste_lines.size() == 1)
