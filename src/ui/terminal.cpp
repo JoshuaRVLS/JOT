@@ -43,23 +43,81 @@ static bool read_char_with_timeout(char &out, int timeout_ms);
 static bool g_csi_tail_open = false;
 static std::chrono::steady_clock::time_point g_csi_tail_deadline{};
 
-static void discard_csi_tail(int timeout_ms)
+// What an owed tail looks like, so the bytes we skip are provably the sequence
+// we started reading and never a keystroke that raced it.
+enum class TailShape
 {
+  AnyCsi,    // parameters and intermediates, then any final byte
+  CursorPos, // digits, `;` or `?`, then `R`: the size probe's DSR reply
+};
+
+static TailShape g_csi_tail_shape = TailShape::AnyCsi;
+
+// One byte a drain read but did not claim, handed back to the next reader.
+static int g_csi_pushback = -1;
+
+static bool tail_byte_ok(char c, TailShape shape, bool &is_final)
+{
+  const unsigned char u = static_cast<unsigned char>(c);
+  is_final = false;
+  if (shape == TailShape::CursorPos)
+  {
+    if ((u >= '0' && u <= '9') || u == ';' || u == '?')
+      return true;
+    if (u != 'R')
+      return false;
+    is_final = true;
+    return true;
+  }
+  if (u >= 0x20 && u <= 0x3f)
+    return true;
+  if (u < 0x40 || u > 0x7e)
+    return false;
+  is_final = true;
+  return true;
+}
+
+// How long the drain waits for a tail at all, and how long the claim it leaves
+// behind stays open when the tail arrives later than that.
+constexpr int kTailPerByteMs = 20;
+constexpr int kTailBudgetMs = 50;
+constexpr int kTailWindowMs = 1000;
+
+// Eats the rest of a sequence whose head was consumed and dropped. A byte that
+// is not part of that sequence is handed back rather than eaten, so a keystroke
+// landing mid-drain still reaches the editor.
+static void discard_csi_tail(TailShape shape, int per_byte_ms = kTailPerByteMs,
+                             int budget_ms = kTailBudgetMs)
+{
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(budget_ms);
   char c = 0;
+  bool is_final = false;
   for (int i = 0; i < 64; i++)
   {
-    if (!read_char_with_timeout(c, timeout_ms))
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= deadline)
       break;
-    if (c >= 0x40 && c <= 0x7e)
+    const int remain =
+        (int)std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+    if (!read_char_with_timeout(c, std::min(per_byte_ms, std::max(1, remain))))
+      break;
+    if (!tail_byte_ok(c, shape, is_final))
+    {
+      g_csi_pushback = static_cast<unsigned char>(c);
+      break;
+    }
+    if (is_final)
     {
       g_csi_tail_open = false;
       return;
     }
   }
-  // Nothing final there yet: hold the skip open briefly, long enough for a tail
-  // still in flight, short enough that it cannot swallow the next keystrokes.
+  // The tail is not here yet. Claim it: read_key() eats the same shape, hands
+  // back anything else, and abandons the claim at the deadline.
   g_csi_tail_open = true;
-  g_csi_tail_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
+  g_csi_tail_shape = shape;
+  g_csi_tail_deadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds(kTailWindowMs);
 }
 
 // cell_px_* are left at 0 when the terminal does not report a
@@ -172,7 +230,7 @@ static bool cursor_probe_size(int &width, int &height, int budget_ms = 200)
   }
   if (partial_reply)
   {
-    discard_csi_tail(20);
+    discard_csi_tail(TailShape::CursorPos);
   }
 
   ::write(STDOUT_FILENO, "\x1b" "8", 2); // DECRC: put the caret back
@@ -189,20 +247,35 @@ static bool cursor_probe_size(int &width, int &height, int budget_ms = 200)
   return false;
 }
 
+// The next byte of input: one a drain handed back, or one off the tty.
+static bool read_raw_byte(char &out)
+{
+  if (g_csi_pushback >= 0)
+  {
+    out = static_cast<char>(g_csi_pushback);
+    g_csi_pushback = -1;
+    return true;
+  }
+  return read(STDIN_FILENO, &out, 1) == 1;
+}
+
 static bool read_char_with_timeout(char &out, int timeout_ms)
 {
-  struct pollfd pfd;
-  pfd.fd = STDIN_FILENO;
-  pfd.events = POLLIN;
-  pfd.revents = 0;
-
-  int ready = poll(&pfd, 1, std::max(0, timeout_ms));
-  if (ready <= 0 || !(pfd.revents & POLLIN))
+  if (g_csi_pushback < 0)
   {
-    return false;
+    struct pollfd pfd;
+    pfd.fd = STDIN_FILENO;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+
+    int ready = poll(&pfd, 1, std::max(0, timeout_ms));
+    if (ready <= 0 || !(pfd.revents & POLLIN))
+    {
+      return false;
+    }
   }
 
-  return read(STDIN_FILENO, &out, 1) == 1;
+  return read_raw_byte(out);
 }
 
 static bool read_paste_until_end(std::string &out)
@@ -641,8 +714,9 @@ int Terminal::read_termkey_result()
 
 int Terminal::read_key()
 {
-  // Finishing a sequence whose tail had not arrived yet when its head was read
-  // and dropped (see discard_csi_tail).
+  // Finishing a sequence whose tail had not arrived when its head was read and
+  // dropped (see discard_csi_tail). Only that shape is eaten: a keystroke that
+  // gets there first is handed back and delivered as usual.
   while (g_csi_tail_open)
   {
     if (std::chrono::steady_clock::now() >= g_csi_tail_deadline)
@@ -651,14 +725,20 @@ int Terminal::read_key()
       break;
     }
     char tail = 0;
+    bool is_final = false;
     if (!read_char_with_timeout(tail, 20))
-      return -1;
-    if (tail >= 0x40 && tail <= 0x7e)
+      break;
+    if (!tail_byte_ok(tail, g_csi_tail_shape, is_final))
+    {
+      g_csi_pushback = static_cast<unsigned char>(tail);
+      break;
+    }
+    if (is_final)
       g_csi_tail_open = false;
   }
 
   char c;
-  if (read(STDIN_FILENO, &c, 1) != 1)
+  if (!read_raw_byte(c))
     return -1;
 
   std::string bytes;
@@ -710,7 +790,7 @@ int Terminal::read_key()
               {
                 // The report's head is already consumed, so its tail is ours
                 // too; and a truncated report is not an Escape press.
-                discard_csi_tail(20);
+                discard_csi_tail(TailShape::AnyCsi);
                 return -1;
               }
               if (mouse_seq[mouse_pos] == 'M' || mouse_seq[mouse_pos] == 'm')
@@ -731,7 +811,7 @@ int Terminal::read_key()
               // A CSI is provably in progress (a bare `ESC [` would not have
               // entered this loop), so its tail is ours to eat, not to hand on
               // to libtermkey as a fragment whose remainder types itself.
-              discard_csi_tail(20);
+              discard_csi_tail(TailShape::AnyCsi);
               return -1;
             }
             bytes.push_back(third);
