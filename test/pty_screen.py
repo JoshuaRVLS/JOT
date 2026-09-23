@@ -306,7 +306,7 @@ class Screen:
 
 def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float = 3.0,
                cols: int = 100, rows: int = 30, cfg: str = "/tmp/jot_probe_cfg",
-               cwd: str = None, phases=None, on_output=None):
+               cwd: str = None, phases=None, on_output=None, until_timeout: float = 15.0):
     """Runs `binary args...` in a pty, sends `keys`, and returns the Screen.
 
     `settle` is how long the editor gets to start before the keys are sent (LSP
@@ -319,6 +319,13 @@ def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float
     followed by a short drain so its frame arrives. A probe that needs the UI to
     finish something asynchronous first -- a mouse hover over a picker whose file
     scan is still running, say -- uses this instead of racing one key blob.
+
+    A phase may also be a callable instead of bytes: it is then a wait, and the
+    run continues as soon as `phase(screen)` is true (or `until_timeout`
+    seconds pass). A probe that types the next key only once the editor has
+    answered the last one - the chat buffer is open before a prompt is typed
+    into it, a provider has replied before the screen is read - says so here
+    instead of guessing a sleep long enough for the slowest machine.
 
     `on_output(chunk)` is called with every chunk the child writes, and can
     write back through the returned writer. That is the only way to answer a
@@ -389,6 +396,11 @@ def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float
     drain(after)
     for delay, extra in phases or []:
         drain(delay)
+        if callable(extra):
+            deadline = time.time() + until_timeout
+            while time.time() < deadline and not extra(screen):
+                drain(0.1)
+            continue
         try:
             os.write(fd, extra)
         except OSError:

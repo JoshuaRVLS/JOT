@@ -82,6 +82,7 @@ add_executable(jot_tests
   test_right_panel.cpp
   test_markdown_http.cpp
   test_lua_markdown.cpp
+  test_ai.cpp
   test_lua_snippet.cpp
   test_completion_matching.cpp
   test_completion_ghost.cpp

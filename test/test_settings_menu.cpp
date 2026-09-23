@@ -588,8 +588,8 @@ TEST_CASE("Settings rows read in groups, header first", "[jot]")
   // Lua features have registered theirs (Snippets, the two previews) are not
   // here at all, so what the list has to be is a subsequence of the order.
   const std::string canonical =
-      "Editor Appearance Color preview Code intelligence Panes & layout Markdown preview "
-      "HTML preview Snippets Discord presence Toasts Updates";
+      "Editor Appearance Color preview Code intelligence AI assistant Panes & layout "
+      "Markdown preview HTML preview Snippets Discord presence Toasts Updates";
   size_t at = 0;
   for (const std::string &title : seen)
   {

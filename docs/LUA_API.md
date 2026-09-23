@@ -98,6 +98,9 @@ jot.treesitter   register_language, language_for_extension, status, parser,
                   disable_language, install_command, reload
 jot.image        execute, open
 jot.job          run, capture
+jot.ai           prompts, prompt, actions, status, adapters, active, config,
+                 chat.{open, toggle, send, stop, reset, set_adapter, messages},
+                 inline, setup
 jot.process      memory
 ```
 
@@ -810,7 +813,9 @@ shell command on a worker thread (so the UI never blocks) and invokes
 `{output=..., exit_code=..., ok=...}`. Both stdout and stderr are captured
 and merged into `output`. The callback is one-shot and automatically
 released. If the plugin set is reloaded while a job runs, the callback is
-dropped safely.
+dropped safely. The call returns `true` when the job was queued and `false`
+when it was refused, so a caller that writes scratch files for the command
+knows whether anything will read them.
 
 ```lua
 jot.job.capture("git diff --stat", function(result)
@@ -845,6 +850,36 @@ jot.status.register("branch", {
   text = function() return " main" end,
 })
 ```
+
+## AI assistant
+
+The bundled assistant (`runtime/lua/features/ai/*`, loaded by
+`src/jot/lua/api_runtime.cpp`) is a Lua module tree over `jot.job`,
+`jot.timer`, `jot.ui` and `jot.buffer`, so a plugin can drive it or replace
+parts of it:
+
+- `jot.ai.setup{ adapter=, model=, prompts={ name = "…" } }` - set the adapter
+  or model for the session and add prompts to the library.
+- `jot.ai.prompts` - the prompt library (`explain`, `fix`, `tests`,
+  `refactor`, `document`, `faster` by default, plus anything a config added).
+- `jot.ai.prompt(name)` - run a named prompt through the inline assistant.
+- `jot.ai.inline(prompt)` - rewrite the selection (or the caret's line) and
+  preview it as a diff the user accepts with `y`.
+- `jot.ai.chat.open() / toggle() / send() / stop() / reset()` - drive the chat
+  buffer; `set_adapter(name)` pins an adapter to the session and
+  `messages()` returns the transcript (`{role=, content=}` pairs).
+- `jot.ai.actions()` - the prompts/adapters/chat-commands picker.
+- `jot.ai.status()` - what is talking to what, as a popup.
+- `jot.ai.adapters()` - the adapter names; `jot.ai.active()` - the resolved
+  adapter (kind, endpoint, model, stream, temperature, max tokens, system
+  prompt); `jot.ai.config` - the whole adapter registry, so a plugin can add an
+  entry for a private gateway with `jot.ai.config.adapters.mine = {...}`.
+
+The pieces that decide bytes are exposed for tests as well:
+`jot.ai.http.payload(adapter, messages)`, `jot.ai.http.url(adapter)`,
+`jot.ai.http.text_of(kind, frame)`, `jot.ai.http.error_of(frame)`,
+`jot.ai.context.expand(text)`, `jot.ai.inline.diff(before, after)` and
+`jot.ai.chat.render_lines(messages, status, prompt_text)`.
 
 ## Markdown Preview
 
@@ -1087,3 +1122,10 @@ Convenience calls are available as `jot.ui.float.open(buf, config)`,
 `close(win)`, `on_key(win, callback)`, and `on_mouse(win, callback)`. Callbacks
 receive a table and return truthy to consume the event. They are protected,
 main-thread only, and released when their window or buffer closes.
+
+A key callback gets `{key=..., ctrl=..., shift=..., alt=..., window=...}` where
+`key` is the **byte or codepoint** of the key (so `y` is 121, `Enter` is 13,
+`Esc` is 27) and the modifiers are booleans; a mouse callback gets
+`{button=..., row=..., col=..., ...}`. `jot.ui.float.set_spans(win, row, spans)`
+paints colored runs on a row, where each span is `{start=, len=, fg=}` in bytes
+of that row's text.

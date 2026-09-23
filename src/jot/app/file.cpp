@@ -670,16 +670,16 @@ bool Editor::save_buffer_at(int index, bool announce)
     return false;
   }
 
-  // The REST response tab's buffer is a rendered result, not a file (see
-  // jot/app/rest_client.cpp): saving it would litter the workspace with a file
-  // literally named "[Response].json". `:w <name>` points the buffer at a real
-  // path first and then saves it like any other.
-  if (buf.filepath.rfind("[Response]", 0) == 0)
+  // A rendered view (is_rendered_view_path): saving it would litter the
+  // workspace with a file literally named "[Response].json" or "[Chat].md".
+  // `:w <name>` points the buffer at a real path first and then saves it like
+  // any other.
+  if (is_rendered_view_path(buf.filepath))
   {
     if (announce)
     {
       message = "Save skipped: " + get_filename(buf.filepath)
-                + " is a response view (use :w <name> to keep it)";
+                + " is a rendered view (use :w <name> to keep it)";
       needs_redraw = true;
     }
     return false;

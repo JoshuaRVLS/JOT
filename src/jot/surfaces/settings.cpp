@@ -47,6 +47,15 @@ const KnownSetting kKnownSettings[] = {
     {"colorizer_xcolor", "Color preview: xcolor", SettingsEntry::Type::Bool},
     {"colorizer_functions", "Color preview: CSS functions", SettingsEntry::Type::Bool},
     {"colorizer_xterm", "Color preview: terminal codes", SettingsEntry::Type::Bool},
+    {"ai_adapter", "AI adapter", SettingsEntry::Type::String},
+    {"ai_base_url", "AI endpoint", SettingsEntry::Type::String},
+    {"ai_command", "AI CLI command", SettingsEntry::Type::String},
+    {"ai_key_env", "AI token variable", SettingsEntry::Type::String},
+    {"ai_max_tokens", "AI max tokens", SettingsEntry::Type::Int},
+    {"ai_model", "AI model", SettingsEntry::Type::String},
+    {"ai_stream", "AI streaming", SettingsEntry::Type::Bool},
+    {"ai_system_prompt", "AI system prompt", SettingsEntry::Type::String},
+    {"ai_temperature", "AI temperature", SettingsEntry::Type::String},
     {"colorizer_ls_colors", "Color preview: LS_COLORS", SettingsEntry::Type::Bool},
     {"colorizer_css_vars", "Color preview: CSS variables", SettingsEntry::Type::Bool},
     {"colorizer_sass", "Color preview: Sass variables", SettingsEntry::Type::Bool},
@@ -298,6 +307,7 @@ const char *const kColorPreviewKeys[] = {"colorizer", "colorizer_mode"};
 const char *const kColorPreviewFamilies[] = {"colorizer_"};
 const char *const kCodeIntelFamilies[] = {"completion_", "cpp_",         "decorations_",
                                          "diagnostics_",  "lsp_",         "treesitter_"};
+const char *const kAssistantFamilies[] = {"ai_"};
 const char *const kPanesKeys[] = {
     "debugger_height",     "explorer_width", "idle_fps",   "image_viewer_backend",
     "render_fps",          "right_panel_width", "show_explorer", "terminal_height",
@@ -330,6 +340,7 @@ const SettingSection kSections[] = {
      kColorPreviewFamilies,
      count_of(kColorPreviewFamilies)},
     {"Code intelligence", nullptr, 0, kCodeIntelFamilies, count_of(kCodeIntelFamilies)},
+    {"AI assistant", nullptr, 0, kAssistantFamilies, count_of(kAssistantFamilies)},
     {"Panes & layout", kPanesKeys, count_of(kPanesKeys), nullptr, 0},
     {"Markdown preview",
      nullptr,

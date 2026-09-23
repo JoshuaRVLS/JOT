@@ -49,7 +49,10 @@ public:
   std::vector<HostBufferInfo> list_buffers() const;
   bool switch_buffer(int index);
   bool close_buffer(int index);
-  void new_buffer();
+  // Opens a new empty buffer. A non-empty `name` gives it a filepath without a
+  // file behind it, which is what names the tab and picks the syntax ruleset
+  // (the REST response tab does the same, see app/rest_client.cpp).
+  void new_buffer(const std::string &name = "");
   std::string buffer_content() const;
   void set_buffer_content(const std::string &text);
   std::string selected_text() const;

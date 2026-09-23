@@ -81,9 +81,17 @@ bool HostCoreAPI::close_buffer(int index)
   return true;
 }
 
-void HostCoreAPI::new_buffer()
+void HostCoreAPI::new_buffer(const std::string &name)
 {
   editor.create_new_buffer();
+  if (!name.empty())
+  {
+    FileBuffer &buf = editor.get_buffer();
+    buf.filepath = name;
+    // The ruleset is chosen from the extension, and the buffer was created
+    // without one, so the cache built for "no name" must go.
+    editor.invalidate_syntax_cache(buf);
+  }
   editor.needs_redraw = true;
 }
 

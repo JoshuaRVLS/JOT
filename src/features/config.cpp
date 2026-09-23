@@ -124,6 +124,22 @@ void Config::load_defaults()
   // Half of the blink cycle, in ms (cursor_blink.h drives it). 500 reads as a
   // calm ~1 Hz blink; the old 300 was a jumpy 1.7 Hz. 0 disables blinking.
   settings["cursor_blink_ms"] = "500";
+  // The AI assistant (features/ai/*.lua): which adapter provides the model and
+  // how the request is shaped. The token is never a setting - it is read from
+  // the environment variable ai_key_env names, which defaults to the adapter's
+  // own (OPENAI_API_KEY and so on). Empty ai_model / ai_base_url / ai_command
+  // fall back to the adapter entry, and an empty ai_system_prompt to the
+  // bundled one; ai_max_tokens of 0 sends no limit (Anthropic requires one and
+  // gets 4096).
+  settings["ai_adapter"] = "openai";
+  settings["ai_model"] = "";
+  settings["ai_base_url"] = "";
+  settings["ai_key_env"] = "";
+  settings["ai_command"] = "";
+  settings["ai_system_prompt"] = "";
+  settings["ai_stream"] = "true";
+  settings["ai_temperature"] = "0.2";
+  settings["ai_max_tokens"] = "0";
   // Inline colour preview (features/color_codes.cpp): paint colour literals in
   // the colour they name. mode is background | foreground | virtualtext.
   settings["colorizer"] = "true";

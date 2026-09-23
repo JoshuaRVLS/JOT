@@ -185,6 +185,10 @@ public:
   bool load_markdown_runtime(lua_State *L);
   bool load_html_runtime(lua_State *L);
   bool load_snippet_runtime(lua_State *L);
+  // Bundled AI assistant (features/ai/*.lua): the CodeCompanion-style chat,
+  // inline rewrite and provider adapters. Loaded after the snippet runtime
+  // (a chat reply can carry snippets) and before features/update.lua.
+  bool load_ai_runtime(lua_State *L);
 
   // LSP installer host half (see api_lsp_install.cpp): loads the Lua
   // installer module (runtime/lua/lsp/install.lua, mason-style registry +

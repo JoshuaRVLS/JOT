@@ -7,6 +7,12 @@
 namespace lua_bind
 {
 
+  // jot.job.capture(command[, cwd], callback) -> true when the job was queued.
+  //
+  // The boolean is what tells a caller the job is actually running: a caller
+  // that owns scratch files for the command (features/ai/http.lua writes the
+  // request body, then curls it) must clean up on a refusal and must not on a
+  // queued job, and with no return value both cases read as nil.
   int l_job_capture(lua_State *L)
   {
     auto &a = api(L);
@@ -30,7 +36,8 @@ namespace lua_bind
       lua_pushboolean(L, 0);
       return 1;
     }
-    return 0;
+    lua_pushboolean(L, 1);
+    return 1;
   }
   int l_task_list(lua_State *L)
   {

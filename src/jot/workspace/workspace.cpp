@@ -294,7 +294,9 @@ void Editor::save_workspace_session()
   persisted.reserve(buffers.size());
   for (auto &buf : buffers)
   {
-    if (!buf.filepath.empty())
+    // A rendered view's name (the REST response tab, the AI chat) is not a
+    // path, so restoring it would try to open a file that does not exist.
+    if (!buf.filepath.empty() && !is_rendered_view_path(buf.filepath))
     {
       persisted.push_back(&buf);
     }
@@ -340,6 +342,10 @@ void Editor::save_workspace_session()
   if (current_buffer >= 0 && current_buffer < (int)buffers.size())
   {
     current_file = buffers[current_buffer].filepath;
+  }
+  if (is_rendered_view_path(current_file))
+  {
+    current_file.clear(); // focus follows the buffers that were persisted
   }
   out << "current_file\t" << escape_field(current_file) << "\n";
 

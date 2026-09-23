@@ -138,7 +138,7 @@ namespace lua_bind
   }
   int l_new_buffer(lua_State *L)
   {
-    api(L).host().core.new_buffer();
+    api(L).host().core.new_buffer(luaL_optstring(L, 1, ""));
     return 0;
   }
   int l_save_buffer(lua_State *L)

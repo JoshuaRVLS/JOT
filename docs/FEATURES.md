@@ -23,6 +23,9 @@ pitch and install steps, see the [README](../README.md).
   disassembly, and output.
 - **Git workflows** for status, diffs, staging, unstaging, committing, log,
   blame, and refresh - all from inside the editor.
+- **A built-in AI assistant** - a CodeCompanion-style chat buffer, inline
+  rewrites previewed as diffs, and adapters for OpenAI-compatible endpoints,
+  Anthropic and any CLI on `PATH`, all in bundled Lua over `jot.job`.
 - **Lua plugins and JSON colorschemes** for customization, with behavior owned
   by the C++ core. The shipped schemes (`jot-dark`, `jot-light` and the
   Flexoki pair) are exact 24-bit palettes authored in hex; a theme file may also
@@ -606,6 +609,69 @@ is an external binary, not bundled - install it with `brew install lazygit`,
 again re-focuses the open tab; quit lazygit with `q` to return to the
 editor.
 
+### AI assistant
+
+`:CodeCompanionChat` (`Alt+Shift+A C`, `:Cc`) opens a chat as a real buffer in
+a tab: the transcript is markdown, you type after the `>` marker under the last
+`## user`, and `Alt+Shift+A S` sends everything from that marker to the end, so
+a prompt can be several lines. The answer streams in as it arrives, the tab is
+marked `[Chat].md` (a rendered view: `:w` on it is refused, `:w <name>` keeps a
+copy), and the chat survives switching tabs. This is
+[codecompanion.nvim](https://github.com/olimorris/codecompanion.nvim)'s shape
+without the plugin: a chat buffer, prompt-line context, an inline rewrite, and
+adapters.
+
+**Context in the prompt.** `#buffer`, `#selection`, `#diagnostics` and
+`#file:<path>` attach that code to the message - the sentence keeps a short
+label (`(src/render/frame.cpp) why is this rebuilt`) and the text follows under
+it in a fenced block, capped at 400 lines per file with the block saying how
+much was dropped. `/buffer`, `/selection`, `/diagnostics` and `/file <path>` do
+the same on their own line, which is how a long path gets in without breaking
+the sentence. A `#word` or `/line` the feature does not know is left exactly as
+typed, so `#include <vector>` is still a sentence. `/help` in the prompt region
+lists the chat's own commands (`/status`, `/new`, `/stop`, `/model <name>`,
+`/adapter <name>`).
+
+**Inline rewrite.** `:CodeCompanion <text>` (or `Alt+Shift+A I`) takes the
+selection, or the line the caret is on, and shows the model's replacement as a
+diff against what is there now: removals in the error colour, additions in the
+string colour, a `-N +M` header. `y` or `Enter` applies it as one undoable edit,
+`n`/`Esc`/`q` discards it, the arrows, Page Up/Down and the wheel scroll a long
+answer. `:CodeCompanionPrompt <name>` runs one of the bundled prompts (`explain`,
+`fix`, `tests`, `refactor`, `document`, `faster`) and
+`:CodeCompanionActions` (`Alt+Shift+A A`) lists the prompts, the adapters and the
+chat commands in one picker. `Alt+Shift+A H` and `:CodeCompanionStatus` show
+what is talking to what.
+
+**Adapters.** A provider is described by *wire protocol*, not by vendor:
+`openai` (chat-completions: OpenAI, Ollama, OpenRouter, DeepSeek, Groq,
+Mistral, xAI, Gemini's compatibility endpoint, LM Studio, llama.cpp, vLLM, a
+gateway), `anthropic` (the messages API) and `cmd` (any CLI on `PATH` that
+answers on stdout, e.g. `claude -p`). `ai_adapter` picks the entry;
+`ai_model`, `ai_base_url`, `ai_key_env`, `ai_command`, `ai_stream`,
+`ai_temperature`, `ai_max_tokens` and `ai_system_prompt` override it, so a
+provider that copies one of the three shapes needs no code at all:
+
+```lua
+jot.config.set("ai_adapter", "ollama")   -- kind=openai, no token needed
+jot.config.set("ai_model", "qwen2.5-coder")
+```
+
+The request is a `curl` on the worker queue (the same reason the git status and
+workspace scans are: an endpoint that takes three seconds must not take three
+seconds of keystrokes with it), writing the reply into a scratch file the frame
+loop reads as it grows - which is what makes an answer appear token by token.
+Streaming SSE is parsed per adapter kind, a provider error is reported with the
+provider's own message and the prompt is put back so a retry is another send,
+and `Alt+Shift+A X` stops an answer mid-flight.
+
+The token is never a setting: it is read from the environment variable
+`ai_key_env` names (`OPENAI_API_KEY` and so on by default) at the moment of the
+request, and `:settings` shows the variable, not the secret. Nothing leaves the
+process except that request; there is no telemetry, no session upload, and the
+file paths and code only travel when you attach them with `#`/`/` or select
+them for an inline rewrite.
+
 ### UI and mouse
 
 The chrome is yours to arrange: menu bar, pane tabs, editor panes, optional
@@ -736,6 +802,13 @@ so they need a grammar for the file type.
 | `Ctrl+T` or `Alt+T` | Theme chooser |
 | `` Ctrl+` `` | Open / focus / hide terminal panel |
 | `F12` | Toggle zen focus mode (hide chrome, center buffer) |
+| `Alt+Shift+A C` | AI: open or close the chat |
+| `Alt+Shift+A N` | AI: start a fresh chat |
+| `Alt+Shift+A S` | AI: send the prompt |
+| `Alt+Shift+A X` | AI: stop the answer being written |
+| `Alt+Shift+A I` | AI: rewrite the selection or line |
+| `Alt+Shift+A A` / `P` | AI: prompts, adapters and chat commands picker |
+| `Alt+Shift+A H` | AI: adapter, model and endpoint |
 | `:settings` or `Ctrl+,` (GUI) | Open the settings menu: every config key under a section heading (Editor, Appearance, Code intelligence, ...), searchable by typing, booleans toggle, ints step, enums list their choices, values edit inline; Lua-registered keys included |
 
 ### The workspace tab strip
@@ -888,6 +961,11 @@ it -- the buffer stays fully visible while you type.
 **Tree-sitter:** `:tsinstall <lang>` (e.g. `:tsinstall javascript` or
 `:tsinstall jsx`) `:tsstatus` `:tsreload`
 
+**AI:** `:CodeCompanionChat` / `:Cc` `:CodeCompanionNewChat`
+`:CodeCompanionSend` `:CodeCompanionStop` `:CodeCompanionActions`
+`:CodeCompanionStatus` `:CodeCompanion <text>` (rewrite the selection or line)
+`:CodeCompanionPrompt <name>`
+
 **Terminal & tasks:** `:term` `:termnew` `:task [name]` `:tasknew <name>`
 `:taskrerun`
 
@@ -992,6 +1070,12 @@ The snippet engine adds `snippet_enabled=true`, `snippet_auto_expand=false`,
 `snippet_load_vscode=true`, `snippet_load_snipmate=true`, `snippet_paths=`,
 and `snippet_filetypes=` (a comma-separated `ext=filetype` override list, e.g.
 `.tsx=typescriptreact`).
+
+The AI assistant adds `ai_adapter=openai`, `ai_model=` (the adapter's own when
+empty), `ai_base_url=`, `ai_key_env=` (the variable the token is read from),
+`ai_command=` (the CLI for the `cmd` adapter), `ai_system_prompt=`,
+`ai_stream=true`, `ai_temperature=0.2` and `ai_max_tokens=0` (no limit; the
+Anthropic kind uses 4096 when it is 0, since its API requires one).
 
 The caret is configured with two keys:
 
@@ -1194,6 +1278,8 @@ src/render/      buffer drawing, minimap, overlays, panels, UI views
 src/tools/       integrated terminal, DAP client, LSP client, search helpers
 src/jot/lua/  C++ bridge for the embedded Lua plugin/theme API
 src/ui/          raw terminal and UI abstraction
+runtime/lua/     bundled Lua features (ui kit, snippets, previews, the AI
+                 assistant under features/ai/), embedded into the binary
 docs/            user-facing documentation
 test/           unit tests
 ```

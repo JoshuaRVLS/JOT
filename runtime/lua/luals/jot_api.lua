@@ -309,6 +309,27 @@
 ---@class jot.api.syntax
 ---@field highlight fun(...)
 
+---@class jot.api.ai.chat
+---@field open fun() Open the chat buffer (or focus it when it is open).
+---@field toggle fun() Open the chat, or close it when it is already focused.
+---@field send fun() Send everything under the last prompt marker.
+---@field stop fun() Stop the answer being written.
+---@field reset fun() Start a fresh chat.
+---@field set_adapter fun(name: string) Pin an adapter to this chat session.
+---@field messages fun(): table[] The transcript as {role=, content=} pairs.
+
+---@class jot.api.ai
+---@field setup fun(opts: table) Adapter/model overrides and extra prompts.
+---@field prompts table<string, string> The named prompt library.
+---@field prompt fun(name: string): boolean Run a named prompt inline.
+---@field inline fun(prompt: string): boolean Rewrite the selection as a diff.
+---@field actions fun() The prompts/adapters/chat-commands picker.
+---@field status fun() Show the active adapter, model and endpoint.
+---@field adapters fun(): string[] The adapter names.
+---@field active fun(): table The resolved adapter for this session.
+---@field config table The adapter registry and resolver.
+---@field chat jot.api.ai.chat
+
 ---@class jot.api
 ---@field editor jot.api.editor
 ---@field buffer jot.api.buffer
@@ -342,6 +363,7 @@
 ---@field treesitter jot.api.treesitter
 ---@field image jot.api.image
 ---@field job jot.api.job
+---@field ai jot.api.ai
 ---@field ui jot.api.ui
 ---@field keymap jot.api.keymap
 ---@field decoration jot.api.decoration

@@ -386,4 +386,13 @@ struct FileBuffer
   }
 };
 
+// A buffer named for something it renders rather than a file it holds: the REST
+// response tab (app/rest_client.cpp) and the AI chat (features/ai/chat.lua).
+// There is nothing behind the name, so a save is refused and a workspace
+// session does not reopen one.
+inline bool is_rendered_view_path(const std::string &path)
+{
+  return path.rfind("[Response]", 0) == 0 || path.rfind("[Chat]", 0) == 0;
+}
+
 #endif

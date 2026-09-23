@@ -145,13 +145,22 @@ namespace lua_bind
     lua_pushinteger(L, api(L).open_float((int)luaL_checkinteger(L, 1), true, L, 2));
     return 1;
   }
+  // jot.ui.float.set_lines(win, lines) - the whole file of the window's
+  // buffer. The buffer functions want (buffer, first, last, replace, lines),
+  // so the arguments are rebuilt rather than overwritten in place: with only
+  // two arguments the old rewrite wrote at slots 3..5, which were past the top
+  // of the stack, and the next callback that read those slots got the numbers
+  // and booleans meant for the buffer call.
   int l_float_set_lines(lua_State *L)
   {
-    int w = (int)luaL_checkinteger(L, 1);
+    const int w = (int)luaL_checkinteger(L, 1);
+    luaL_checktype(L, 2, LUA_TTABLE);
     auto it = api(L).float_windows.find(w);
     if (it == api(L).float_windows.end())
       return (lua_pushboolean(L, 0), 1);
-    luaL_checktype(L, 2, LUA_TTABLE);
+    // [win, lines] -> [buffer, 0, -1, false, lines], with the table parked at
+    // slot 5 before the slots below it are rewritten.
+    lua_settop(L, 5);
     lua_pushvalue(L, 2);
     lua_replace(L, 5);
     lua_pushinteger(L, it->second.buffer);
@@ -166,10 +175,11 @@ namespace lua_bind
   }
   int l_float_get_lines(lua_State *L)
   {
-    int w = (int)luaL_checkinteger(L, 1);
+    const int w = (int)luaL_checkinteger(L, 1);
     auto it = api(L).float_windows.find(w);
     if (it == api(L).float_windows.end())
       return (lua_newtable(L), 1);
+    lua_settop(L, 4); // make the slots the buffer call reads exist first
     lua_pushinteger(L, it->second.buffer);
     lua_replace(L, 1);
     lua_pushinteger(L, 0);

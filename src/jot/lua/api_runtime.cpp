@@ -418,5 +418,29 @@ bool LuaAPI::load_snippet_runtime(lua_State *L)
   return load_bundled_lua_file(L, "features/snippet/init.lua", "Snippets");
 }
 
+bool LuaAPI::load_ai_runtime(lua_State *L)
+{
+  // The AI assistant is a module tree (features/ai/*.lua) like the snippet
+  // engine: pre-load each module into package.loaded["jot_ai.*"], then run
+  // init.lua - the only file that executes, registering the commands, the
+  // keymap family and the jot.ai surface.
+  static const char *kModules[] = {
+      "features/ai/config.lua",
+      "features/ai/json.lua",
+      "features/ai/http.lua",
+      "features/ai/context.lua",
+      "features/ai/chat.lua",
+      "features/ai/inline.lua",
+  };
+  for (const char *rel : kModules)
+  {
+    if (!jot_lua::load_bundled_lua_module(L, rel, "jot_ai"))
+    {
+      return false;
+    }
+  }
+  return load_bundled_lua_file(L, "features/ai/init.lua", "AI assistant");
+}
+
 // Recursively converts one native FileNode (and its children) into a Lua
 // table - the exact tree the explorer sidebar renders.
