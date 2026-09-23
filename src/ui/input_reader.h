@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <deque>
 #include <string>
 
 // The one reader of the input fd. A sequence whose head a reader consumes must
@@ -22,7 +23,6 @@ enum class OwedTail
 {
   CsiBody,     // parameter and intermediate bytes, then any final byte
   FinalByte,   // a single final byte: the last byte of an SS3 sequence
-  CursorPos,   // digits, `;` and `?`, then `R`: the size probe's DSR reply
   MouseReport, // digits, `;` and `?`, then `M` or `m`: an SGR mouse report
 };
 
@@ -43,12 +43,17 @@ public:
   // does not wait, and a handed-back byte never waits.
   bool read(char &out, int timeout_ms);
 
-  // The next byte off the fd, ignoring anything handed back. For parsing a
-  // reply this reader asked for, which a handed-back keystroke is not part of.
-  bool read_fd(char &out, int timeout_ms);
+  // Gives bytes back: the next read takes them, in this order, ahead of the fd.
+  // This is what lets a reader that has to pull bytes it cannot yet judge put
+  // them back instead of dropping them.
+  void unread(char c);
+  void unread(const char *bytes, std::size_t len);
 
-  // Gives a byte back to the next read.
-  void push_back(char c);
+  // Whether bytes are waiting to be handed back.
+  bool pending() const
+  {
+    return !pending_.empty();
+  }
 
   // Eats the rest of a sequence whose head was consumed and dropped.
   void abandon(OwedTail owed, int per_byte_ms = kTailPerByteMs,
@@ -84,9 +89,13 @@ private:
   bool accepts(char c, bool &is_final);
   void open_claim();
 
+  // More than any caller hands back at once: the size probe returns at most
+  // its own 32-byte buffer, and a drain or a claim returns one byte.
+  static constexpr std::size_t kPendingMax = 256;
+
   int fd_;
   int claim_ms_;
-  int pushback_ = -1;
+  std::deque<char> pending_;
   Claim claim_ = Claim::None;
   OwedTail owed_ = OwedTail::CsiBody;
   char fixed_[8] = {};

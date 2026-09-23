@@ -20,17 +20,13 @@ InputReader::InputReader(int fd, int claim_ms) : fd_(fd), claim_ms_(claim_ms) {}
 
 bool InputReader::read(char &out, int timeout_ms)
 {
-  if (pushback_ >= 0)
+  if (!pending_.empty())
   {
-    out = static_cast<char>(pushback_);
-    pushback_ = -1;
+    out = pending_.front();
+    pending_.pop_front();
     return true;
   }
-  return read_fd(out, timeout_ms);
-}
 
-bool InputReader::read_fd(char &out, int timeout_ms)
-{
   if (timeout_ms >= 0)
   {
     struct pollfd pfd;
@@ -44,9 +40,19 @@ bool InputReader::read_fd(char &out, int timeout_ms)
   return ::read(fd_, &out, 1) == 1;
 }
 
-void InputReader::push_back(char c)
+void InputReader::unread(char c)
 {
-  pushback_ = static_cast<unsigned char>(c);
+  if (pending_.size() >= kPendingMax)
+    return;
+  pending_.push_front(c);
+}
+
+void InputReader::unread(const char *bytes, std::size_t len)
+{
+  if (pending_.size() + len > kPendingMax)
+    return;
+  for (std::size_t i = len; i-- > 0;)
+    pending_.push_front(bytes[i]);
 }
 
 bool InputReader::accepts(char c, bool &is_final)
@@ -63,12 +69,12 @@ bool InputReader::accepts(char c, bool &is_final)
     return true;
   }
 
-  if (owed_ == OwedTail::CursorPos || owed_ == OwedTail::MouseReport)
+  if (owed_ == OwedTail::MouseReport)
   {
+    // SGR is `ESC [ < buttons ; x ; y M|m`; the `<` was the head's last byte.
     if ((u >= '0' && u <= '9') || u == ';' || u == '?')
       return true;
-    const bool final_ok = owed_ == OwedTail::CursorPos ? u == 'R' : (u == 'M' || u == 'm');
-    if (!final_ok)
+    if (u != 'M' && u != 'm')
       return false;
     is_final = true;
     return true;
@@ -117,7 +123,7 @@ void InputReader::abandon(OwedTail owed, int per_byte_ms, int budget_ms)
       break;
     if (!accepts(c, is_final))
     {
-      push_back(c);
+      unread(c);
       break;
     }
     if (is_final)
@@ -184,7 +190,7 @@ void InputReader::settle()
       return; // nothing has arrived yet; the claim stays open
     if (!accepts(c, is_final))
     {
-      push_back(c); // someone's keystroke: still owed, so keep the claim
+      unread(c); // someone's keystroke: still owed, so keep the claim
       return;
     }
     if (is_final)

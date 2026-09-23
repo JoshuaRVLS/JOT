@@ -78,7 +78,7 @@ TEST_CASE("Input reader delivers a handed-back byte before the tty", "[jot][inpu
   Pipe pipe;
   jot_ui::InputReader input = reader_for(pipe);
   pipe.write("ab");
-  input.push_back('z');
+  input.unread('z');
 
   std::string typed;
   char c = 0;
@@ -88,39 +88,39 @@ TEST_CASE("Input reader delivers a handed-back byte before the tty", "[jot][inpu
   REQUIRE(typed == "zab");
 }
 
-TEST_CASE("Input reader eats a cursor reply that is already queued", "[jot][input]")
+TEST_CASE("Input reader eats a tail that is already queued", "[jot][input]")
 {
   Pipe pipe;
   jot_ui::InputReader input = reader_for(pipe);
-  pipe.write("91R");
+  pipe.write("91;24M");
 
-  input.abandon(jot_ui::OwedTail::CursorPos);
+  input.abandon(jot_ui::OwedTail::MouseReport);
 
   REQUIRE_FALSE(input.claiming());
   REQUIRE_FALSE(has_queued(input));
 }
 
-TEST_CASE("Input reader claims a cursor reply that has not arrived yet", "[jot][input]")
+TEST_CASE("Input reader claims a tail that has not arrived yet", "[jot][input]")
 {
   Pipe pipe;
   jot_ui::InputReader input = reader_for(pipe);
 
-  input.abandon(jot_ui::OwedTail::CursorPos);
+  input.abandon(jot_ui::OwedTail::MouseReport);
   REQUIRE(input.claiming());
 
-  pipe.write("91R");
+  pipe.write("91;24M");
   input.settle();
 
   REQUIRE_FALSE(input.claiming());
   REQUIRE_FALSE(has_queued(input));
 }
 
-TEST_CASE("Input reader hands back a keystroke where a reply tail was owed", "[jot][input]")
+TEST_CASE("Input reader hands back a keystroke where a tail was owed", "[jot][input]")
 {
   Pipe pipe;
   jot_ui::InputReader input = reader_for(pipe);
 
-  input.abandon(jot_ui::OwedTail::CursorPos);
+  input.abandon(jot_ui::OwedTail::MouseReport);
   pipe.write("z");
 
   input.settle();
@@ -128,23 +128,23 @@ TEST_CASE("Input reader hands back a keystroke where a reply tail was owed", "[j
   REQUIRE(drain(input) == "z");
 }
 
-TEST_CASE("Input reader stops claiming once the reply tail is owed no more", "[jot][input]")
+TEST_CASE("Input reader stops claiming once the tail is owed no more", "[jot][input]")
 {
   Pipe pipe;
   jot_ui::InputReader input = reader_for(pipe, 30);
 
-  input.abandon(jot_ui::OwedTail::CursorPos);
+  input.abandon(jot_ui::OwedTail::MouseReport);
   REQUIRE(input.claiming());
 
   ::usleep(60 * 1000);
-  pipe.write("91Rz");
+  pipe.write("91;24Mz");
   input.settle();
 
   REQUIRE_FALSE(input.claiming());
-  // The window is gone, so the reply that came too late is the editor's
-  // problem: it is past the point where a keystroke and a reply can be told
-  // apart, and eating input for longer is worse than missing one.
-  REQUIRE(drain(input) == "91Rz");
+  // The window is gone, so a tail that came too late is the editor's problem:
+  // it is past the point where a keystroke and a tail can be told apart, and
+  // eating input for longer is worse than missing one.
+  REQUIRE(drain(input) == "91;24Mz");
 }
 
 TEST_CASE("Input reader tells a mouse report's tail from a keystroke", "[jot][input]")
@@ -182,18 +182,26 @@ TEST_CASE("Input reader finishes a fixed tail such as a paste terminator", "[jot
   REQUIRE_FALSE(has_queued(input));
 }
 
-TEST_CASE("Input reader's reply reads never take a handed-back byte", "[jot][input]")
+TEST_CASE("Input reader delivers handed-back bytes first, in order", "[jot][input]")
 {
   Pipe pipe;
   jot_ui::InputReader input = reader_for(pipe);
-  input.push_back('r');
+  pipe.write("xy");
+  input.unread("ab", 2);
+  REQUIRE(input.pending());
+  REQUIRE(drain(input) == "abxy");
+  REQUIRE_FALSE(input.pending());
+}
 
-  // Parsing a reply this reader asked for must not steal a keystroke that a
-  // drain handed back: the tty has nothing, so neither does read_fd.
-  char c = 0;
-  REQUIRE_FALSE(input.read_fd(c, 0));
-  REQUIRE(input.read(c, 0));
-  REQUIRE(c == 'r');
+TEST_CASE("Input reader puts one byte ahead of the run it was given back with", "[jot][input]")
+{
+  Pipe pipe;
+  jot_ui::InputReader input = reader_for(pipe);
+  // A drain hands one byte back to be read next; a run goes in ahead of the fd
+  // but behind it, in the order it arrived.
+  input.unread("bc", 2);
+  input.unread('a');
+  REQUIRE(drain(input) == "abc");
 }
 
 TEST_CASE("Input reader reads a whole bracketed paste", "[jot][input]")

@@ -94,6 +94,26 @@ static bool get_terminal_size(int &width, int &height, int *cell_px_w = nullptr,
   return false;
 }
 
+// The span of a DSR cursor-position reply, `ESC [ rows ; cols R`, in `buf`.
+static bool probe_reply_span(const char *buf, int n, std::size_t &at, std::size_t &end)
+{
+  for (std::size_t p = 0; p + 3 < (std::size_t)n; p++)
+  {
+    if (buf[p] != '\x1b' || buf[p + 1] != '[')
+      continue;
+    std::size_t q = p + 2;
+    while (q < (std::size_t)n && ((buf[q] >= '0' && buf[q] <= '9') || buf[q] == ';'))
+      q++;
+    if (q < (std::size_t)n && buf[q] == 'R' && q > p + 2)
+    {
+      at = p;
+      end = q + 1;
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool cursor_probe_size(int &width, int &height, int budget_ms = 200)
 {
   // Park the cursor at (999, 999) and ask for its position with DSR (CSI 6 n):
@@ -120,46 +140,39 @@ static bool cursor_probe_size(int &width, int &height, int budget_ms = 200)
     const int remain = (int)std::chrono::duration_cast<std::chrono::milliseconds>(
                            deadline - now)
                            .count();
-    struct pollfd pfd;
-    pfd.fd = STDIN_FILENO;
-    pfd.events = POLLIN;
-    pfd.revents = 0;
-    int ready = poll(&pfd, 1, std::max(1, remain));
-    if (ready <= 0 || !(pfd.revents & POLLIN))
-    {
+    if (!g_input.read(buf[i], std::max(1, remain)))
       break;
-    }
-    if (!g_input.read_fd(buf[i], -1))
-      break;
-    if (buf[i] == 'R')
-    {
-      i++;
-      break;
-    }
     i++;
+    std::size_t at = 0;
+    std::size_t end = 0;
+    if (probe_reply_span(buf, i, at, end))
+      break;
   }
 
   // Whatever stopped the loop -- the deadline, a poll that came back empty, a
-  // read that failed -- a reply we began reading is still owed its tail. The
-  // poll below can give up with a few milliseconds of budget left, which is how
-  // a wide terminal's "ESC [ 24 ; 191 R" ends up typed as "191R". Only a reply
-  // is claimed: the digits and `;` of the CSI this probe asked for, never a
-  // keystroke that raced it.
-  bool partial_reply = i >= 2 && buf[0] == '\x1b' && buf[1] == '[';
-  for (int k = 2; k < i && partial_reply; k++)
+  // read that failed -- the probe read bytes it never asked for: a mouse report
+  // or a keystroke that raced its window. They are handed back, in order, so the
+  // input still reaches the editor. Dropping them is what left a report's tail
+  // ("191R", ";124;24M") to be read as typing, and swallowed clicks and keys.
+  std::size_t reply_at = 0;
+  std::size_t reply_end = 0;
+  const bool answered = probe_reply_span(buf, i, reply_at, reply_end);
+
+  char keep[sizeof(buf)];
+  int kept = 0;
+  for (int k = 0; k < i && kept < (int)sizeof(keep); k++)
   {
-    const char c = buf[k];
-    partial_reply = (c >= '0' && c <= '9') || c == ';' || c == '?';
+    if (answered && (std::size_t)k >= reply_at && (std::size_t)k < reply_end)
+      continue;
+    keep[kept++] = buf[k];
   }
-  if (partial_reply)
-  {
-    g_input.abandon(jot_ui::OwedTail::CursorPos);
-  }
+  if (kept > 0)
+    g_input.unread(keep, (std::size_t)kept);
 
   ::write(STDOUT_FILENO, "\x1b" "8", 2); // DECRC: put the caret back
 
   int rows = 0, cols = 0;
-  if (sscanf(buf, "\x1b[%d;%d", &rows, &cols) == 2)
+  if (answered && sscanf(buf + reply_at, "\x1b[%d;%d", &rows, &cols) == 2)
   {
     if (rows > 0)
       height = rows;
@@ -799,13 +812,17 @@ Event Terminal::poll_event()
   Event ev{};
   ev.type = EVENT_REDRAW;
 
+  // Bytes a reader handed back (see InputReader::unread) are input waiting to
+  // be delivered, so they are read without waiting for the fd to speak again.
+  const bool queued = g_input.pending();
   struct pollfd pfd;
   pfd.fd = STDIN_FILENO;
   pfd.events = POLLIN;
   pfd.revents = 0;
-  poll(&pfd, 1, std::max(0, poll_timeout_ms));
+  if (!queued)
+    poll(&pfd, 1, std::max(0, poll_timeout_ms));
 
-  if (pfd.revents & POLLIN)
+  if (queued || (pfd.revents & POLLIN))
   {
     Event input = read_event();
     if (input.type != EVENT_REDRAW)
