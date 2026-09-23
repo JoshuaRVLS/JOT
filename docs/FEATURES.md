@@ -86,7 +86,7 @@ an explicit font file.
   selection, triple-click line selection.
 - Smart multi-line paste that re-indents to the cursor.
 - Auto-indent, auto-closing brackets, bracket matching and jumping, rainbow
-  bracket colors, and an active bracket guide.
+  bracket colors (`rainbow_brackets`), and an active bracket guide.
 - Markup tags (`.html`, `.htm`, `.jsx`, `.tsx`): typing `>` on an opening tag
   writes the closing tag for you, Enter between a pair splits it onto three
   indented lines, and renaming a tag - from either end, including a name being
@@ -927,8 +927,9 @@ reloads Lua plugins and Tree-sitter; `:reloadconfig` is the config-only
 variant. A bundled starter config lives in `.configs/configs/`.
 
 Built-in defaults include `explorer_width=25`, `minimap_width=15`,
-`tab_size=2`, `show_line_numbers=true`, `relative_line_numbers=true`,
-`cursor_style=block`, `cursor_blink_ms=500`, `render_fps=120`, `idle_fps=60`,
+`tab_size=2`, `show_line_numbers=true`, `rainbow_brackets=true`,
+`relative_line_numbers=true`, `cursor_style=block`, `cursor_blink_ms=500`,
+`render_fps=120`, `idle_fps=60`,
 `auto_save=false`, `auto_save_interval_ms=2000`, `lsp_change_debounce_ms=120`,
 `lsp_inlay_hints=true`, `lsp_inlay_type_hints=true`, `cpp_definitions=true`
 (the C++ declaration/definition checks), `terminal_height=10`,

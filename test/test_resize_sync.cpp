@@ -427,6 +427,48 @@ TEST_CASE("Bracket colors match the file-position depth", "[jot]")
   e.apply_resize_for_test(120, 30);
 }
 
+TEST_CASE("Rainbow brackets can be switched off", "[jot]")
+{
+  const std::unique_ptr<Editor> owned = fresh_editor();
+  Editor &e = *owned;
+  hide_sidebar(e);
+  UI *ui = e.ui_for_test();
+  REQUIRE(ui != nullptr);
+
+  // Nested pairs, so several depths share the screen: the palette is only
+  // observable while more than one level is painted.
+  load_source(e, "int f()\n{\n  if (a && b)\n  {\n    g(x[0]);\n  }\n}\n");
+  e.apply_resize_for_test(100, 30);
+  e.render_for_test();
+
+  const int first_row = pane_content_top(e.pane_for_test());
+  const auto bracket_glyphs_in_row = [&](int row)
+  {
+    int count = 0;
+    for (int x = 0; x < ui->get_width(); x++)
+    {
+      const UICell *cell = ui->cell_at(x, row);
+      if (cell && is_bracket_glyph(cell->ch))
+      {
+        count++;
+      }
+    }
+    return count;
+  };
+
+  // On by default: the braces carry the depth palette.
+  REQUIRE(bracket_glyphs_in_row(first_row + 1) > 0);
+  REQUIRE_FALSE(join(bracket_color_fingerprint(e, first_row)).empty());
+
+  // Off: the glyphs stay on screen, in the syntax colour they had before this
+  // feature existed -- what the setting drops is the palette, not the braces.
+  e.config_set_for_test("rainbow_brackets", "false");
+  e.apply_config_live_for_test();
+  e.render_for_test();
+  REQUIRE(bracket_glyphs_in_row(first_row + 1) > 0);
+  REQUIRE(join(bracket_color_fingerprint(e, first_row)).empty());
+}
+
 TEST_CASE("The sidebar comes back when the window fits again", "[jot]")
 {
   Editor &e = probe_editor();

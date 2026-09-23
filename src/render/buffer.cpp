@@ -173,13 +173,14 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
   // Seed the rainbow depth at the viewport top. In-memory buffers use the
   // absolute per-line depth prefix (stable under scrolling); lazy buffers
   // keep the bounded backscan so the cache never demand-loads the whole
-  // file.
+  // file. The depth exists only to colour brackets, so with the setting off
+  // the whole walk is skipped and every bracket keeps its syntax colour.
   int bracket_depth = 0;
-  if (!buf.is_lazy())
+  if (rainbow_brackets && !buf.is_lazy())
   {
     bracket_depth = bracket_depth_at_line_start(buf, buf.scroll_offset);
   }
-  else
+  else if (rainbow_brackets)
   {
     const int scan_start = std::max(0, buf.scroll_offset - kBracketDepthScanLimitLines);
     // Also cap the backscan by bytes: for files made of giant single lines
@@ -299,8 +300,8 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
     // stale scroll_offset snapped the viewport -- re-anchor the depth to
     // the absolute prefix value for the line actually being drawn, so a
     // bracket's color is always a pure function of its file position.
-    if (!buf.is_lazy() && line_idx >= 0 && line_idx < (int)buf.line_count()
-        && line_idx != prev_line_idx + 1)
+    if (rainbow_brackets && !buf.is_lazy() && line_idx >= 0
+        && line_idx < (int)buf.line_count() && line_idx != prev_line_idx + 1)
     {
       bracket_depth = bracket_depth_at_line_start(buf, line_idx);
     }
@@ -696,12 +697,12 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
             const bool skip_bracket_logic =
                 (token_type == TS_TOKEN_STRING || token_type == TS_TOKEN_COMMENT);
             int bracket_color = -1;
-            if (!skip_bracket_logic && is_open_bracket(c))
+            if (rainbow_brackets && !skip_bracket_logic && is_open_bracket(c))
             {
               bracket_color = rainbow_bracket_color(theme, line_bracket_depth);
               line_bracket_depth++;
             }
-            else if (!skip_bracket_logic && is_close_bracket(c))
+            else if (rainbow_brackets && !skip_bracket_logic && is_close_bracket(c))
             {
               line_bracket_depth = std::max(0, line_bracket_depth - 1);
               bracket_color = rainbow_bracket_color(theme, line_bracket_depth);
@@ -1182,7 +1183,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
         }
         bracket_depth = line_bracket_depth;
       }
-      else
+      else if (rainbow_brackets)
       {
         for (char c : line)
         {
@@ -1193,7 +1194,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
       // stop at the visible edge, so the depth it reached is not the line's. The
       // prefix cache is authoritative and O(1) for sequential rows; lazy buffers
       // keep the carried value, since the walk would demand-load lines.
-      if (!buf.is_lazy() && line_idx + 1 < (int)buf.line_count())
+      if (rainbow_brackets && !buf.is_lazy() && line_idx + 1 < (int)buf.line_count())
       {
         bracket_depth = bracket_depth_at_line_start(buf, line_idx + 1);
       }

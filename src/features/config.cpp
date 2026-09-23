@@ -88,6 +88,11 @@ void Config::load_defaults()
   settings["render_margin"] = "0";
   settings["tab_size"] = "2";
   settings["show_indent_guides"] = "true";
+  // Rainbow brackets (render/bracket.cpp): each bracket is painted in a colour
+  // that cycles with its nesting depth. Off leaves every bracket in its syntax
+  // colour; the active bracket guide and the matching-bracket jump are
+  // independent of this.
+  settings["rainbow_brackets"] = "true";
   settings["auto_indent"] = "true";
   // Emmet abbreviations (features/emmet.cpp): Tab expands `div.box>p` in a
   // markup file and `m10-20` in a style sheet. Off is the escape hatch for code

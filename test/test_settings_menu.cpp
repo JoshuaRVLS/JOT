@@ -533,6 +533,7 @@ TEST_CASE("Settings panel files every key under a section", "[jot]")
   REQUIRE(e.settings_section_for_test("color_scheme") == "Appearance");
   REQUIRE(e.settings_section_for_test("tabline_auto_hide") == "Appearance");
   REQUIRE(e.settings_section_for_test("smooth_scroll_easing") == "Appearance");
+  REQUIRE(e.settings_section_for_test("rainbow_brackets") == "Appearance");
   REQUIRE(e.settings_section_for_test("colorizer") == "Color preview");
   REQUIRE(e.settings_section_for_test("colorizer_mode") == "Color preview");
   REQUIRE(e.settings_section_for_test("colorizer_hex_alpha") == "Color preview");

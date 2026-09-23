@@ -143,6 +143,7 @@ const KnownSetting kKnownSettings[] = {
     {"markdown_preview_theme", "Markdown preview: theme", SettingsEntry::Type::String},
     {"minimap_width", "Minimap width", SettingsEntry::Type::Int},
     {"prettier_on_save", "Prettier on save", SettingsEntry::Type::Bool},
+    {"rainbow_brackets", "Rainbow brackets", SettingsEntry::Type::Bool},
     {"relative_line_numbers", "Relative line numbers", SettingsEntry::Type::Bool},
     {"render_fps", "Render FPS", SettingsEntry::Type::Int},
     {"right_panel_width", "Right panel width", SettingsEntry::Type::Int},
@@ -282,12 +283,12 @@ const char *const kEditorKeys[] = {
     "tab_size",             "word_wrap",
 };
 const char *const kAppearanceKeys[] = {
-    "color_scheme",     "cursor_blink_ms",      "cursor_style",     "gui_font_family",
-    "gui_font_size",    "highlight_cursor_line", "minimap_width",   "relative_line_numbers",
-    "render_margin",    "show_indent_guides",   "show_line_numbers", "show_minimap",
-    "smooth_scroll",    "status_clock",         "status_session_time", "tabline",
-    "tabline_auto_hide", "tabline_insert",      "truecolor",        "winbar",
-    "zen_content_width",
+    "color_scheme",          "cursor_blink_ms",       "cursor_style",       "gui_font_family",
+    "gui_font_size",         "highlight_cursor_line", "minimap_width",      "rainbow_brackets",
+    "relative_line_numbers", "render_margin",         "show_indent_guides", "show_line_numbers",
+    "show_minimap",          "smooth_scroll",         "status_clock",       "status_session_time",
+    "tabline",               "tabline_auto_hide",     "tabline_insert",     "truecolor",
+    "winbar",                "zen_content_width",
 };
 const char *const kAppearanceFamilies[] = {"smooth_scroll_"};
 const char *const kColorPreviewKeys[] = {"colorizer", "colorizer_mode"};

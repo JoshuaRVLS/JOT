@@ -20,6 +20,7 @@ struct ViewState
   bool gui_mode = false; // the SDL3/OpenGL frontend (jot --gui) owns the screen
   int status_height = 0;
   bool show_indent_guides = false;
+  bool rainbow_brackets = true;
   bool relative_line_numbers = false;
   bool highlight_cursor_line = false;
   bool auto_indent = false;

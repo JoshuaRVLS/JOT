@@ -94,6 +94,7 @@ void Editor::apply_config_live()
   apply_winbar_setting();
   tab_size = std::clamp(config.get_int("tab_size", 2), 1, 16);
   show_indent_guides = config.get_bool("show_indent_guides", true);
+  rainbow_brackets = config.get_bool("rainbow_brackets", true);
   relative_line_numbers = config.get_bool("relative_line_numbers", false);
   highlight_cursor_line = config.get_bool("highlight_cursor_line", true);
   auto_indent = config.get_bool("auto_indent", true);
@@ -327,6 +328,7 @@ void Editor::initialize_state_defaults()
   apply_winbar_setting();
   tab_size = config.get_int("tab_size", 2);
   show_indent_guides = config.get_bool("show_indent_guides", true);
+  rainbow_brackets = config.get_bool("rainbow_brackets", true);
   relative_line_numbers = config.get_bool("relative_line_numbers", false);
   highlight_cursor_line = config.get_bool("highlight_cursor_line", true);
   tab_scroll_index = 0;
