@@ -52,6 +52,8 @@ private:
   // level it stepped through on screen (dropbar's model).
   const std::vector<SymbolMatch> &winbar_symbols(int buffer_id);
   Winbar::WinbarLayout build_winbar_layout(const SplitPane &pane, int pane_index);
+  // Emits every pane's breadcrumb row as one surface, before the panes paint.
+  bool emit_winbar_rows();
   void render_winbar(const SplitPane &pane, int pane_index);
   void render_winbar_menu();
   bool handle_winbar_mouse(int x, int y, bool is_click, bool is_click_release, bool is_motion);

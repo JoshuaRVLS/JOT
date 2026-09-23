@@ -1357,6 +1357,72 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
   lua_pop(L, 1);
 
+  // --- the winbar paints one row per pane ------------------------------------
+  // A split hands the painter every pane's row at once, so each pane gets its
+  // own float and a row this frame does not carry is closed. Keyed on one row
+  // it could only ever show one pane, and the others kept paying for a
+  // breadcrumb row nothing drew.
+  auto push_winbar_rows = [&](const std::vector<int> &panes_to_y) {
+    lua_newtable(L);
+    lua_newtable(L); // colors
+    lua_pushinteger(L, 250);
+    lua_setfield(L, -2, "fg");
+    lua_pushinteger(L, 235);
+    lua_setfield(L, -2, "bg");
+    lua_setfield(L, -2, "colors");
+    lua_newtable(L); // rows
+    for (size_t i = 0; i < panes_to_y.size(); i++) {
+      lua_newtable(L);
+      lua_pushinteger(L, 0);
+      lua_setfield(L, -2, "x");
+      lua_pushinteger(L, panes_to_y[i]);
+      lua_setfield(L, -2, "y");
+      lua_pushinteger(L, 40);
+      lua_setfield(L, -2, "w");
+      lua_pushinteger(L, (lua_Integer)i);
+      lua_setfield(L, -2, "pane");
+      lua_newtable(L); // crumbs
+      lua_newtable(L);
+      lua_pushstring(L, "a.cpp");
+      lua_setfield(L, -2, "label");
+      lua_pushstring(L, "file");
+      lua_setfield(L, -2, "kind");
+      lua_pushinteger(L, 1);
+      lua_setfield(L, -2, "x");
+      lua_pushinteger(L, 9);
+      lua_setfield(L, -2, "end_x");
+      lua_rawseti(L, -2, 1);
+      lua_setfield(L, -2, "crumbs");
+      lua_rawseti(L, -2, (lua_Integer)i + 1);
+    }
+    lua_setfield(L, -2, "rows");
+  };
+
+  const int winbar_opens = g.open_count;
+  const int winbar_closes = g.close_count;
+  push_module_field(L, 1, "winbar");
+  push_winbar_rows({1, 15});
+  REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+  REQUIRE(lua_toboolean(L, -1));
+  lua_pop(L, 1);
+  REQUIRE(g.open_count == winbar_opens + 2); // a float per pane, not one shared
+  REQUIRE(g.last_width == 39);               // the pane's row less its last cell
+
+  // The next frame carries one row: the pane that lost its row goes with it.
+  push_module_field(L, 1, "winbar");
+  push_winbar_rows({1});
+  REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+  lua_pop(L, 1);
+  REQUIRE(g.open_count == winbar_opens + 2); // re-configured, not reopened
+  REQUIRE(g.close_count == winbar_closes + 1);
+
+  // ...and nil closes the rest.
+  push_module_field(L, 1, "winbar");
+  lua_pushnil(L);
+  REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+  lua_pop(L, 1);
+  REQUIRE(g.close_count == winbar_closes + 2);
+
   // --- match_spans helper ---
   push_module_field(L, 1, "match_spans");
   lua_pushstring(L, "hello world");

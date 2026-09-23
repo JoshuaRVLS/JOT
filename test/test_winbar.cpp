@@ -143,6 +143,20 @@ namespace
     }
     return -1;
   }
+
+  // One pane's slice of a grid row: what *that* pane painted there, not what
+  // any pane painted on the same screen row.
+  std::string pane_row_text(Editor &e, const SplitPane &pane, int y)
+  {
+    UI *ui = e.ui_for_test();
+    std::string row;
+    for (int x = pane.x; x < pane.x + std::max(1, pane.w); x++)
+    {
+      const UICell *cell = ui->cell_at(x, y);
+      row += cell ? cell->ch : " ";
+    }
+    return row;
+  }
 } // namespace
 
 TEST_CASE("A chain is the folders down to the file, then the cursor's symbols", "[jot][winbar]")
@@ -331,6 +345,38 @@ TEST_CASE("A code pane pays a breadcrumb row and paints the chain on it", "[jot]
   REQUIRE(winbar_row.find("\u203A") != std::string::npos); // the crumb separator
   REQUIRE(winbar_row.find("render") != std::string::npos);
   REQUIRE(row_of_text(e, "// strip") == pane_content_top(pane));
+}
+
+TEST_CASE("Every pane of a split paints its own breadcrumb row", "[jot][winbar]")
+{
+  // The rows are one surface for the whole split (render/winbar.cpp hands the
+  // Lua painter every pane's row in one payload, frame.cpp emits it once).
+  // Keyed on a single row it only ever painted the pane that emitted last, and
+  // the earlier panes still paid for a breadcrumb row nothing drew into.
+  seed_config_home();
+  const std::string root = write_workspace_root();
+  Editor e;
+  e.set_home_menu_visible(false);
+  e.open_workspace(root, true);
+  e.load_file((fs::path(root) / "src" / "render" / "tabs.cpp").string());
+  e.split_pane_for_test(false); // stacked: the layout the split chord makes
+  e.render_for_test();
+
+  const std::vector<SplitPane> &panes = e.panes_for_test();
+  REQUIRE(panes.size() == 2);
+  REQUIRE(panes[0].y != panes[1].y);
+  for (const SplitPane &pane : panes)
+  {
+    REQUIRE(pane.header_height == 1);
+    REQUIRE(pane_viewport_h(pane) == pane.h - 1);
+    // The chain on this pane's own row, and the file's first line below it.
+    const std::string crumb_row = pane_row_text(e, pane, pane.y);
+    INFO("pane at y " << pane.y << ": [" << crumb_row << "]");
+    REQUIRE(crumb_row.find("tabs.cpp") != std::string::npos);
+    REQUIRE(crumb_row.find("\u203A") != std::string::npos);
+    REQUIRE(pane_row_text(e, pane, pane_content_top(pane)).find("// strip")
+            != std::string::npos);
+  }
 }
 
 TEST_CASE("A crumb press opens its menu where the layout says, and a row picks it",

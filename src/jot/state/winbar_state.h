@@ -59,6 +59,12 @@ struct WinbarState
   {
     return !winbar_menus.empty();
   }
+
+  // Whether the Lua painter took every row this frame (emit_winbar_rows, before
+  // the panes). The rows are one surface for the whole split, so a pane cannot
+  // decide this for itself: when the painter took them the panes paint no rows
+  // at all, and when it declined each pane paints its own natively.
+  bool winbar_lua_rows = false;
 };
 
 #endif

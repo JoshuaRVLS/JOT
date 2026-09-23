@@ -117,6 +117,50 @@ namespace
     text += entry.label;
     return text;
   }
+
+  // One pane's row as the Lua painter sees it: the layout's own columns, so a
+  // click on a glyph in the float lands on the crumb the layout put there.
+  WinbarRowView winbar_row_view(const SplitPane &pane,
+                                int pane_index,
+                                const std::string &filepath,
+                                const Winbar::WinbarLayout &layout)
+  {
+    WinbarRowView out;
+    out.x = pane.x;
+    out.y = layout.y;
+    out.w = pane.w;
+    out.pane = pane_index;
+    out.filepath = filepath;
+    out.truncated = layout.truncated;
+    for (const Winbar::WinbarSegment &segment : layout.segments)
+    {
+      WinbarCrumbView crumb;
+      if (segment.crumb_index < 0)
+      {
+        crumb.kind = "ellipsis";
+        crumb.label = segment.label;
+        crumb.ellipsis = true;
+      }
+      else
+      {
+        const Winbar::Crumb &source = layout.crumbs[(size_t)segment.crumb_index];
+        crumb.label = segment.label;
+        crumb.kind = source.kind;
+        crumb.symbol_kind = source.symbol_kind;
+        crumb.icon = source.icon;
+        crumb.icon_fg = source.icon_fg;
+        crumb.current = source.current;
+      }
+      crumb.x = segment.x;
+      crumb.icon_x = segment.icon_x;
+      crumb.label_x = segment.label_x;
+      crumb.end_x = segment.end_x;
+      crumb.hovered = segment.hovered;
+      crumb.active = segment.active;
+      out.crumbs.push_back(std::move(crumb));
+    }
+    return out;
+  }
 } // namespace
 
 // The document-symbol index behind the crumb chain, cached on the buffer and
@@ -247,9 +291,46 @@ Winbar::WinbarLayout Editor::build_winbar_layout(const SplitPane &pane, int pane
   return layout;
 }
 
+// The whole winbar surface, once per frame and before the panes paint: every
+// pane's row arrives together so the painter can tell which rows this frame has
+// and close the ones it does not -- the same shape the crumb cascade uses.
+// Returns whether the Lua painter took the rows; when it declines (or there is
+// no handler) the panes fall back to painting their own rows natively.
+bool Editor::emit_winbar_rows()
+{
+  winbar_lua_rows = false;
+  if (!lua_api || !lua_api->has_lua_ui_handler("winbar"))
+  {
+    return false;
+  }
+  WinbarView view;
+  for (int i = 0; i < (int)panes.size(); i++)
+  {
+    const SplitPane &pane = panes[(size_t)i];
+    if (!pane_has_winbar(pane))
+    {
+      continue;
+    }
+    const Winbar::WinbarLayout layout = build_winbar_layout(pane, i);
+    if (layout.crumbs.empty())
+    {
+      continue;
+    }
+    view.rows.push_back(winbar_row_view(pane, i, buffers[(size_t)pane.buffer_id].filepath, layout));
+  }
+  winbar_lua_rows = lua_api->emit_winbar(view);
+  return winbar_lua_rows;
+}
+
 void Editor::render_winbar(const SplitPane &pane, int pane_index)
 {
   if (!ui || !pane_has_winbar(pane))
+  {
+    return;
+  }
+  // The Lua painter drew every row this frame (emit_winbar_rows, before the
+  // panes), so the cells are already covered.
+  if (winbar_lua_rows)
   {
     return;
   }
@@ -259,50 +340,6 @@ void Editor::render_winbar(const SplitPane &pane, int pane_index)
     return;
   }
   const int y = layout.y;
-
-  // A registered Lua UI handler paints the row from this state; the layout
-  // (columns included) is passed through so mouse hits stay aligned.
-  if (lua_api && lua_api->has_lua_ui_handler("winbar"))
-  {
-    WinbarView view;
-    view.x = pane.x;
-    view.y = y;
-    view.w = pane.w;
-    view.pane = pane_index;
-    view.filepath = buffers[(size_t)pane.buffer_id].filepath;
-    view.truncated = layout.truncated;
-    for (const Winbar::WinbarSegment &segment : layout.segments)
-    {
-      WinbarCrumbView crumb;
-      if (segment.crumb_index < 0)
-      {
-        crumb.kind = "ellipsis";
-        crumb.label = segment.label;
-        crumb.ellipsis = true;
-      }
-      else
-      {
-        const Winbar::Crumb &source = layout.crumbs[(size_t)segment.crumb_index];
-        crumb.label = segment.label;
-        crumb.kind = source.kind;
-        crumb.symbol_kind = source.symbol_kind;
-        crumb.icon = source.icon;
-        crumb.icon_fg = source.icon_fg;
-        crumb.current = source.current;
-      }
-      crumb.x = segment.x;
-      crumb.icon_x = segment.icon_x;
-      crumb.label_x = segment.label_x;
-      crumb.end_x = segment.end_x;
-      crumb.hovered = segment.hovered;
-      crumb.active = segment.active;
-      view.crumbs.push_back(std::move(crumb));
-    }
-    if (lua_api->emit_winbar(view))
-    {
-      return;
-    }
-  }
 
   // The row is the pane's own: it stops one cell short on the right, the column
   // the text leaves to the scrollbar.
@@ -783,6 +820,10 @@ bool Editor::handle_winbar_mouse(int x, int y, bool is_click, bool is_click_rele
       {
         if (row_crumb >= 0)
         {
+          // The row belongs to its pane, so a crumb press is a press on that
+          // pane: the menu's jumps then move the pane the pointer is in rather
+          // than whichever one happened to hold the keyboard focus.
+          activate_pane(row_pane);
           open_winbar_menu(row_crumb, row_pane);
         }
         else

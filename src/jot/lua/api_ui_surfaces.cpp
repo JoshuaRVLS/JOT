@@ -660,35 +660,45 @@ bool LuaAPI::emit_winbar(const WinbarView &view)
   return emit_lua_ui("winbar",
                      [&](lua_State *L, int t)
                      {
-                       lua_set_int_field(L, t, "x", view.x);
-                       lua_set_int_field(L, t, "y", view.y);
-                       lua_set_int_field(L, t, "w", view.w);
-                       lua_set_int_field(L, t, "pane", view.pane);
-                       lua_set_str_field(L, t, "filepath", view.filepath);
-                       lua_set_bool_field(L, t, "truncated", view.truncated);
                        lua_newtable(L);
-                       const int arr = lua_gettop(L);
-                       for (size_t i = 0; i < view.crumbs.size(); i++)
+                       const int rows = lua_gettop(L);
+                       for (size_t r = 0; r < view.rows.size(); r++)
                        {
-                         const WinbarCrumbView &crumb = view.crumbs[i];
+                         const WinbarRowView &row = view.rows[r];
                          lua_newtable(L);
-                         const int ci = lua_gettop(L);
-                         lua_set_str_field(L, ci, "label", crumb.label);
-                         lua_set_str_field(L, ci, "kind", crumb.kind);
-                         lua_set_str_field(L, ci, "symbol_kind", crumb.symbol_kind);
-                         lua_set_str_field(L, ci, "icon", crumb.icon);
-                         lua_set_int_field(L, ci, "icon_fg", crumb.icon_fg);
-                         lua_set_int_field(L, ci, "x", crumb.x);
-                         lua_set_int_field(L, ci, "icon_x", crumb.icon_x);
-                         lua_set_int_field(L, ci, "label_x", crumb.label_x);
-                         lua_set_int_field(L, ci, "end_x", crumb.end_x);
-                         lua_set_bool_field(L, ci, "current", crumb.current);
-                         lua_set_bool_field(L, ci, "hovered", crumb.hovered);
-                         lua_set_bool_field(L, ci, "active", crumb.active);
-                         lua_set_bool_field(L, ci, "ellipsis", crumb.ellipsis);
-                         lua_rawseti(L, arr, (lua_Integer)i + 1);
+                         const int rt = lua_gettop(L);
+                         lua_set_int_field(L, rt, "x", row.x);
+                         lua_set_int_field(L, rt, "y", row.y);
+                         lua_set_int_field(L, rt, "w", row.w);
+                         lua_set_int_field(L, rt, "pane", row.pane);
+                         lua_set_str_field(L, rt, "filepath", row.filepath);
+                         lua_set_bool_field(L, rt, "truncated", row.truncated);
+                         lua_newtable(L);
+                         const int arr = lua_gettop(L);
+                         for (size_t i = 0; i < row.crumbs.size(); i++)
+                         {
+                           const WinbarCrumbView &crumb = row.crumbs[i];
+                           lua_newtable(L);
+                           const int ci = lua_gettop(L);
+                           lua_set_str_field(L, ci, "label", crumb.label);
+                           lua_set_str_field(L, ci, "kind", crumb.kind);
+                           lua_set_str_field(L, ci, "symbol_kind", crumb.symbol_kind);
+                           lua_set_str_field(L, ci, "icon", crumb.icon);
+                           lua_set_int_field(L, ci, "icon_fg", crumb.icon_fg);
+                           lua_set_int_field(L, ci, "x", crumb.x);
+                           lua_set_int_field(L, ci, "icon_x", crumb.icon_x);
+                           lua_set_int_field(L, ci, "label_x", crumb.label_x);
+                           lua_set_int_field(L, ci, "end_x", crumb.end_x);
+                           lua_set_bool_field(L, ci, "current", crumb.current);
+                           lua_set_bool_field(L, ci, "hovered", crumb.hovered);
+                           lua_set_bool_field(L, ci, "active", crumb.active);
+                           lua_set_bool_field(L, ci, "ellipsis", crumb.ellipsis);
+                           lua_rawseti(L, arr, (lua_Integer)i + 1);
+                         }
+                         lua_setfield(L, rt, "crumbs");
+                         lua_rawseti(L, rows, (lua_Integer)r + 1);
                        }
-                       lua_setfield(L, t, "crumbs");
+                       lua_setfield(L, t, "rows");
                        push_ui_colors(L, t);
                      });
 }

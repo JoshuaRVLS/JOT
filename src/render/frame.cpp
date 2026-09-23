@@ -528,6 +528,10 @@ void Editor::render()
 
 void Editor::render_panes()
 {
+  // One surface for every pane's breadcrumb row, emitted before the first pane
+  // paints: the painter has to see the whole split to know which rows this
+  // frame has and which floats to close.
+  emit_winbar_rows();
   for (size_t i = 0; i < panes.size(); i++)
   {
     // While a pane is zoomed only it is drawn; the hidden panes stay parked

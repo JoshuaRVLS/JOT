@@ -302,13 +302,25 @@ struct WinbarCrumbView
   bool ellipsis = false; // the chip standing in for the crumbs that did not fit
 };
 
-struct WinbarView
+// One pane's breadcrumb row. Every pane with a row gets one of these, and the
+// row names its pane so the painter and the hit-test agree on which row is
+// which.
+struct WinbarRowView
 {
   int x = 0, y = 0, w = 0; // the pane's winbar row (absolute)
   int pane = -1;
   std::string filepath;
   bool truncated = false;
   std::vector<WinbarCrumbView> crumbs;
+};
+
+// The winbar surface: every pane's row in one payload, the way the crumb
+// cascade carries all of its levels. A painter keyed on a single row cannot
+// tell which panes are gone, so it would leave a split's earlier rows unpainted
+// and keep re-configuring one float for whoever emitted last.
+struct WinbarView
+{
+  std::vector<WinbarRowView> rows;
 };
 
 struct WinbarMenuEntryView

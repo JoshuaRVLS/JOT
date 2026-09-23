@@ -1,5 +1,9 @@
--- The winbar: the Lua painter for the breadcrumb row a pane spends above its
--- text, one cell short on the right like the pane leaves to the scrollbar.
+-- The winbar: the Lua painter for the breadcrumb rows the panes spend above
+-- their text, one cell short on the right like the pane leaves to the
+-- scrollbar. Every pane's row arrives in one payload (render/winbar.cpp), and
+-- this keeps one float per row -- keyed by the row's pane -- so a split paints
+-- every pane. A row this frame does not carry is closed, the way the crumb
+-- cascade closes the levels it stepped back out of.
 local h = require("jot_ui.helpers")
 local close = h.close
 local cell_len = h.cell_len
@@ -31,11 +35,26 @@ local function symbol_color(colors, kind)
   return colors.accent
 end
 
-local function winbar(p)
-  if not p then
-    close("winbar")
-    return true
+-- The float name for one pane's row. Stable per pane, so the next frame
+-- re-configures that row's own float instead of opening another one.
+local function row_name(pane)
+  return "winbar:" .. tostring(pane or 0)
+end
+
+-- Closes every row float except the ones in `keep` (the panes this frame drew).
+local function close_rows(keep)
+  local stale = {}
+  for name in pairs(surfaces) do
+    if name:sub(1, 7) == "winbar:" and not (keep and keep[name]) then
+      stale[#stale + 1] = name
+    end
   end
+  for _, name in ipairs(stale) do
+    close(name)
+  end
+end
+
+local function paint_row(p, row)
   local colors = p.colors or {}
   local row_fg = colors.winbar_fg or colors.default_fg or 7
   local row_bg = colors.winbar_bg or colors.default_bg or 0
@@ -48,7 +67,7 @@ local function winbar(p)
 
   -- The row stops before the last column of the pane, the one the text leaves
   -- to the scrollbar.
-  local w = math.max(1, (p.w or 1) - 1)
+  local w = math.max(1, (row.w or 1) - 1)
   local text = ""
   local spans = {}
   local function emit(s, fg, bg, bold)
@@ -62,9 +81,9 @@ local function winbar(p)
 
   -- The crumbs carry absolute screen columns (that is what the hit-test reads);
   -- this float starts at the row's own x, so the coupons are converted here.
-  local origin = p.x or 0
+  local origin = row.x or 0
   local cursor = 0 -- column already painted, relative to the float
-  for i, c in ipairs(p.crumbs or {}) do
+  for i, c in ipairs(row.crumbs or {}) do
     -- Honoring `x` keeps this painter aligned with the hit-test if the layout
     -- ever adds a gap between crumbs.
     local x = (c.x or cursor) - origin
@@ -110,13 +129,14 @@ local function winbar(p)
   -- winbar's own band rather than whatever was under it.
   table.insert(spans, 1, { start = 0, len = 65535, fg = row_fg, bg = row_bg })
 
-  local s = surfaces["winbar"]
+  local name = row_name(row.pane)
+  local s = surfaces[name]
   local buf, win
   if s then
     buf, win = s.buf, s.win
     jot.ui.float.configure(win, {
-      col = p.x or 0,
-      row = p.y or 0,
+      col = row.x or 0,
+      row = row.y or 0,
       width = w,
       height = 1,
       relative = "editor",
@@ -129,8 +149,8 @@ local function winbar(p)
   else
     buf = jot.ui.buffer.create(false, true)
     win = jot.ui.float.open(buf, {
-      col = p.x or 0,
-      row = p.y or 0,
+      col = row.x or 0,
+      row = row.y or 0,
       width = w,
       height = 1,
       relative = "editor",
@@ -147,11 +167,28 @@ local function winbar(p)
       jot.ui.buffer.delete(buf)
       return false
     end
-    surfaces["winbar"] = { win = win, buf = buf }
+    surfaces[name] = { win = win, buf = buf }
   end
   jot.ui.buffer.set_lines(buf, 0, -1, true, { text })
   jot.ui.float.set_spans(win, 1, spans)
   return true
+end
+
+local function winbar(p)
+  if not p or not p.rows or #p.rows == 0 then
+    close_rows(nil)
+    return true
+  end
+  local keep = {}
+  local ok = true
+  for _, row in ipairs(p.rows) do
+    keep[row_name(row.pane)] = true
+    if not paint_row(p, row) then
+      ok = false
+    end
+  end
+  close_rows(keep)
+  return ok
 end
 
 return {
