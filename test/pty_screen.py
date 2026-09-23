@@ -306,7 +306,7 @@ class Screen:
 
 def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float = 3.0,
                cols: int = 100, rows: int = 30, cfg: str = "/tmp/jot_probe_cfg",
-               cwd: str = None, phases=None):
+               cwd: str = None, phases=None, on_output=None):
     """Runs `binary args...` in a pty, sends `keys`, and returns the Screen.
 
     `settle` is how long the editor gets to start before the keys are sent (LSP
@@ -319,6 +319,11 @@ def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float
     followed by a short drain so its frame arrives. A probe that needs the UI to
     finish something asynchronous first -- a mouse hover over a picker whose file
     scan is still running, say -- uses this instead of racing one key blob.
+
+    `on_output(chunk)` is called with every chunk the child writes, and can
+    write back through the returned writer. That is the only way to answer a
+    query the editor makes of the terminal (its cursor-position probe): the
+    reply has to land in the child's input while its read window is still open.
     """
     os.makedirs(cfg, exist_ok=True)
     # Resolve before forking: the child may chdir to `cwd`, and a relative
@@ -357,6 +362,9 @@ def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float
             break
         screen.feed(data)
         screen.sample_italic()
+        if on_output:
+            on_output(fd, data)
+
     def drain(seconds: float) -> None:
         end = time.time() + seconds
         while time.time() < end:
@@ -371,6 +379,8 @@ def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float
                 return
             screen.feed(data)
             screen.sample_italic()
+            if on_output:
+                on_output(fd, data)
 
     try:
         os.write(fd, keys)

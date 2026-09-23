@@ -134,10 +134,6 @@ static bool cursor_probe_size(int &width, int &height, int budget_ms = 200)
     const auto now = std::chrono::steady_clock::now();
     if (now >= deadline)
     {
-      // A reply we stopped reading part-way is still owed its tail. Only a
-      // reply is: a keystroke that raced the probe is not ours to eat.
-      if (i > 0 && buf[0] == '\x1b' && buf[i - 1] != 'R')
-        discard_csi_tail(20);
       break;
     }
     const int remain = (int)std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -160,6 +156,23 @@ static bool cursor_probe_size(int &width, int &height, int budget_ms = 200)
       break;
     }
     i++;
+  }
+
+  // Whatever stopped the loop -- the deadline, a poll that came back empty, a
+  // read that failed -- a reply we began reading is still owed its tail. The
+  // poll below can give up with a few milliseconds of budget left, which is how
+  // a wide terminal's "ESC [ 24 ; 191 R" ends up typed as "191R". Only a reply
+  // is claimed: the digits and `;` of the CSI this probe asked for, never a
+  // keystroke that raced it.
+  bool partial_reply = i >= 2 && buf[0] == '\x1b' && buf[1] == '[';
+  for (int k = 2; k < i && partial_reply; k++)
+  {
+    const char c = buf[k];
+    partial_reply = (c >= '0' && c <= '9') || c == ';' || c == '?';
+  }
+  if (partial_reply)
+  {
+    discard_csi_tail(20);
   }
 
   ::write(STDOUT_FILENO, "\x1b" "8", 2); // DECRC: put the caret back
