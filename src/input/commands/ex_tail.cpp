@@ -6,6 +6,7 @@
 #include "host_api.h"
 #include "jot/lua/api.h"
 #include "jot/workspace/git_run.h"
+#include "tools/string_util.h"
 
 #include <algorithm>
 #include <cctype>
@@ -438,7 +439,7 @@ bool Editor::execute_ex_command_tail(const std::string &lcmd,
       }
       else
       {
-        show_popup(limit_lines(status, 18), "Git Status");
+        show_popup(string_util::limit_lines(status, 18), "Git Status");
       }
     }
   }
@@ -677,7 +678,7 @@ bool Editor::execute_ex_command_tail(const std::string &lcmd,
       }
       else
       {
-        show_popup(limit_lines(log, 18), "Git Log");
+        show_popup(string_util::limit_lines(log, 18), "Git Log");
       }
     }
   }

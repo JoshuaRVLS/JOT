@@ -1,9 +1,10 @@
 // Internal helpers shared by the file modules: path normalization, the
-// state-file root, and the tab-escaped field encoding used by the recent
+// state-file root, and the tab-separated field encoding used by the recent
 // files/workspaces lists and the per-file fold-state map.
 #pragma once
 
 #include "jot/editor_models.h"
+#include "tools/string_util.h"
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -68,83 +69,6 @@ inline fs::path config_root_path()
   return fs::path(home) / ".config" / "jot";
 }
 
-inline std::string escape_state_field(const std::string &input)
-{
-  std::string out;
-  out.reserve(input.size());
-  for (char c : input)
-  {
-    if (c == '\\')
-    {
-      out += "\\\\";
-    }
-    else if (c == '\t')
-    {
-      out += "\\t";
-    }
-    else if (c == '\n')
-    {
-      out += "\\n";
-    }
-    else
-    {
-      out.push_back(c);
-    }
-  }
-  return out;
-}
-
-inline std::string unescape_state_field(const std::string &input)
-{
-  std::string out;
-  out.reserve(input.size());
-  for (size_t i = 0; i < input.size(); i++)
-  {
-    if (input[i] == '\\' && i + 1 < input.size())
-    {
-      char n = input[i + 1];
-      if (n == 't')
-      {
-        out.push_back('\t');
-        i++;
-        continue;
-      }
-      if (n == 'n')
-      {
-        out.push_back('\n');
-        i++;
-        continue;
-      }
-      if (n == '\\')
-      {
-        out.push_back('\\');
-        i++;
-        continue;
-      }
-    }
-    out.push_back(input[i]);
-  }
-  return out;
-}
-
-inline std::vector<std::string> split_state_tab(const std::string &line)
-{
-  std::vector<std::string> parts;
-  size_t start = 0;
-  while (start <= line.size())
-  {
-    size_t pos = line.find('\t', start);
-    if (pos == std::string::npos)
-    {
-      parts.push_back(line.substr(start));
-      break;
-    }
-    parts.push_back(line.substr(start, pos - start));
-    start = pos + 1;
-  }
-  return parts;
-}
-
 inline std::unordered_map<std::string, std::string> load_file_fold_state_map()
 {
   std::unordered_map<std::string, std::string> states;
@@ -167,13 +91,13 @@ inline std::unordered_map<std::string, std::string> load_file_fold_state_map()
     {
       continue;
     }
-    std::vector<std::string> parts = split_state_tab(line);
+    std::vector<std::string_view> parts = string_util::split(line, '\t');
     if (parts.size() < 2)
     {
       continue;
     }
-    const std::string key = normalize_existing_path(unescape_state_field(parts[0]));
-    const std::string payload = unescape_state_field(parts[1]);
+    const std::string key = normalize_existing_path(string_util::unescape_field(parts[0]));
+    const std::string payload = string_util::unescape_field(parts[1]);
     if (!key.empty())
     {
       states[key] = payload;

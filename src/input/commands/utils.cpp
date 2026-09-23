@@ -25,33 +25,6 @@ namespace CommandLineUtils
     return string_util::first_line_copy(text);
   }
 
-  std::string limit_lines(const std::string &text, int max_lines)
-  {
-    if (max_lines <= 0)
-    {
-      return "";
-    }
-    std::istringstream iss(text);
-    std::string out;
-    std::string line;
-    int count = 0;
-    while (count < max_lines && std::getline(iss, line))
-    {
-      out += line;
-      out.push_back('\n');
-      count++;
-    }
-    if (iss.good())
-    {
-      out += "...";
-    }
-    else if (!out.empty() && out.back() == '\n')
-    {
-      out.pop_back();
-    }
-    return out;
-  }
-
   const std::vector<std::string> &ex_commands()
   {
     static const std::vector<std::string> commands = {"q",

@@ -1,13 +1,14 @@
 #include "editor.h"
 #include "render/pane_edges.h"
 #include "jot/lua/api.h"
+#include "tools/string_util.h"
 
 #include <algorithm>
-#include <sstream>
+#include <string_view>
 
 namespace
 {
-  std::string clip(std::string text, int width)
+  std::string clip(std::string_view text, int width)
   {
     if (width <= 0)
     {
@@ -15,29 +16,13 @@ namespace
     }
     if ((int)text.size() <= width)
     {
-      return text;
+      return std::string(text);
     }
     if (width <= 2)
     {
-      return text.substr(0, (size_t)width);
+      return std::string(text.substr(0, (size_t)width));
     }
-    return text.substr(0, (size_t)(width - 2)) + "..";
-  }
-
-  std::vector<std::string> split_lines(const std::string &text, int max_lines)
-  {
-    std::vector<std::string> out;
-    std::istringstream stream(text);
-    std::string line;
-    while ((int)out.size() < max_lines && std::getline(stream, line))
-    {
-      if (!line.empty() && line.back() == '\r')
-      {
-        line.pop_back();
-      }
-      out.push_back(line);
-    }
-    return out;
+    return std::string(text.substr(0, (size_t)(width - 2))) + "..";
   }
 } // namespace
 
@@ -369,45 +354,38 @@ void Editor::render_debugger_panel()
     {
       break;
     }
-    {
-      SidePanelRowView r;
-      r.text = clip(inst.address + "  " + inst.instruction, col4_w);
-      r.fg = theme.fg_terminal;
-      r.bg = theme.bg_terminal;
-      r.kind = "instruction";
-      view.rows.push_back(std::move(r));
-    }
-    ui->draw_text(x4,
-                  content_y + row,
-                  clip(inst.address + "  " + inst.instruction, col4_w),
-                  theme.fg_terminal,
-                  theme.bg_terminal);
+    const std::string text = clip(inst.address + "  " + inst.instruction, col4_w);
+    SidePanelRowView r;
+    r.text = text;
+    r.fg = theme.fg_terminal;
+    r.bg = theme.bg_terminal;
+    r.kind = "instruction";
+    view.rows.push_back(std::move(r));
+    ui->draw_text(x4, content_y + row, text, theme.fg_terminal, theme.bg_terminal);
     row++;
   }
 
   if (row < content_h)
   {
-    // Output history window: scroll back with the wheel / Ctrl+PageUp/Down.
-    // `output_scroll` is lines from the end; 0 = newest output pinned at the
-    // bottom of the visible window.
+    // Output history window: `output_scroll` counts lines back from the end, 0
+    // newest, and the wheel / Ctrl+PageUp/Down move it. Only the rows on screen
+    // are cut out, so a long log is not rebuilt line by line every frame.
     const int visible = content_h - row;
-    const auto all_lines = split_lines(state.output, 100000);
-    const int max_scroll = std::max(0, (int)all_lines.size() - visible);
+    const int total = (int)string_util::line_count(state.output);
+    const int max_scroll = std::max(0, total - visible);
     const int scroll = std::clamp(state.output_scroll, 0, max_scroll);
     state.output_scroll = scroll;
-    const int start = std::max(0, (int)all_lines.size() - visible - scroll);
-    for (int i = start; i < (int)all_lines.size() && row < content_h; i++)
+    for (std::string_view line :
+         string_util::tail_lines(state.output, (size_t)visible, (size_t)scroll))
     {
-      const auto &line = all_lines[(size_t)i];
-      {
-        SidePanelRowView r;
-        r.text = clip(line, col4_w);
-        r.fg = theme.fg_comment;
-        r.bg = theme.bg_terminal;
-        r.kind = "output";
-        view.rows.push_back(std::move(r));
-      }
-      ui->draw_text(x4, content_y + row, clip(line, col4_w), theme.fg_comment, theme.bg_terminal);
+      const std::string text = clip(line, col4_w);
+      SidePanelRowView r;
+      r.text = text;
+      r.fg = theme.fg_comment;
+      r.bg = theme.bg_terminal;
+      r.kind = "output";
+      view.rows.push_back(std::move(r));
+      ui->draw_text(x4, content_y + row, text, theme.fg_comment, theme.bg_terminal);
       row++;
     }
   }

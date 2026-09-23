@@ -6,6 +6,7 @@
 #include "jot/lua/api.h"
 #include "jot/workspace/workspace_internal.h"
 #include "tools/shell_util.h"
+#include "tools/string_util.h"
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
@@ -102,32 +103,6 @@ void Editor::handle_sidebar_input(int ch)
     }
     return abs_path;
   };
-  auto limit_lines_local = [](const std::string &text, int max_lines)
-  {
-    if (max_lines <= 0)
-    {
-      return std::string();
-    }
-    std::istringstream iss(text);
-    std::string out;
-    std::string line;
-    int count = 0;
-    while (count < max_lines && std::getline(iss, line))
-    {
-      if (count > 0)
-      {
-        out += '\n';
-      }
-      out += line;
-      count++;
-    }
-    if (std::getline(iss, line))
-    {
-      out += "\n...";
-    }
-    return out;
-  };
-
   if (ch == '\t')
   {
     if (explorer_only())
@@ -338,7 +313,7 @@ void Editor::handle_sidebar_input(int ch)
         }
         else
         {
-          show_popup(limit_lines_local(diff, 18), "Git Diff");
+          show_popup(string_util::limit_lines(diff, 18), "Git Diff");
         }
       }
       needs_redraw = true;

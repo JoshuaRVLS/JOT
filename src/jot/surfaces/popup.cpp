@@ -57,32 +57,6 @@ namespace
     return nullptr;
   }
 
-  std::string limit_lines(const std::string &text, int max_lines)
-  {
-    if (max_lines <= 0)
-    {
-      return "";
-    }
-    std::istringstream iss(text);
-    std::string out;
-    std::string line;
-    int count = 0;
-    while (count < max_lines && std::getline(iss, line))
-    {
-      if (count > 0)
-      {
-        out += '\n';
-      }
-      out += line;
-      count++;
-    }
-    if (std::getline(iss, line))
-    {
-      out += "\n...";
-    }
-    return out;
-  }
-
   bool popup_markdown_fence(const std::string &line)
   {
     size_t start = 0;
@@ -635,7 +609,7 @@ void Editor::execute_context_menu_item(int index)
       }
       else
       {
-        show_popup(limit_lines(diff, 18), "Git Diff");
+        show_popup(string_util::limit_lines(diff, 18), "Git Diff");
       }
     }
     break;
@@ -655,7 +629,7 @@ void Editor::execute_context_menu_item(int index)
       }
       else
       {
-        show_popup(limit_lines(diff, 18), "Git Diff");
+        show_popup(string_util::limit_lines(diff, 18), "Git Diff");
       }
     }
     break;

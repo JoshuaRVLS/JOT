@@ -4,6 +4,7 @@
 #include "host_api.h"
 #include "jot/lua/api.h"
 #include "jot/workspace/git_run.h"
+#include "tools/string_util.h"
 
 #include <algorithm>
 #include <cctype>
@@ -232,7 +233,7 @@ bool Editor::execute_ex_command(const std::string &input_line)
         }
         out << "\n";
       }
-      show_popup(limit_lines(out.str(), 24), "Plugins");
+      show_popup(string_util::limit_lines(out.str(), 24), "Plugins");
     }
   }
   else if (lcmd == "pluginpanel")

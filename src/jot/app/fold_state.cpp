@@ -61,7 +61,7 @@ namespace file_internal
       {
         continue;
       }
-      file << escape_state_field(key) << '\t' << escape_state_field(payload) << '\n';
+      file << string_util::escape_field(key) << '\t' << string_util::escape_field(payload) << '\n';
     }
   }
 } // namespace file_internal

@@ -11,6 +11,7 @@
 #include <functional>
 #include "cpp_assist.h"
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <unordered_set>
 
@@ -316,7 +317,7 @@ void Editor::save_workspace_session()
   }
 
   out << "version\t1\n";
-  out << "root\t" << escape_field(workspace_session_root) << "\n";
+  out << "root\t" << string_util::escape_field(workspace_session_root) << "\n";
   out << "show_sidebar\t" << (show_sidebar ? 1 : 0) << "\n";
   out << "sidebar_width\t" << effective_sidebar_width() << "\n";
   out << "sidebar_view\t" << (active_sidebar_view == SIDEBAR_VIEW_GIT ? "git" : "explorer") << "\n";
@@ -347,7 +348,7 @@ void Editor::save_workspace_session()
   {
     current_file.clear(); // focus follows the buffers that were persisted
   }
-  out << "current_file\t" << escape_field(current_file) << "\n";
+  out << "current_file\t" << string_util::escape_field(current_file) << "\n";
 
   for (FileBuffer *buf : persisted)
   {
@@ -357,9 +358,9 @@ void Editor::save_workspace_session()
       buf->folds_dirty = false;
     }
     std::string fold_payload = Folding::encode_collapsed_ranges(buf->fold_ranges);
-    out << "file\t" << escape_field(buf->filepath) << "\t" << buf->cursor.y << "\t" << buf->cursor.x
-        << "\t" << buf->scroll_offset << "\t" << buf->scroll_x << "\t" << (buf->is_preview ? 1 : 0)
-        << "\t" << escape_field(fold_payload) << "\n";
+    out << "file\t" << string_util::escape_field(buf->filepath) << "\t" << buf->cursor.y << "\t"
+        << buf->cursor.x << "\t" << buf->scroll_offset << "\t" << buf->scroll_x << "\t"
+        << (buf->is_preview ? 1 : 0) << "\t" << string_util::escape_field(fold_payload) << "\n";
   }
 }
 bool Editor::restore_workspace_session()
@@ -418,24 +419,21 @@ bool Editor::restore_workspace_session()
     {
       continue;
     }
-    std::vector<std::string> parts = split_tab(line);
+    std::vector<std::string_view> parts = string_util::split(line, '\t');
     if (parts.empty())
     {
       continue;
     }
-    const std::string key = parts[0];
+    const std::string_view key = parts[0];
     if (key == "show_sidebar" && parts.size() >= 2)
     {
       restored_show_sidebar = (parts[1] == "1");
     }
     else if (key == "sidebar_width" && parts.size() >= 2)
     {
-      try
+      if (std::optional<int> width = string_util::to_int(parts[1]))
       {
-        restored_sidebar_width = std::stoi(parts[1]);
-      }
-      catch (...)
-      {
+        restored_sidebar_width = *width;
       }
     }
     else if (key == "sidebar_view" && parts.size() >= 2)
@@ -444,12 +442,9 @@ bool Editor::restore_workspace_session()
     }
     else if (key == "right_panel_width" && parts.size() >= 2)
     {
-      try
+      if (std::optional<int> width = string_util::to_int(parts[1]))
       {
-        restored_right_panel_width = std::stoi(parts[1]);
-      }
-      catch (...)
-      {
+        restored_right_panel_width = *width;
       }
     }
     else if (key == "sidebar_show_hidden" && parts.size() >= 2)
@@ -463,12 +458,10 @@ bool Editor::restore_workspace_session()
     else if (key == "right_panel_tabs" && parts.size() >= 2)
     {
       std::vector<RightPanelTab> tabs;
-      std::stringstream ss(parts[1]);
-      std::string name;
-      while (std::getline(ss, name, ','))
+      for (std::string_view name : string_util::fields(parts[1], ','))
       {
         RightPanelTab tab;
-        if (parse_right_panel_tab(name, tab)
+        if (parse_right_panel_tab(std::string(name), tab)
             && std::find(tabs.begin(), tabs.end(), tab) == tabs.end())
         {
           tabs.push_back(tab);
@@ -479,7 +472,7 @@ bool Editor::restore_workspace_session()
     else if (key == "right_panel_active_tab" && parts.size() >= 2)
     {
       RightPanelTab tab;
-      if (parse_right_panel_tab(parts[1], tab))
+      if (parse_right_panel_tab(std::string(parts[1]), tab))
       {
         restored_active_tab = tab;
         restored_has_active_tab = true;
@@ -487,28 +480,30 @@ bool Editor::restore_workspace_session()
     }
     else if (key == "current_file" && parts.size() >= 2)
     {
-      target_current_file = unescape_field(parts[1]);
+      target_current_file = string_util::unescape_field(parts[1]);
     }
     else if (key == "file" && parts.size() >= 7)
     {
       Entry e;
-      e.path = unescape_field(parts[1]);
-      try
+      e.path = string_util::unescape_field(parts[1]);
+      const std::optional<int> cy = string_util::to_int(parts[2]);
+      const std::optional<int> cx = string_util::to_int(parts[3]);
+      const std::optional<int> scroll = string_util::to_int(parts[4]);
+      const std::optional<int> scroll_x = string_util::to_int(parts[5]);
+      if (cy && cx && scroll && scroll_x)
       {
-        e.cy = std::stoi(parts[2]);
-        e.cx = std::stoi(parts[3]);
-        e.scroll = std::stoi(parts[4]);
-        e.scroll_x = std::stoi(parts[5]);
+        e.cy = *cy;
+        e.cx = *cx;
+        e.scroll = *scroll;
+        e.scroll_x = *scroll_x;
         e.preview = (parts[6] == "1");
         if (parts.size() >= 8)
         {
           e.has_collapsed_folds = true;
-          e.collapsed_folds = Folding::decode_collapsed_ranges(unescape_field(parts[7]));
+          e.collapsed_folds =
+              Folding::decode_collapsed_ranges(string_util::unescape_field(parts[7]));
         }
         entries.push_back(e);
-      }
-      catch (...)
-      {
       }
     }
   }
