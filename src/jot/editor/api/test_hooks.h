@@ -308,6 +308,18 @@ public:
   {
     return config.get_int(key, 0);
   }
+  // Sets one the way the settings menu or Lua would, so a test can drive a
+  // behaviour the editor reads out of its config.
+  void set_config_for_test(const std::string &key, const std::string &value)
+  {
+    config.set(key, value);
+  }
+  // The save the editor runs on Ctrl+S, so a test can pin what a save leaves on
+  // disk without a keystroke or a tab.
+  bool save_buffer_for_test(int index, bool announce = true)
+  {
+    return save_buffer_at(index, announce);
+  }
   // Feeds one key through the settings menu's real input handler.
   bool settings_input_for_test(int ch)
   {

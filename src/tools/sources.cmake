@@ -4,6 +4,7 @@ set(JOT_TOOLS_SOURCES
   tools/debugger/json.cpp
   tools/debugger/process.cpp
   tools/discord_presence.cpp
+  tools/file_util.cpp
   tools/imageviewer.cpp
   tools/lsp/install.cpp
   tools/symbols/index.cpp

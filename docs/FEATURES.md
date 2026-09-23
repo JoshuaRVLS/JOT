@@ -84,6 +84,12 @@ an explicit font file.
 - Modeless text entry - typing edits immediately.
 - Undo/redo, copy/cut/paste, select all, mouse selection, double-click word
   selection, triple-click line selection.
+- Saves that leave the file whole: the bytes go to a temporary beside the file
+  and are renamed over it, so a full disk or a killed process cannot truncate
+  what was on disk. Trailing whitespace comes off on the way out
+  (`trim_trailing_whitespace_on_save`, on by default), in the buffer as well as
+  in the bytes; a file where those spaces are content (markdown's hard line
+  break) keeps them, and `:trim` still cleans it on request.
 - Smart multi-line paste that re-indents to the cursor.
 - Auto-indent, bracket matching and jumping, rainbow bracket colors
   (`rainbow_brackets`), and an active bracket guide.

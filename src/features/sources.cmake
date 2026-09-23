@@ -26,6 +26,7 @@ set(JOT_FEATURES_SOURCES
   features/http_file.cpp
   features/language.cpp
   features/quote_text_object.cpp
+  features/save_hygiene.cpp
   features/smooth_scroll.cpp
   features/status_clock.cpp
   features/tab_order.cpp

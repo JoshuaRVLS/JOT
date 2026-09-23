@@ -186,6 +186,7 @@ const KnownSetting kKnownSettings[] = {
      SettingsEntry::Type::String},
     {"treesitter_library_paths", "Tree-sitter library paths", SettingsEntry::Type::String},
     {"treesitter_query_paths", "Tree-sitter query paths", SettingsEntry::Type::String},
+    {"trim_trailing_whitespace_on_save", "Trim trailing whitespace on save", SettingsEntry::Type::Bool},
     {"update.build_dir", "Update build dir", SettingsEntry::Type::String},
     {"update.check_on_startup", "Check updates on startup", SettingsEntry::Type::Bool},
     {"word_wrap", "Word wrap", SettingsEntry::Type::Bool},
@@ -278,9 +279,11 @@ struct SettingSection
 };
 
 const char *const kEditorKeys[] = {
-    "auto_detect_indent",   "auto_indent",   "auto_save",        "auto_save_interval_ms",
-    "clang_format_on_save", "emmet",         "prettier_on_save", "smart_paste_indent",
-    "tab_size",             "word_wrap",
+    "auto_detect_indent",   "auto_indent",          "auto_save",
+    "auto_save_interval_ms", "clang_format_on_save", "emmet",
+    "prettier_on_save",     "smart_paste_indent",   "tab_size",
+    "trim_trailing_whitespace_on_save",
+    "word_wrap",
 };
 const char *const kAppearanceKeys[] = {
     "color_scheme",          "cursor_blink_ms",       "cursor_style",       "gui_font_family",

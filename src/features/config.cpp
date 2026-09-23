@@ -99,6 +99,11 @@ void Config::load_defaults()
   // that presses Tab at the end of a word that happens to parse.
   settings["emmet"] = "true";
   settings["smart_paste_indent"] = "true";
+  // Trailing whitespace is stray blanks in most files, so a save drops it
+  // (features/save_hygiene.cpp). Off is the escape hatch for a tree where every
+  // such line is meant to stay as it is; a file where the spaces are content
+  // (markdown's hard line break) is left alone either way.
+  settings["trim_trailing_whitespace_on_save"] = "true";
   settings["auto_save"] = "false";
   settings["auto_save_interval_ms"] = "2000";
   settings["prettier_on_save"] = "true";

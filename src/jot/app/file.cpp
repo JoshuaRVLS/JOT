@@ -6,6 +6,8 @@
 #include "jot/lua/api.h"
 #include "cpp_assist.h"
 #include "lazy_line_provider.h"
+#include "save_hygiene.h"
+#include "tools/file_util.h"
 #include "tools/shell_util.h"
 #include <algorithm>
 #include <chrono>
@@ -698,30 +700,63 @@ bool Editor::save_buffer_at(int index, bool announce)
     buf.materialize();
   }
 
-  std::ofstream file(buf.filepath);
-  if (!file.is_open())
+  // Trailing whitespace is stray blanks in everything but the formats where it
+  // is a line break, so the save drops it -- in the buffer as well as in the
+  // bytes, so what is on screen is what landed on disk.
+  int trimmed_lines = 0;
+  if (config.get_bool("trim_trailing_whitespace_on_save", true)
+      && !SaveHygiene::preserves_trailing_whitespace(buf.filepath))
   {
-    if (announce)
+    for (auto &line : buf.lines)
     {
-      message = "Save failed: cannot open " + buf.filepath;
-      needs_redraw = true;
+      if (!SaveHygiene::has_trailing_whitespace(line))
+      {
+        continue;
+      }
+      line = SaveHygiene::trim_trailing_whitespace(line);
+      trimmed_lines++;
     }
-    return false;
+    if (trimmed_lines > 0)
+    {
+      // The lines just got shorter under the carets that were past the trim.
+      save_state();
+      const int cursor_line = std::clamp(buf.cursor.y, 0, (int)buf.line_count() - 1);
+      buf.cursor.y = cursor_line;
+      buf.cursor.x = std::min(buf.cursor.x, (int)buf.line(cursor_line).size());
+      buf.preferred_x = buf.cursor.x;
+      for (auto &caret : buf.extra_carets)
+      {
+        for (Cursor *point : {&caret.start, &caret.end})
+        {
+          const int line = std::clamp(point->y, 0, (int)buf.line_count() - 1);
+          point->y = line;
+          point->x = std::min(point->x, (int)buf.line(line).size());
+        }
+      }
+    }
   }
+
+  std::string text;
+  text.reserve(buf.lines.size() * 32);
   for (const auto &line : buf.lines)
   {
-    file << line << '\n';
+    text += line;
+    text += '\n';
   }
-  if (!file.good())
+
+  // Through a temporary and a rename (tools/file_util.h): a save that fails
+  // part way must leave the file that was on disk intact, not truncated to
+  // whatever got through before the disk filled or the process died.
+  const std::string write_error = file_util::write_file_atomic(buf.filepath, text);
+  if (!write_error.empty())
   {
     if (announce)
     {
-      message = "Save failed: write error";
+      message = "Save failed: " + write_error;
       needs_redraw = true;
     }
     return false;
   }
-  file.close();
 
   auto run_formatter = [this, &buf](const std::string &runner) -> bool
   {
@@ -855,6 +890,11 @@ bool Editor::save_buffer_at(int index, bool announce)
     else if (formatted_with_clang)
     {
       message += " (formatted: clang-format)";
+    }
+    if (trimmed_lines > 0)
+    {
+      message += " (trimmed " + std::to_string(trimmed_lines) + " line"
+                 + (trimmed_lines == 1 ? ")" : "s)");
     }
     needs_redraw = true;
   }
