@@ -1,4 +1,5 @@
 #include "editor.h"
+#include "jot/model/panes.h" // pane_viewport_h
 #include "tools/lsp/client.h"
 #include "tools/lsp/internal.h"
 #include <catch2/catch_test_macros.hpp>
@@ -531,6 +532,97 @@ TEST_CASE("A declaration jump lands and reports which lookup found it", "[lsp][n
   REQUIRE(e.buffer_for_test().cursor.y == 0);
   const std::string name = std::filesystem::path(file).filename().string();
   REQUIRE(e.message_for_test() == "Declaration: " + name + ":1");
+}
+
+// Where a definition jump leaves the view is part of reading the definition:
+// the minimal reveal pinned the caret's line to the last row of the pane, so a
+// jump into a function arrived with the rest of the function still below the
+// fold and the eye starting at the bottom edge. A landmark that is off screen
+// is centred instead; one that is already on screen keeps the view it found.
+namespace
+{
+  // 400 lines, so a target in the middle of them has a full pane of code below.
+  std::string filler_source()
+  {
+    std::string text;
+    for (int i = 0; i < 400; i++)
+    {
+      text += "// filler " + std::to_string(i) + "\n";
+    }
+    return text;
+  }
+
+  void deliver_definition_jump(Editor &e, const std::string &file, int origin_line, int target_line)
+  {
+    LSPDefinitionResult result;
+    result.origin_filepath = file;
+    result.origin_line = origin_line;
+    result.origin_character = 3;
+    result.navigation = LSPNavigationKind::Definition;
+    LSPLocation location;
+    location.filepath = file;
+    location.line = target_line;
+    location.character = 4;
+    location.end_line = target_line;
+    location.end_character = 10;
+    result.locations.push_back(location);
+    e.deliver_lsp_definition_for_test(result);
+  }
+} // namespace
+
+TEST_CASE("A definition jump off screen centres the target line", "[lsp][navigation]")
+{
+  Editor &e = probe_editor();
+  e.apply_resize_for_test(100, 30);
+  const std::string file = write_temp_source(e, filler_source());
+  const int target_line = 200;
+
+  e.scroll_cursor_to_for_test(0, 3);
+  const int viewport_h = pane_viewport_h(e.pane_for_test());
+  REQUIRE(viewport_h > 4);
+  REQUIRE(e.buffer_for_test().scroll_offset == 0);
+
+  deliver_definition_jump(e, file, /*origin_line=*/0, target_line);
+
+  REQUIRE(e.buffer_for_test().cursor.y == target_line);
+  REQUIRE(target_line - e.buffer_for_test().scroll_offset == viewport_h / 2);
+}
+
+// The viewport cannot scroll past the last line, so a definition near the end of
+// the file still comes to rest against the bottom edge. Pinned because it is the
+// one case centring has nothing to give, and it must not scroll past the end to
+// fake a middle.
+TEST_CASE("A definition jump near the end of the file lands on the last row", "[lsp][navigation]")
+{
+  Editor &e = probe_editor();
+  e.apply_resize_for_test(100, 30);
+  const std::string file = write_temp_source(e, filler_source());
+  const int target_line = 399;
+
+  e.scroll_cursor_to_for_test(0, 3);
+  const int viewport_h = pane_viewport_h(e.pane_for_test());
+
+  deliver_definition_jump(e, file, /*origin_line=*/0, target_line);
+
+  REQUIRE(e.buffer_for_test().cursor.y == target_line);
+  REQUIRE(e.buffer_for_test().scroll_offset == 400 - viewport_h);
+  REQUIRE(target_line - e.buffer_for_test().scroll_offset == viewport_h - 1);
+}
+
+TEST_CASE("A definition jump onto a line already on screen leaves the viewport alone",
+          "[lsp][navigation]")
+{
+  Editor &e = probe_editor();
+  e.apply_resize_for_test(100, 30);
+  const std::string file = write_temp_source(e, filler_source());
+
+  e.scroll_cursor_to_for_test(0, 3);
+  REQUIRE(e.buffer_for_test().scroll_offset == 0);
+
+  deliver_definition_jump(e, file, /*origin_line=*/0, /*target_line=*/5);
+
+  REQUIRE(e.buffer_for_test().cursor.y == 5);
+  REQUIRE(e.buffer_for_test().scroll_offset == 0);
 }
 
 TEST_CASE("A location lookup with no hit says so instead of waiting", "[lsp][navigation]")

@@ -650,7 +650,7 @@ void Editor::winbar_menu_activate(int level, int index)
     buf.cursor.x = std::clamp(entry.col, 0, (int)buf.line(buf.cursor.y).size());
     buf.preferred_x = buf.cursor.x;
     clear_selection();
-    ensure_cursor_visible();
+    reveal_cursor_centered();
     record_jump();
     set_message(entry.label);
     needs_redraw = true;

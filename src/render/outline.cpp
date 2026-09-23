@@ -134,7 +134,7 @@ void Editor::outline_jump_selected()
   buf.cursor.x = std::clamp(symbol.column, 0, (int)buf.line(buf.cursor.y).size());
   buf.preferred_x = buf.cursor.x;
   clear_selection();
-  ensure_cursor_visible();
+  reveal_cursor_centered();
   needs_redraw = true;
   record_jump();
   set_message(get_filename(buf.filepath) + ":" + std::to_string(buf.cursor.y + 1) + "  "

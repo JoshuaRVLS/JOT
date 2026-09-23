@@ -680,7 +680,7 @@ bool Editor::apply_pending_lsp_definition_jump()
       std::clamp(lsp_definition_pending_location.character, 0, (int)buf.line(buf.cursor.y).size());
   buf.preferred_x = buf.cursor.x;
   clear_selection();
-  ensure_cursor_visible();
+  reveal_cursor_centered();
   lsp_definition_jump_pending = false;
   set_message(lsp_navigation_jump_label + ": " + get_filename(buf.filepath) + ":"
               + std::to_string(buf.cursor.y + 1));

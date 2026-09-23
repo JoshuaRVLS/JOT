@@ -14,7 +14,9 @@ is no room to be a cell off before the answer belongs to the member instead.
 
 Each scene opens the file, ctrl+clicks one cell, and reads the caret back out of
 the status line's `line:column` indicator -- the landing message is transient,
-but the caret the jump left behind stays on screen.
+but the caret the jump left behind stays on screen. The last scene lands in a
+file taller than the pane, where the jump also chooses what the view shows, so
+it reads the rows around the landing too.
 
 Usage: test/ctrl_click_probe.py [path-to-jot] [--dump]
 Exit codes: 0 pass, 1 fail, 2 skipped (no binary or no clangd).
@@ -107,11 +109,27 @@ UNDERLINES = {
 }
 
 
+# A file taller than the pane, with the definition in the middle of it and the
+# call site on the last screen. `// above-def` / `// below-def` are the two lines
+# either side of the definition: a landing is readable only when both are on
+# screen with it, so they are what the long-file scene reads.
+BIG = "\n".join(
+    ["// pad %d" % i for i in range(40)]
+    + ["// above-def", "int big_marker() {", "// below-def", "  return 1;", "}"]
+    + ["// pad %d" % i for i in range(40, 110)]
+    + ["// call-site", "int big_use() {", "  return big_marker();", "}"]
+) + "\n"
+BIG_CALL = "return big_marker();"
+BIG_DEF = "int big_marker() {"
+
+
 def write_workspace(root: str) -> None:
     shutil.rmtree(root, ignore_errors=True)
     os.makedirs(root, exist_ok=True)
     with open(os.path.join(root, "main.cpp"), "w") as fh:
         fh.write(MAIN)
+    with open(os.path.join(root, "big.cpp"), "w") as fh:
+        fh.write(BIG)
     # So clangd parses as C++17 with no compile database to find. -xc++ is not
     # optional: without it clangd falls back to treating a .cpp as C.
     with open(os.path.join(root, "compile_flags.txt"), "w") as fh:
@@ -139,6 +157,19 @@ def ctrl_motion(col: int, row: int) -> bytes:
     return b"\x1b[<48;%d;%dM" % (col + 1, row + 1) * 2
 
 
+def alt(letter: str) -> bytes:
+    """The kitty report for Alt+<letter> (Alt is bitmask 2, so modifier = 3)."""
+    return b"\x1b[" + str(ord(letter)).encode() + b";3u"
+
+
+def row_of(screen, needle: str) -> int:
+    """The screen row `needle` is on, or -1. Rows are the pane's own, top down."""
+    for row, line in enumerate(screen.text().split("\n")):
+        if needle in line:
+            return row
+    return -1
+
+
 def cell_of(screen, needle: str, offset: int = 0):
     """The 0-based (col, row) of `needle` on screen, plus a character offset."""
     for row, line in enumerate(screen.text().split("\n")):
@@ -149,16 +180,16 @@ def cell_of(screen, needle: str, offset: int = 0):
 
 
 def run(binary: str, root: str, keys: bytes, cfg: str, settle: float = 9.0,
-        after: float = 5.0):
+        after: float = 5.0, name: str = "main.cpp"):
     # Tall enough for every line of the workspace file: an off-screen line gets
     # no inlay hints, which would silently skip the hinted scenes.
-    return run_in_pty(binary, [os.path.join(root, "main.cpp")], keys,
+    return run_in_pty(binary, [os.path.join(root, name)], keys,
                       settle=settle, after=after, cols=110, rows=44, cfg=cfg,
                       cwd=root)
 
 
 def run_settled(binary: str, root: str, keys: bytes, cfg: str, needle: str,
-                attempts: int = 3):
+                attempts: int = 3, name: str = "main.cpp"):
     """Run a scene, retrying while the last frame came out cut short.
 
     The editor writes a frame in one write() and this probe kills the process to
@@ -166,11 +197,11 @@ def run_settled(binary: str, root: str, keys: bytes, cfg: str, needle: str,
     one's tail unwritten -- a partially redrawn row. The scene is only valid
     when the row it is about reconstructed, so retry until it did.
     """
-    screen = run(binary, root, keys, cfg)
+    screen = run(binary, root, keys, cfg, name=name)
     for _ in range(attempts - 1):
         if needle in screen.text():
             return screen
-        screen = run(binary, root, keys, cfg)
+        screen = run(binary, root, keys, cfg, name=name)
     return screen
 
 
@@ -268,6 +299,53 @@ def main() -> int:
         if runs != [want]:
             failures.append(f"underline {label}: expected exactly ['{want}'], "
                             f"got {runs}")
+
+    # Third: where a jump leaves the view. A jump used to pin the caret's line to
+    # the edge it entered from -- the pane's last row coming from below, its first
+    # coming from above -- so a definition in a long file arrived with nothing
+    # around it. This scene ends up at the bottom of a 119-line file, clicks a
+    # call site there, and reads the rows the definition landed between: Alt+G is
+    # the shipped end-of-file binding, and the two marker comments sit one line
+    # either side of the definition.
+    base_big = None
+    for attempt in range(3):
+        base_big = run(binary, root, alt("G"),
+                       f"/tmp/jot_ctrl_click_probe_big_base{attempt}",
+                       settle=11.0, after=6.0, name="big.cpp")
+        if BIG_CALL in base_big.text():
+            break
+    if dump:
+        print(base_big.text())
+        print("-" * 70)
+
+    cell = cell_of(base_big, BIG_CALL, len("  return "))
+    if cell is None:
+        failures.append("long file: the call site is not visible after End")
+    else:
+        col, row = cell
+        screen = run_settled(binary, root, alt("G") + ctrl_click(col, row),
+                             "/tmp/jot_ctrl_click_probe_cfg_big", BIG_DEF,
+                             name="big.cpp")
+        if dump:
+            print(screen.text())
+            print("-" * 70)
+        got = caret(screen)
+        rows = screen.text().split("\n")
+        landed = row_of(screen, BIG_DEF)
+        neighbours = (rows[landed - 1].strip(), rows[landed + 1].strip()) \
+            if 0 < landed < len(rows) - 1 else ("", "")
+        print(f"ctrl+click long file   {BIG_CALL} at ({col},{row}) -> caret "
+              f"{got if got else '(none)'} (want 42:5) on screen row {landed}, "
+              f"rows around it {neighbours}")
+        if got != (42, 5):
+            failures.append(f"long file: expected the definition at 42:5, landed "
+                            f"on {got if got else 'nothing'}")
+        elif "above-def" not in neighbours[0]:
+            failures.append("long file: the line above the definition is not on "
+                            "screen (the landing is pinned to the pane's top edge)")
+        elif "below-def" not in neighbours[1]:
+            failures.append("long file: the line below the definition is not on "
+                            "screen (the landing is pinned to the pane's last row)")
 
     if failures:
         for failure in failures:

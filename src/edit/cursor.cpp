@@ -211,6 +211,44 @@ void Editor::ensure_cursor_visible(bool adjust_horizontal)
     buf.scroll_offset = 0;
 }
 
+void Editor::reveal_cursor_centered()
+{
+  if (panes.empty())
+    return;
+  auto &pane = get_pane();
+  auto &buf = get_buffer(pane.buffer_id);
+
+  int viewport_h = pane_viewport_h(pane);
+  if (viewport_h < 1)
+    viewport_h = 1;
+
+  // A jump that lands somewhere already on screen keeps the view it found: the
+  // caret moving is enough to follow, and recentring a view the reader was
+  // reading costs them their place. Only a landmark that is not on screen moves
+  // the viewport, and then it arrives with the code around it rather than
+  // pinned to the last row -- which is where minimal scrolling used to leave it,
+  // so half the function was still below the fold.
+  const auto fold_view = Folding::view_of(buf.fold_ranges);
+  if (fold_view->visible_row_for_line(buf.scroll_offset,
+                                      buf.cursor.y,
+                                      viewport_h,
+                                      (int)buf.line_count())
+      >= 0)
+  {
+    ensure_cursor_visible();
+    return;
+  }
+
+  buf.scroll_offset = buf.cursor.y;
+  for (int i = 0; i < viewport_h / 2; i++)
+  {
+    buf.scroll_offset = fold_view->previous_visible_line(buf.scroll_offset);
+  }
+  // Clamps, and the caret is inside the viewport now, so the vertical part has
+  // nothing left to do; horizontal is what this call is still for.
+  ensure_cursor_visible();
+}
+
 void Editor::move_word_forward(bool extend_selection)
 {
   auto &buf = get_buffer();
