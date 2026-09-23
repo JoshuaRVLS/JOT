@@ -35,6 +35,33 @@ static bool probe_terminal_size_via_ioctl(int fd, struct winsize &ws)
   return ioctl(fd, TIOCGWINSZ, &ws) != -1;
 }
 
+static bool read_char_with_timeout(char &out, int timeout_ms);
+
+// A CSI sequence whose head was consumed and then abandoned -- the size probe
+// hitting its deadline, a mouse report straddling a timeout -- leaves its tail
+// in the tty, where the next read takes it for typing ("9R", ";12;3M").
+static bool g_csi_tail_open = false;
+static std::chrono::steady_clock::time_point g_csi_tail_deadline{};
+
+static void discard_csi_tail(int timeout_ms)
+{
+  char c = 0;
+  for (int i = 0; i < 64; i++)
+  {
+    if (!read_char_with_timeout(c, timeout_ms))
+      break;
+    if (c >= 0x40 && c <= 0x7e)
+    {
+      g_csi_tail_open = false;
+      return;
+    }
+  }
+  // Nothing final there yet: hold the skip open briefly, long enough for a tail
+  // still in flight, short enough that it cannot swallow the next keystrokes.
+  g_csi_tail_open = true;
+  g_csi_tail_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
+}
+
 // cell_px_* are left at 0 when the terminal does not report a
 // pixel size (the env fallback cannot know it).
 static bool get_terminal_size(int &width, int &height, int *cell_px_w = nullptr,
@@ -107,6 +134,10 @@ static bool cursor_probe_size(int &width, int &height, int budget_ms = 200)
     const auto now = std::chrono::steady_clock::now();
     if (now >= deadline)
     {
+      // A reply we stopped reading part-way is still owed its tail. Only a
+      // reply is: a keystroke that raced the probe is not ours to eat.
+      if (i > 0 && buf[0] == '\x1b' && buf[i - 1] != 'R')
+        discard_csi_tail(20);
       break;
     }
     const int remain = (int)std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -597,6 +628,22 @@ int Terminal::read_termkey_result()
 
 int Terminal::read_key()
 {
+  // Finishing a sequence whose tail had not arrived yet when its head was read
+  // and dropped (see discard_csi_tail).
+  while (g_csi_tail_open)
+  {
+    if (std::chrono::steady_clock::now() >= g_csi_tail_deadline)
+    {
+      g_csi_tail_open = false;
+      break;
+    }
+    char tail = 0;
+    if (!read_char_with_timeout(tail, 20))
+      return -1;
+    if (tail >= 0x40 && tail <= 0x7e)
+      g_csi_tail_open = false;
+  }
+
   char c;
   if (read(STDIN_FILENO, &c, 1) != 1)
     return -1;
@@ -647,7 +694,12 @@ int Terminal::read_key()
             while (mouse_pos < 31)
             {
               if (!read_char_with_timeout(mouse_seq[mouse_pos], 5))
-                return '\x1b';
+              {
+                // The report's head is already consumed, so its tail is ours
+                // too; and a truncated report is not an Escape press.
+                discard_csi_tail(20);
+                return -1;
+              }
               if (mouse_seq[mouse_pos] == 'M' || mouse_seq[mouse_pos] == 'm')
               {
                 mouse_seq[mouse_pos + 1] = '\0';
@@ -663,7 +715,11 @@ int Terminal::read_key()
           {
             if (!read_char_with_timeout(third, 5))
             {
-              break;
+              // A CSI is provably in progress (a bare `ESC [` would not have
+              // entered this loop), so its tail is ours to eat, not to hand on
+              // to libtermkey as a fragment whose remainder types itself.
+              discard_csi_tail(20);
+              return -1;
             }
             bytes.push_back(third);
           }
