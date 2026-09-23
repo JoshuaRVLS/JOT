@@ -200,6 +200,17 @@ void Editor::handle_modeless_input(int ch, bool is_ctrl, bool is_shift, bool is_
     show_workspace_diagnostics_picker();
     return;
   }
+  // Ctrl+Shift+Z is redo wherever Ctrl+Y is. It has to be tested before the
+  // Ctrl block below, which reads a bare 'z' as undo -- and it only arrives
+  // apart from Ctrl+Z on terminals that report modifiers distinctly (kitty
+  // protocol); elsewhere both are the same 0x1a byte, so this is an extra
+  // binding rather than a replacement for Ctrl+Y.
+  if (is_ctrl && is_shift && (ch == 'z' || ch == 'Z'))
+  {
+    redo();
+    needs_redraw = true;
+    return;
+  }
   // Ctrl+Tab / Ctrl+Shift+Tab: cycle pane-local tabs.
   if (is_ctrl && (ch == '\t' || ch == 9))
   {

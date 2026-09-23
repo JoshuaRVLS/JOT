@@ -37,6 +37,7 @@ add_executable(jot_tests
   test_input_reader.cpp
   test_autoclose.cpp
   test_save_hygiene.cpp
+  test_undo_redo_chords.cpp
   test_lsp.cpp
   test_lsp_install.cpp
   test_lsp_policy.cpp

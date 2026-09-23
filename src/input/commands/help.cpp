@@ -77,7 +77,7 @@ void Editor::show_command_help(const std::string &topic_text)
       "  Ctrl+Shift+Enter  Insert line above",
       "",
       "Editing",
-      "  Ctrl+Z / Ctrl+Y  Undo / Redo",
+      "  Ctrl+Z / Ctrl+Y  Undo / Redo (Ctrl+Shift+Z also redoes)",
       "  Ctrl+A           Select all",
       "  Ctrl+C/X/V       Copy / Cut / Paste",
       "  Ctrl+D           Select next occurrence (multi-cursor)",

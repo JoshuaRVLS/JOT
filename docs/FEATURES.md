@@ -641,7 +641,7 @@ API.
 | --- | --- |
 | Typing | Insert text at the cursor |
 | `Esc` | Clear selection / close the active floating surface |
-| `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo (`Ctrl+Shift+Z` redoes too) |
 | `Ctrl+A` | Select all |
 | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / cut / paste |
 | `Ctrl+D` | Select next occurrence (multi-cursor) |
