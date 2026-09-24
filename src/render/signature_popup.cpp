@@ -177,18 +177,22 @@ void Editor::render_lsp_signature()
   {
     max_x = min_x;
   }
+  // Vertical side, the rule the completion popup uses (see
+  // overlay_internal::overlay_box_above): above the caret when it fits, below
+  // when only that side does. The old fallback pinned the box to the pane's
+  // first row, which on the top lines of the window drew it straight over the
+  // code and the caret being typed.
+  const int pane_bottom = pane.y + visible_h;
   int min_y = pane_content_top(pane);
+  int max_y = pane_bottom - box_h;
+  if (max_y < min_y)
+  {
+    max_y = min_y;
+  }
+  const bool place_above =
+      overlay_internal::overlay_box_above(cursor_y, box_h, min_y, pane_bottom);
   int box_x = std::clamp(cursor_x - 2, min_x, max_x);
-  int box_y = cursor_y - box_h - 2;
-  if (box_y < min_y)
-  {
-    box_y = min_y;
-  }
-  int max_y = pane.y + visible_h - box_h;
-  if (box_y > max_y)
-  {
-    box_y = std::max(min_y, max_y);
-  }
+  int box_y = std::clamp(place_above ? cursor_y - box_h - 2 : cursor_y + 2, min_y, max_y);
 
   // Truncate every row to the content width so nothing bleeds past the
   // border, then clamp the parameter highlight to the label text that is

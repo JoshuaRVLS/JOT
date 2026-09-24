@@ -8,6 +8,22 @@
 
 namespace overlay_internal
 {
+bool overlay_box_above(int cursor_y, int box_h, int min_y, int pane_bottom)
+{
+  const int need = box_h + 2; // the box and the gap to the caret row
+  const int space_above = cursor_y - min_y;
+  const int space_below = std::max(0, pane_bottom - (cursor_y + 1));
+  if (space_above >= need)
+  {
+    return true;
+  }
+  if (space_below >= need)
+  {
+    return false;
+  }
+  return space_above >= space_below;
+}
+
 std::string one_line_text(const std::string &text)
 {
   std::string out;
