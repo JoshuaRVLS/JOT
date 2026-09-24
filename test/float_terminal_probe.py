@@ -39,6 +39,10 @@ SOURCE = os.path.join(ROOT, "tall.cpp")
 FLOAT_KEY = b"\x1b[116;4u"
 # Ctrl+Shift+P opens the command palette; Enter runs what is typed in it.
 PALETTE = b"\x1b[112;6u"
+# The maximum share is the stress case for the top-left corner, since it makes
+# the frame touch the pane's text-area boundaries.
+BOX_WIDTH_PCT = 100
+BOX_HEIGHT_PCT = 100
 ESC = b"\x1b"
 ENTER = b"\r"
 FLOAT_OK = "FLOAT_OK_123"
@@ -79,9 +83,16 @@ def box_edges(lines: list[str]):
     right = line.rfind("┐")
     if left < 0 or right < 0:
         return None
+    # Require the whole left edge to be continuous. A missing corner or a row
+    # painted over by later chrome is a malformed frame, not a smaller box.
     for y in range(top + 1, len(lines)):
-        if lines[y][left : left + 1] == "└":
-            return (top, left, right, y)
+        cell = lines[y][left : left + 1]
+        if cell == "└":
+            return (top, left, right, y) if all(
+                lines[yy][left : left + 1] == "│" for yy in range(top + 1, y)
+            ) else None
+        if cell != "│":
+            return None
     return None
 
 
@@ -158,6 +169,13 @@ def main() -> int:
 
     write_workspace()
     shutil.rmtree(CFG, ignore_errors=True)
+    os.makedirs(os.path.join(CFG, "configs"))
+    # Exercise the most collision-prone geometry: the frame extends to every
+    # edge of the pane's text area, where an underlying pane, breadcrumb, or
+    # neighboring overlay could otherwise paint over a corner.
+    with open(os.path.join(CFG, "configs", "settings.conf"), "w") as fh:
+        fh.write("terminal_float_width=%d\nterminal_float_height=%d\n"
+                 % (BOX_WIDTH_PCT, BOX_HEIGHT_PCT))
     # An empty HOME and a plain shell, as in the terminal cwd probe: no shell rc
     # file may move the shell or decorate its prompt, so what is measured is the
     # editor's own box.
@@ -192,6 +210,13 @@ def main() -> int:
         failures.append("open: no box on screen after Alt+Shift+T")
     else:
         top, left, right, bottom = edges
+        if lines[top][left:left + 1] != "┌":
+            failures.append("frame: the top-left corner is missing")
+        if lines[bottom][left:left + 1] != "└":
+            failures.append("frame: the bottom-left corner is missing")
+        missing_left = [y for y in range(top + 1, bottom) if lines[y][left:left + 1] != "│"]
+        if missing_left:
+            failures.append("frame: the left border is missing on row(s) %r" % missing_left)
         if right - left + 1 < 20 or bottom - top + 1 < 5:
             failures.append("open: the box is %dx%d cells" % (right - left + 1, bottom - top + 1))
         # The default asks for a big share of the pane's text rows (85% by

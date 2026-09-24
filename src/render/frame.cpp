@@ -370,9 +370,6 @@ void Editor::render()
     render_lsp_completion();
     render_lsp_signature();
     render_integrated_terminal();
-    // The floating box is the topmost native surface over the panes; the
-    // palette, menus and popups painted after it still come out on top.
-    render_floating_terminal();
     if (!terminal_zoom_active)
     {
       render_debugger_panel();
@@ -450,6 +447,10 @@ void Editor::render()
     {
       lua_api->render_floats();
     }
+    // Paint the floating terminal after chrome floats. It occupies only the
+    // active pane's text rows, so pane-owned tab/window chrome cannot erase its
+    // frame or corners after it is drawn.
+    render_floating_terminal();
 
     // Set cursor state BEFORE ui->render() so the full-row paint emits the
     // correct cursor at the end of the frame.

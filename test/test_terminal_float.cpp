@@ -177,6 +177,10 @@ TEST_CASE("The floating box paints over the buffer", "[jot]")
   REQUIRE(e.ui_for_test()->cell_at(box.x, box.y)->ch == "┌");
   REQUIRE(e.ui_for_test()->cell_at(box.x + box.w - 1, box.y)->ch == "┐");
   REQUIRE(e.ui_for_test()->cell_at(box.x, box.y + box.h - 1)->ch == "└");
+  for (int y = box.y + 1; y < box.y + box.h - 1; y++)
+  {
+    REQUIRE(e.ui_for_test()->cell_at(box.x, y)->ch == "│");
+  }
   REQUIRE(screen_row(e, box.y).find("Floating terminal") != std::string::npos);
   // ...the row above the pane's text is the same one it read before, with the
   // frame nowhere near it...
