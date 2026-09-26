@@ -272,7 +272,12 @@ deliberately does not, so a preview never depends on a file you cannot see.
   the theme sets one) from the gutter out past the end of the text, so a
   finding is findable while scrolling instead of only where the squiggle sits.
   Its message rides the end of that line in the severity colour -- the message
-  alone, with no severity icon in front of it.
+  alone, with no severity icon in front of it. What a server finds while you
+  type waits for the typing to pause (`lsp_diagnostics_quiet_ms`, default 700;
+  `0` paints each answer the moment it arrives), because the squiggle, the band
+  and the message landing under the hands on every publish is noise -- and a
+  save paints the freshest findings at once, since Ctrl+S is the user asking
+  for the truth now.
 - Completion with fuzzy filtering and `textEdit` support, including the
   `additionalTextEdits` an item carries: accepting a symbol whose file does not
   import it yet writes the import with it (typescript/vtsls auto-import, and
@@ -1058,7 +1063,8 @@ Built-in defaults include `explorer_width=25`, `minimap_width=15`,
 `relative_line_numbers=true`, `cursor_style=block`, `cursor_blink_ms=500`,
 `render_fps=120`, `idle_fps=60`,
 `auto_save=false`, `auto_save_interval_ms=2000`, `lsp_change_debounce_ms=120`,
-`lsp_inlay_hints=true`, `lsp_inlay_type_hints=true`, `cpp_definitions=true`
+`lsp_diagnostics_quiet_ms=700`, `lsp_inlay_hints=true`,
+`lsp_inlay_type_hints=true`, `cpp_definitions=true`
 (the C++ declaration/definition checks), `terminal_height=10`,
 `terminal_float_width=85` and `terminal_float_height=75` (the floating
 terminal's box, a percentage of the active pane's text rows each),

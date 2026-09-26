@@ -115,6 +115,8 @@ void Editor::apply_config_live()
         std::isfinite(multiplier) ? std::clamp(multiplier, 0.1, 10.0) : 1.0;
   }
   lsp_change_debounce_ms = std::clamp(config.get_int("lsp_change_debounce_ms", 120), 25, 1000);
+  lsp_diagnostics_quiet_ms =
+      std::clamp(config.get_int("lsp_diagnostics_quiet_ms", 700), 0, 5000);
   integrated_terminal_height = std::clamp(config.get_int("terminal_height", 10), 5, 20);
   floating_terminal_width = std::clamp(config.get_int("terminal_float_width", 85), 20, 100);
   floating_terminal_height = std::clamp(config.get_int("terminal_float_height", 75), 20, 100);
@@ -412,6 +414,8 @@ void Editor::initialize_state_defaults()
   render_fps = std::clamp(config.get_int("render_fps", 120), 30, 240);
   idle_fps = std::clamp(config.get_int("idle_fps", 60), 5, 240);
   lsp_change_debounce_ms = std::clamp(config.get_int("lsp_change_debounce_ms", 120), 25, 1000);
+  lsp_diagnostics_quiet_ms =
+      std::clamp(config.get_int("lsp_diagnostics_quiet_ms", 700), 0, 5000);
   last_cursor_shape = -1;
   cancel_smooth_scroll();
   blink_anchor_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

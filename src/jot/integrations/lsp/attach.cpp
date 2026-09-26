@@ -386,7 +386,12 @@ void Editor::notify_lsp_change(const std::string &filepath)
   {
     return;
   }
-  lsp_pending_changes[filepath] = lsp_internal::now_ms() + lsp_change_debounce_ms;
+  const long long now = lsp_internal::now_ms();
+  // The stamp a fresh finding measures its hold against (see
+  // holds_live_diagnostics): findings for this file wait for the typing pause,
+  // while the change itself still goes out after its own short debounce.
+  lsp_last_edit_ms_[filepath] = now;
+  lsp_pending_changes[filepath] = now + lsp_change_debounce_ms;
 }
 
 void Editor::notify_lsp_save(const std::string &filepath)
@@ -398,6 +403,10 @@ void Editor::notify_lsp_save(const std::string &filepath)
   lsp_pending_changes.erase(filepath);
   if (!ensure_lsp_for_file(filepath))
   {
+    // Even with no server attached, the save lifts the hold: whatever is in
+    // the slices is what the file on disk is known to have found.
+    lsp_last_save_ms_[filepath] = lsp_internal::now_ms();
+    paint_held_lsp_diagnostics_for(filepath);
     return;
   }
   std::string root;
@@ -414,6 +423,12 @@ void Editor::notify_lsp_save(const std::string &filepath)
       break;
     }
   }
+  // A save is a request for the truth: paint what is held right now, and let
+  // the findings the save provokes paint as they arrive (the stamp above keeps
+  // the hold off until the next edit), so Ctrl+S right after a keystroke does
+  // not make the user wait out a typing pause.
+  lsp_last_save_ms_[filepath] = lsp_internal::now_ms();
+  paint_held_lsp_diagnostics_for(filepath);
 }
 
 void Editor::notify_lsp_close(const std::string &filepath)

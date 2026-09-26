@@ -511,6 +511,31 @@ public:
                                     int line,
                                     int severity,
                                     const std::string &message);
+  // The typing-pause hold on live diagnostics: run the merge a publish runs,
+  // age the last keystroke instead of sleeping through the quiet window, run
+  // the frame timer's flush, and ask what is waiting. The hold itself is
+  // decided from the stamps notify_lsp_change/notify_lsp_save set, so a case
+  // drives it through the real edit and save paths.
+  void refresh_lsp_diagnostics_for_test(const std::string &path)
+  {
+    refresh_lsp_diagnostics_for(path);
+  }
+  void age_lsp_typing_for_test(const std::string &path, int ms)
+  {
+    const auto it = lsp_last_edit_ms_.find(path);
+    if (it != lsp_last_edit_ms_.end())
+    {
+      it->second -= ms;
+    }
+  }
+  void paint_held_lsp_diagnostics_for_test()
+  {
+    maybe_paint_held_lsp_diagnostics();
+  }
+  bool lsp_diagnostics_held_for_test(const std::string &path) const
+  {
+    return lsp_diagnostics_held_.count(path) > 0;
+  }
   // Seeds the completion popup the way a landed server response does: the site
   // (token under the caret, prefix as typed) is recorded through the same
   // arm_lsp_completion a request uses, and `items` are filtered through the same

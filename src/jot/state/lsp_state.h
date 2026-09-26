@@ -33,6 +33,16 @@ struct LspUiState
   // servers attached to one buffer merge instead of clobbering each other.
   std::map<std::string, std::map<std::string, std::vector<Diagnostic>>> lsp_diag_slices_;
   int lsp_change_debounce_ms = 0;
+  // The typing-pause hold on live diagnostics: when a file was last edited as
+  // far as the servers are concerned, when it was last saved, and the files
+  // whose fresh findings are waiting for the pause. A server's answer paints
+  // the moment it arrives only for a file nobody is typing in; for the one
+  // under the hands it waits `lsp_diagnostics_quiet_ms` past the last edit (and
+  // a save lifts the hold at once). See maybe_paint_held_lsp_diagnostics.
+  int lsp_diagnostics_quiet_ms = 0;
+  std::map<std::string, long long> lsp_last_edit_ms_;
+  std::map<std::string, long long> lsp_last_save_ms_;
+  std::set<std::string> lsp_diagnostics_held_;
 
   bool show_lsp_status_modal = false;
   int lsp_status_scroll = 0;

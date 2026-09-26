@@ -300,6 +300,9 @@ void Editor::stop_all_lsp_clients()
   int stopped = 0;
   lsp_pending_changes.clear();
   lsp_diag_slices_.clear();
+  // A held finding belongs to the slices that just went away; the files' own
+  // diagnostics are cleared below, so nothing is left waiting to paint.
+  lsp_diagnostics_held_.clear();
   for (auto &buf : buffers)
   {
     if (!buf.filepath.empty())
@@ -330,6 +333,7 @@ void Editor::restart_all_lsp_clients()
   // Old diagnostics belong to the pre-restart documents; refresh re-opens
   // every file below and servers re-publish fresh ones.
   lsp_diag_slices_.clear();
+  lsp_diagnostics_held_.clear();
   for (auto &buf : buffers)
   {
     if (!buf.filepath.empty())

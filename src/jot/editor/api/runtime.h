@@ -93,8 +93,23 @@ private:
   std::vector<LSPClient *> attached_lsp_clients_for(const std::string &filepath,
                                                     std::string *root_out,
                                                     std::string *primary_out);
-  // Merges the per-server diagnostic slices for one file into the buffer.
+  // Merges the per-server diagnostic slices for one file into the buffer. While
+  // the user is typing in that file the merge is held back -- the findings wait
+  // for the pause (lsp_diagnostics_quiet_ms) or for a save -- so a server's
+  // answer never paints under the hands mid-keystroke; see the hold below.
   void refresh_lsp_diagnostics_for(const std::string &filepath);
+  // Whether fresh findings for `filepath` wait for the typing to pause right
+  // now: true only for a file edited within the quiet window and not saved
+  // since. `now_ms` is passed in so the frame timer and the hold decision read
+  // one clock.
+  bool holds_live_diagnostics(const std::string &filepath, long long now_ms) const;
+  // The frame-timer tick: paints the findings a finished typing pause released.
+  // Cheap while nothing is held, and it is also where the per-file stamps that
+  // can no longer hold anything are dropped.
+  void maybe_paint_held_lsp_diagnostics();
+  // Lifts the hold for one file and paints what was held (a save's promise:
+  // Ctrl+S shows the freshest findings even right after a keystroke).
+  void paint_held_lsp_diagnostics_for(const std::string &filepath);
   // Drops one server's slices and refreshes the affected files (client died,
   // server removed, …).
   void drop_lsp_diagnostics_for_client(const std::string &server, const std::string &root);

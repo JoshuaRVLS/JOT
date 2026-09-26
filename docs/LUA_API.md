@@ -166,6 +166,7 @@ it immediately, and **live-applies** every setting that maps to editor state
 `relative_line_numbers`, `highlight_cursor_line`, `auto_indent`,
 `smart_paste_indent`, `auto_save`,
 `auto_save_interval_ms`, `render_fps`, `idle_fps`, `lsp_change_debounce_ms`,
+`lsp_diagnostics_quiet_ms`,
 `terminal_height`, `debugger_height`, `right_panel_width`,
 `image_viewer_backend`, the `treesitter_*` paths, and `color_scheme`
 (switches the theme). Keys that are read on every use (`prettier_on_save`,

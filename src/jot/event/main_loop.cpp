@@ -273,7 +273,14 @@ void Editor::run()
 
   int render_ms = std::max(1, 1000 / std::max(1, render_fps));
   event_loop_.set_timer(render_ms, true, [this] { render_frame(); });
-  event_loop_.set_timer(50, true, [this] { maybe_fire_lsp_mouse_hover(); });
+  // The LSP housekeeping clock: the hover arm fires a request once the pointer
+  // has rested on a token, and the diagnostics hold paints the findings a
+  // finished typing pause released. Both are state checks, so one timer is
+  // enough.
+  event_loop_.set_timer(50, true, [this] {
+    maybe_fire_lsp_mouse_hover();
+    maybe_paint_held_lsp_diagnostics();
+  });
 
   // Tree-sitter background work, polled on a repeating timer:
   //  - Bundled highlight queries are compiled off the synchronous boot path

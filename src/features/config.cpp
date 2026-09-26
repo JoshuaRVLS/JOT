@@ -188,6 +188,12 @@ void Config::load_defaults()
   settings["smooth_scroll_easing"] = "linear";
   settings["smooth_scroll_duration_multiplier"] = "1.0";
   settings["lsp_change_debounce_ms"] = "120";
+  // How long the typing has to pause before a server's fresh findings paint.
+  // While it is typing, the squiggle, the row band and the inline message
+  // appearing under the hands on every publish is the noise this holds back;
+  // the server still analyses every change, and a save paints at once. 0 shows
+  // them the moment they arrive.
+  settings["lsp_diagnostics_quiet_ms"] = "700";
   settings["lsp_completion_max_items"] = "8";
   settings["lsp_completion_nerd_icons"] = "true";
   settings["lsp_completion_ghost_text"] = "true";
