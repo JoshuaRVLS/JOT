@@ -243,6 +243,11 @@ bool LSPClient::send_message(const std::string &json, bool allow_during_initiali
   constexpr size_t kMaxLspMessageBytes = 16 * 1024 * 1024;
   constexpr size_t kMaxDeferredMessages = 256;
   constexpr size_t kMaxOutboundBytes = 32 * 1024 * 1024;
+  if (capture_wire_)
+  {
+    captured_wire_.push_back(json);
+    return true;
+  }
   if (!running || stdin_fd < 0)
   {
     return false;
@@ -528,6 +533,7 @@ bool LSPClient::start()
   shutdown_request_id = 0;
   file_versions.clear();
   document_texts.clear();
+  applied_diag_versions.clear();
   pending_completion_requests.clear();
   pending_hover_requests.clear();
   pending_signature_requests.clear();
@@ -708,6 +714,7 @@ void LSPClient::stop()
   shutdown_request_id = 0;
   file_versions.clear();
   document_texts.clear();
+  applied_diag_versions.clear();
   pending_completion_requests.clear();
   pending_hover_requests.clear();
   pending_signature_requests.clear();

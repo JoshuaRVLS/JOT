@@ -13,6 +13,11 @@ namespace fs = std::filesystem;
 
 using namespace lsp_detail;
 
+void LSPClient::receive_for_test(const std::string &json)
+{
+  handle_stdout_data("Content-Length: " + std::to_string(json.size()) + "\r\n\r\n" + json);
+}
+
 void LSPClient::handle_stdout_data(const std::string &data)
 {
   constexpr size_t kMaxLspHeaderBytes = 64 * 1024;
@@ -91,12 +96,27 @@ void LSPClient::handle_stdout_data(const std::string &data)
       }
 
       const std::string filepath = from_file_uri(json_string_or_empty(uri));
+      // Which document state these findings describe. Only a publish *older*
+      // than the ones already applied is dropped -- an out-of-order duplicate.
+      // Anything newer is taken even when the document has since moved past
+      // it: servers coalesce parses, so the freshest word from the server can
+      // carry a version the client already queued past, and demanding an exact
+      // match with the newest sent version threw away the very publish that
+      // clears an error (the request paths bump the version on every hover or
+      // completion). The stale finding then stayed on screen until some later
+      // edit happened to end on a matching version -- the "phantom error that
+      // fixes itself when you retype a character" bug.
+      const std::string abs = fs::absolute(filepath).string();
       const JsonValue *version = params ? json_object_get(*params, "version") : nullptr;
-      auto current_version = file_versions.find(fs::absolute(filepath).string());
-      if (version && version->type == JsonValue::Number && current_version != file_versions.end()
-          && current_version->second != (int)version->number_value)
+      if (version && version->type == JsonValue::Number)
       {
-        continue;
+        const int published = (int)version->number_value;
+        const auto applied = applied_diag_versions.find(abs);
+        if (applied != applied_diag_versions.end() && published < applied->second)
+        {
+          continue;
+        }
+        applied_diag_versions[abs] = published;
       }
       auto parsed = diagnostics_from_json(*diagnostics);
       for (auto &diagnostic : parsed)

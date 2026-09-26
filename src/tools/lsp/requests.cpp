@@ -30,8 +30,6 @@ bool LSPClient::did_open(const std::string &filepath,
   {
     return did_change(abs_path, text);
   }
-  file_versions[abs_path] = 1;
-  document_texts[abs_path] = text;
   std::ostringstream json;
   json << "{"
        << "\"jsonrpc\":\"2.0\","
@@ -45,7 +43,19 @@ bool LSPClient::did_open(const std::string &filepath,
        << "}"
        << "}"
        << "}";
-  return send_message(json.str());
+  if (!send_message(json.str()))
+  {
+    return false;
+  }
+  // Recorded only after the message is on its way out: the version and the
+  // text are this client's claim about the server's document, and a claim made
+  // for a message that never went out would make every later comparison
+  // against it wrong (a no-op did_change would then skip a change the server
+  // never saw).
+  file_versions[abs_path] = 1;
+  document_texts[abs_path] = text;
+  applied_diag_versions.erase(abs_path);
+  return true;
 }
 
 bool LSPClient::did_change(const std::string &filepath, const std::string &text)
@@ -61,8 +71,17 @@ bool LSPClient::did_change(const std::string &filepath, const std::string &text)
     return did_open(abs_path, language_id_for(language, abs_path), text);
   }
 
-  document_texts[abs_path] = text;
-  int version = ++file_versions[abs_path];
+  // A change that changes nothing is not sent. Every request path (hover,
+  // completion, rename, the telescope preview) flushes the document first;
+  // without this check each of those bumps the version and makes the server
+  // reparse a document it already has.
+  const auto known = document_texts.find(abs_path);
+  if (known != document_texts.end() && known->second == text)
+  {
+    return true;
+  }
+
+  const int version = file_versions[abs_path] + 1;
   std::ostringstream json;
   json << "{"
        << "\"jsonrpc\":\"2.0\","
@@ -74,7 +93,13 @@ bool LSPClient::did_change(const std::string &filepath, const std::string &text)
        << "\"contentChanges\":[{\"text\":\"" << json_escape(text) << "\"}]"
        << "}"
        << "}";
-  return send_message(json.str());
+  if (!send_message(json.str()))
+  {
+    return false;
+  }
+  file_versions[abs_path] = version;
+  document_texts[abs_path] = text;
+  return true;
 }
 
 bool LSPClient::did_save(const std::string &filepath, const std::string &text)
@@ -92,7 +117,16 @@ bool LSPClient::did_save(const std::string &filepath, const std::string &text)
       return false;
     }
   }
-  document_texts[abs_path] = text;
+  else if (!did_change(abs_path, text))
+  {
+    // The save must not overtake edits the change debounce had not sent yet:
+    // a server's document is only ever updated by didChange (didSave's `text`
+    // is informational, honored only when the server opted into
+    // save.includeText), so a save that skips it leaves the server parsing a
+    // stale draft -- phantom errors at exactly the lines just typed, until
+    // some later edit resyncs the text.
+    return false;
+  }
   std::ostringstream json;
   json << "{"
        << "\"jsonrpc\":\"2.0\","
@@ -118,6 +152,7 @@ bool LSPClient::did_close(const std::string &filepath)
     return true;
   }
   document_texts.erase(abs_path);
+  applied_diag_versions.erase(abs_path);
   std::ostringstream json;
   json << "{"
        << "\"jsonrpc\":\"2.0\","
@@ -763,6 +798,12 @@ bool LSPClient::has_open_document(const std::string &filepath) const
     return false;
   }
   return file_versions.find(fs::absolute(filepath).string()) != file_versions.end();
+}
+
+int LSPClient::document_version_for_test(const std::string &filepath) const
+{
+  const auto it = file_versions.find(fs::absolute(filepath).string());
+  return it == file_versions.end() ? 0 : it->second;
 }
 
 std::string LSPClient::describe() const

@@ -257,9 +257,16 @@ private:
   int shutdown_request_id;
   std::map<std::string, int> file_versions;
   std::map<std::string, std::string> document_texts;
+  // The version the newest *applied* publishDiagnostics described, per file:
+  // publishes older than this are out-of-order duplicates and go, everything
+  // else is applied (see messages.cpp).
+  std::map<std::string, int> applied_diag_versions;
   std::string stdout_buffer;
   std::string stderr_buffer;
   std::string outbound_buffer;
+  // Test mode: record outbound messages instead of writing them to a server.
+  bool capture_wire_ = false;
+  std::vector<std::string> captured_wire_;
   std::vector<std::string> deferred_messages;
   std::string last_error;
   std::vector<std::pair<std::string, std::vector<Diagnostic>>> pending_diagnostics;
@@ -338,6 +345,26 @@ public:
     LSPClient probe("cpp", "/tmp/jot-lsp-params", {}, {}, "");
     return probe.initialize_params_json();
   }
+
+  // Test seams for the document-sync rules, which are otherwise only reachable
+  // against a running server: record what would go out on the wire instead of
+  // writing it to a spawned process, and feed a server message in through the
+  // real parser.
+  void capture_wire_for_test()
+  {
+    capture_wire_ = true;
+    running = true;
+    initialized = true;
+  }
+  const std::vector<std::string> &captured_wire_for_test() const
+  {
+    return captured_wire_;
+  }
+  // One complete server message (a JSON-RPC object), dispatched exactly as a
+  // polled message would be.
+  void receive_for_test(const std::string &json);
+  // The version this client believes the server's document is at (0 = none).
+  int document_version_for_test(const std::string &filepath) const;
 
   bool start();
   void stop();

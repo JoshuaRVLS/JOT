@@ -42,6 +42,7 @@ add_executable(jot_tests
   test_save_hygiene.cpp
   test_undo_redo_chords.cpp
   test_lsp.cpp
+  test_lsp_sync.cpp
   test_lsp_install.cpp
   test_lsp_policy.cpp
   test_popup.cpp
