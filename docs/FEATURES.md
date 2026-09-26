@@ -95,7 +95,8 @@ an explicit font file.
   break) keeps them, and `:trim` still cleans it on request.
 - Smart multi-line paste that re-indents to the cursor.
 - Auto-indent, bracket matching and jumping, rainbow bracket colors
-  (`rainbow_brackets`), and an active bracket guide.
+  (`rainbow_brackets`), an active bracket guide, and a highlight on the bracket
+  under the caret together with its partner (the `BracketMatch` theme group).
 - Smart indent on Enter. A bracket left open on the line lines the new line up
   under the argument after it, so a wrapped call stays aligned:
   `res = call(arg,` continues at `arg`'s column. In the C family a control

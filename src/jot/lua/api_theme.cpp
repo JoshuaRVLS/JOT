@@ -204,6 +204,7 @@ void LuaAPI::set_theme_color(std::string name, int fg, int bg)
       {"Visual", "selection"},
       {"Search", "search_match"},
       {"CurSearch", "search_current"},
+      {"BracketMatch", "bracket_match"},
       {"StatusLine", "status"},
       {"StatusLineMsg", "status_message"},
       {"StatusLineLogo", "status_logo"},

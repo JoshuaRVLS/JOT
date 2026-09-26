@@ -35,6 +35,7 @@
   "CursorLineNr": {"fg": "#ca246c"},
   "Search": {"fg": "#3a2c3f", "bg": "#ffe08a"},
   "CurSearch": {"fg": "#3a2c3f", "bg": "#ffa8cb"},
+  "BracketMatch": {"fg": "#3a2c3f", "bg": "#fbe2ea"},
   "StatusLine": {"fg": "#3a2c3f", "bg": "#fbe9e7"},
   "StatusLineMsg": {"fg": "#8c600f", "bg": "#fbe9e7"},
   "StatusLineLogo": {"fg": "#ca246c", "bg": "#fbe9e7"},

@@ -398,7 +398,10 @@ TEST_CASE("Bracket colors match the file-position depth", "[jot]")
   load_source(e, content);
 
   e.apply_resize_for_test(100, 30);
-  e.scroll_cursor_to_for_test(/*line=*/20, /*col=*/0);
+  // The caret is parked on a filler line rather than on line 20's `{`: the
+  // bracket under the caret wears the bracket-match highlight, and this case is
+  // about the rainbow color the pair is painted with.
+  e.scroll_cursor_to_for_test(/*line=*/19, /*col=*/0);
   e.render_for_test();
 
   // The long line's own braces sit at byte ~600, far outside a 100-column pane,

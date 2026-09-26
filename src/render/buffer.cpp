@@ -690,6 +690,15 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
             const int token_type = tokenized ? colors[char_idx].second : 0;
             const bool skip_bracket_logic =
                 (token_type == TS_TOKEN_STRING || token_type == TS_TOKEN_COMMENT);
+            // The two cells of the pair the caret is on (see
+            // build_active_bracket_guide): the caret's bracket and its
+            // partner, whenever the partner was found.
+            const bool matched_bracket =
+                bracket_guide.pair.found
+                && ((line_idx == bracket_guide.pair.open_line
+                     && char_idx == bracket_guide.pair.open_col)
+                    || (line_idx == bracket_guide.pair.close_line
+                        && char_idx == bracket_guide.pair.close_col));
             int bracket_color = -1;
             if (rainbow_brackets && !skip_bracket_logic && is_open_bracket(c))
             {
@@ -763,6 +772,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
               }
             }
 
+            bool in_search_hit = false;
             if (!search_hits.empty())
             {
               while (next_search_hit < search_hits.size()
@@ -775,6 +785,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
                   && char_idx >= search_hits[next_search_hit].col
                   && char_idx < search_hits[next_search_hit].col + search_hits[next_search_hit].len)
               {
+                in_search_hit = true;
                 const bool is_active_match =
                     search_hits[next_search_hit].line == active_search_match.line
                     && search_hits[next_search_hit].col == active_search_match.col;
@@ -823,13 +834,21 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
               continue;
             }
 
-            if (bracket_color != -1 && !in_sel
-                && !(next_search_hit < search_hits.size()
-                     && char_idx >= search_hits[next_search_hit].col
-                     && char_idx
-                            < search_hits[next_search_hit].col + search_hits[next_search_hit].len))
+            if (bracket_color != -1 && !in_sel && !in_search_hit)
             {
               fg = bracket_color;
+            }
+
+            // Bracket-match highlight: the pair the caret is on (or the
+            // bracket it has just typed) wears the theme's match colors on
+            // both cells. It paints over the rainbow bracket color, and under
+            // selections, search hits and the decoration overlay below. Only
+            // the focused pane draws it: a pane showing no caret gives the
+            // pair no reason to be lit.
+            if (matched_bracket && pane.active && !in_sel && !in_search_hit && !skip_bracket_logic)
+            {
+              fg = theme.fg_bracket_match;
+              bg = theme.bg_bracket_match;
             }
 
             // Anchored decoration overlay: spans draw over syntax and brackets

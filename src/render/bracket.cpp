@@ -186,6 +186,11 @@ ActiveBracketGuide build_active_bracket_guide(FileBuffer &buf, int tab_size)
     guide.visual_column = memo.column;
     guide.start_line = memo.start_line;
     guide.end_line = memo.end_line;
+    guide.pair.found = memo.pair_found;
+    guide.pair.open_line = memo.pair_open_line;
+    guide.pair.open_col = memo.pair_open_col;
+    guide.pair.close_line = memo.pair_close_line;
+    guide.pair.close_col = memo.pair_close_col;
     return guide;
   }
   memo.valid = true;
@@ -198,6 +203,11 @@ ActiveBracketGuide build_active_bracket_guide(FileBuffer &buf, int tab_size)
     memo.column = g.visual_column;
     memo.start_line = g.start_line;
     memo.end_line = g.end_line;
+    memo.pair_found = g.pair.found;
+    memo.pair_open_line = g.pair.open_line;
+    memo.pair_open_col = g.pair.open_col;
+    memo.pair_close_line = g.pair.close_line;
+    memo.pair_close_col = g.pair.close_col;
     return g;
   };
   if (buf.cursor.y < 0 || buf.cursor.y >= (int)buf.line_count())
@@ -206,6 +216,9 @@ ActiveBracketGuide build_active_bracket_guide(FileBuffer &buf, int tab_size)
   }
 
   const std::string &line = buf.line(buf.cursor.y);
+  const bool caret_on_bracket =
+      buf.cursor.x >= 0 && buf.cursor.x < (int)line.size()
+      && (is_open_bracket(line[buf.cursor.x]) || is_close_bracket(line[buf.cursor.x]));
   int candidates[3] = {buf.cursor.x, buf.cursor.x - 1, buf.cursor.x + 1};
   for (int c : candidates)
   {
@@ -222,6 +235,18 @@ ActiveBracketGuide build_active_bracket_guide(FileBuffer &buf, int tab_size)
     if (!pair.found)
     {
       continue;
+    }
+
+    // Which candidate owns the bracket-match highlight: the caret's own cell
+    // when that is a bracket, otherwise the cell just left of it -- where
+    // insert mode leaves the bracket it has just typed. The third candidate (a
+    // bracket to the right) only feeds the guide: a bracket the caret is not on
+    // must not light the highlight, and an unmatched bracket under the caret
+    // must not fall through to a neighbour's pair.
+    if (!guide.pair.found
+        && (caret_on_bracket ? c == buf.cursor.x : c == buf.cursor.x - 1))
+    {
+      guide.pair = pair;
     }
 
     int top = std::min(pair.open_line, pair.close_line);

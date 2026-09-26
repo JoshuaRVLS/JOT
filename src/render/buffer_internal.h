@@ -18,14 +18,6 @@ inline constexpr int kDiagDenseSpanLimit = 64;
 // walks cannot drift apart.
 inline constexpr std::size_t kBracketTokenAwareLineBytes = 4096;
 
-struct ActiveBracketGuide
-{
-  bool active = false;
-  int visual_column = 0;
-  int start_line = 0;
-  int end_line = 0;
-};
-
 struct BracketPairMatch
 {
   bool found = false;
@@ -33,6 +25,19 @@ struct BracketPairMatch
   int open_col = -1;
   int close_line = -1;
   int close_col = -1;
+};
+
+struct ActiveBracketGuide
+{
+  bool active = false;
+  int visual_column = 0;
+  int start_line = 0;
+  int end_line = 0;
+  // The pair the caret is on -- its own cell, or the one just left of it (the
+  // cell insert mode leaves a bracket it has just typed in) -- when there is
+  // one: the bracket-match highlight paints both of its cells. Independent of
+  // `active`, which also needs inner rows to hang the guide's connector on.
+  BracketPairMatch pair;
 };
 
 // buffer.cpp

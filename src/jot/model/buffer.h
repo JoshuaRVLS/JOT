@@ -204,6 +204,13 @@ struct FileBuffer
     int column = 0;
     int start_line = 0;
     int end_line = 0;
+    // The pair the caret is on, mirrored from buffer_internal::BracketPairMatch
+    // the same way: the bracket-match highlight reads it back out of this memo.
+    bool pair_found = false;
+    int pair_open_line = -1;
+    int pair_open_col = -1;
+    int pair_close_line = -1;
+    int pair_close_col = -1;
   } bracket_guide_memo;
   std::unordered_map<int, SyntaxLineCache> syntax_cache;
   // Colour-preview variable definitions (--name: value, $name: value) for this
