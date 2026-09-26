@@ -180,6 +180,13 @@ struct Theme
   int fg_diagnostic_warning = 3;
   int fg_diagnostic_info = 6;
   int fg_diagnostic_hint = 2;
+  // The band behind a line that holds an error or a warning: the renderer fills
+  // the whole row (gutter included, out past the end of the text) with it.
+  // -1 is the "no band" default, so a theme that does not ask for one keeps the
+  // plain pane background instead of the editor inventing a tint out of the
+  // severity colour. Info and hint rows carry no band.
+  int bg_diagnostic_error = -1;
+  int bg_diagnostic_warning = -1;
   int fg_bracket1 = 1;
   int fg_bracket2 = 2;
   int fg_bracket3 = 3;

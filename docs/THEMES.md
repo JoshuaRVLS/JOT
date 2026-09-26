@@ -169,7 +169,15 @@ stepping), which reads brighter than the plain `Search` hits so the current
 target never blends into the rest. `BracketMatch` boxes the bracket under the
 caret and its partner while the pair is in view (`fg` colors the bracket
 glyphs, `bg` the band behind both cells), and each bundled theme keeps it on
-the same soft surface as its hover bands. The cursor-row tint can be turned off with
+the same soft surface as its hover bands. `DiagnosticError` and
+`DiagnosticWarn` colour the squiggle, the line number and the inline message of
+their severity, and their `bg` is the band the renderer paints across the
+*whole* line that holds such a finding - the gutter, the code, and the space
+past the end of the text - so a problem is findable while scrolling instead of
+only where the squiggle sits. A theme that names no band leaves those rows on
+the pane background; `DiagnosticInfo` and `DiagnosticHint` carry no band (their
+`bg` is ignored), and selection, search hits and decorations still paint over
+the band. The cursor-row tint can be turned off with
 the `highlight_cursor_line` setting (`false`), and both `CurSearch` and
 `CursorLine` fall back to sensible defaults when a theme omits them.
 

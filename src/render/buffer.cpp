@@ -44,6 +44,19 @@ namespace
     int width = 0;
   };
 
+  // The full-width background a line wears for its severity: the error and
+  // warning slots a theme can set. -1 (a diagnostic that is only info or a
+  // hint, no diagnostic at all, or a theme that asked for no band) reads as
+  // "the plain pane background" at every call site.
+  int severity_band_background(const Theme &theme, int severity)
+  {
+    if (severity == 1)
+      return theme.bg_diagnostic_error;
+    if (severity == 2)
+      return theme.bg_diagnostic_warning;
+    return -1;
+  }
+
 } // namespace
 
 void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int buffer_id)
@@ -312,17 +325,36 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
     if (line_idx >= 0 && line_idx < (int)buf.line_count()
         && !fold_view->hidden(line_idx))
     {
-      // The cursor row tints only the line-number gutter so the active row
-      // reads at a glance without washing out the code itself. The code area
-      // keeps the plain pane background -- selection, search hits, syntax
-      // colors and decorations are never fought by a row tint.
       const bool row_is_cursor_line =
           highlight_cursor_line && line_idx == buf.cursor.y && pane.active;
-      const int gutter_bg = row_is_cursor_line ? theme.bg_cursor_line : theme.bg_default;
+      // A line that holds an error or a warning wears its severity as a
+      // full-width band: the gutter, the code, and the space out to the pane's
+      // right edge, so a problem is findable while scrolling instead of only
+      // where the squiggle sits. The band is a base rather than an overlay --
+      // selection, search hits and anchored decorations still paint over it --
+      // and it outranks the cursor-row tint, which has already said what it can
+      // say through the line number's colour.
+      const int line_diag_severity = line_diagnostic_severity(buf, line_idx);
+      const int severity_band_bg = severity_band_background(theme, line_diag_severity);
+      const bool row_has_band = severity_band_bg >= 0;
+      if (row_has_band)
+      {
+        for (int fill_c = x; fill_c < x + w; fill_c++)
+        {
+          ui->draw_text(fill_c, draw_y, " ", theme.fg_default, severity_band_bg);
+        }
+      }
+      // Otherwise the cursor row tints only the line-number gutter so the
+      // active row reads at a glance without washing out the code itself. The
+      // code area keeps the plain pane background -- selection, search hits,
+      // syntax colors and decorations are never fought by a row tint.
+      const int gutter_bg = row_has_band ? severity_band_bg
+                                         : (row_is_cursor_line ? theme.bg_cursor_line
+                                                               : theme.bg_default);
       // Paint the whole gutter band (number and the spacing to its right) in
       // one pass so the number and the severity tint beside it sit on a
       // seamless tint.
-      if (row_is_cursor_line)
+      if (row_is_cursor_line && !row_has_band)
       {
         int gutter_end = std::min(x + 1 + line_num_width, x + w); // exclusive
         for (int fill_c = x + 1; fill_c < gutter_end; fill_c++)
@@ -330,14 +362,20 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
           ui->draw_text(fill_c, draw_y, " ", theme.fg_default, gutter_bg);
         }
       }
+      // The row's base background: what a cell that no overlay claims is
+      // painted on. The character walk, the end-of-line message, the indent
+      // guides and the ghost text all read this rather than bg_default, so
+      // none of them punches a hole in the band.
+      const int row_bg = row_has_band ? severity_band_bg : theme.bg_default;
 
       // The number is the gutter's first cell and is not padded on its left:
       // there is no marker column, so a file that mixes 1- and 4-digit numbers
       // does not read as a ragged left margin before the digits. Line 5 draws
       // at the same column line 5000 does, and the code column is fixed by
       // line_num_width, so the gap to the code is what absorbs the difference.
-      const int line_diag_severity = line_diagnostic_severity(buf, line_idx);
-      const int ln_bg = row_is_cursor_line ? theme.bg_cursor_line : theme.bg_line_num;
+      const int ln_bg = row_has_band ? severity_band_bg
+                                     : (row_is_cursor_line ? theme.bg_cursor_line
+                                                           : theme.bg_line_num);
       int ln_fg = theme.fg_line_num;
       if (line_idx == buf.cursor.y)
       {
@@ -372,7 +410,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
         int suffix_x = current_x + std::max(0, visible_len - (int)suffix.size());
         if (suffix_x > current_x)
         {
-          ui->draw_text(suffix_x, draw_y, suffix, theme.fg_comment, theme.bg_default);
+          ui->draw_text(suffix_x, draw_y, suffix, theme.fg_comment, row_bg);
           visible_len = std::max(0, suffix_x - current_x - 1);
         }
       }
@@ -440,7 +478,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
                               draw_y,
                               txt,
                               theme.fg_comment,
-                              theme.bg_default,
+                              row_bg,
                               false,
                               true); // italic, like an editor's dimmed hints
               }
@@ -722,7 +760,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
             int char_w = std::max(1, visual_cols[next_idx] - visual_cols[char_idx]);
 
             int fg = color;
-            int bg = theme.bg_default;
+            int bg = row_bg;
             // Inline colour preview. Painted over the syntax colour but before
             // selection, search and anchored decorations, so anything the user
             // is actively looking at still wins over the preview.
@@ -1135,7 +1173,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
             }
             if (vbg == -1)
             {
-              vbg = theme.bg_default;
+              vbg = row_bg;
             }
             int line_vis_end = visible_len;
             if ((int)line.size() < (int)visual_cols.size())
@@ -1184,7 +1222,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
                           draw_y,
                           "\u25A0",
                           theme.fg_default,
-                          theme.bg_default,
+                          row_bg,
                           false,
                           false,
                           0,
@@ -1343,7 +1381,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
         if (guide_vis_idx >= 0 && guide_vis_idx < visible_len)
         {
           ui->draw_text(
-              current_x + guide_vis_idx, draw_y, "│", theme.fg_bracket_match, theme.bg_default);
+              current_x + guide_vis_idx, draw_y, "│", theme.fg_bracket_match, row_bg);
         }
       }
 
@@ -1383,7 +1421,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
                 break;
               }
               ui->draw_text(
-                  current_x + vis_idx, draw_y, "│", theme.fg_line_num, theme.bg_default);
+                  current_x + vis_idx, draw_y, "│", theme.fg_line_num, row_bg);
             }
           }
         }
@@ -1431,7 +1469,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
                           draw_y,
                           txt,
                           theme.fg_comment,
-                          theme.bg_default,
+                          row_bg,
                           false,
                           true);
           }
@@ -1514,7 +1552,16 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
               inline_text = inline_text.substr(0, (size_t)available);
             }
           }
-          ui->draw_text(inline_x, inline_y, inline_text, theme.fg_comment, theme.bg_default);
+          // The message rides the row it describes, so it sits on that row's
+          // severity band when the theme gives it one instead of punching a
+          // hole through it with the pane background.
+          int inline_bg = severity_band_background(
+              theme, line_diagnostic_severity(buf, cursor_line));
+          if (inline_bg < 0)
+          {
+            inline_bg = theme.bg_default;
+          }
+          ui->draw_text(inline_x, inline_y, inline_text, theme.fg_comment, inline_bg);
         }      }
     }
   }

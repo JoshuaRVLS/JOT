@@ -3,9 +3,9 @@
 // state whose jot.* API is stubbed with recording functions, so no Editor or
 // terminal is needed. Pins the VSCode-style wavy-underline contract -- one
 // decoration per diagnostic with underline=2 + severity underline_hl -- and the
-// end-of-line message: the severity's own mark (the statusline's icon for that
-// severity, not a plain dot) followed by the one-line message, all in the
-// severity colour (virt_hl).
+// end-of-line message: the one-line message alone, in the severity colour
+// (virt_hl), with no severity icon ahead of it -- the squiggle, the number and
+// the row's band already say which kind it is.
 #include <catch2/catch_test_macros.hpp>
 #include <string>
 #include <vector>
@@ -246,15 +246,20 @@ TEST_CASE("Bundled decorations feature applies wavy underlines per diagnostic")
   REQUIRE(hint.underline == 0);
   REQUIRE_FALSE(hint.virt_text.empty());
 
-  // The message leads with the mark for its own severity -- the four the
-  // statusline draws (U+F057 / U+F071 / U+F05A / U+F0EB) -- and not with the
-  // plain dot the module used to write, which said nothing about kind.
-  REQUIRE(error.virt_text.rfind("  \uF057 ", 0) == 0);
-  REQUIRE(warning.virt_text.rfind("  \uF071 ", 0) == 0);
-  REQUIRE(hint.virt_text.rfind("  \uF0EB ", 0) == 0);
+  // The message is the whole of the virtual text: two cells of breathing room,
+  // then the text. No severity icon (U+F057 / U+F071 / U+F05A / U+F0EB) and no
+  // plain dot leads it: an icon would spend cells on a kind the squiggle, the
+  // number and the row's band already tell.
+  REQUIRE(error.virt_text == "  Use of undeclared identifier 'undeclared_function'");
+  REQUIRE(warning.virt_text == "  Something is iffy here");
+  REQUIRE(hint.virt_text == "  Hint with zero width");
   for (const DecoSpan &s : g.spans)
   {
     REQUIRE_FALSE(s.virt_text.empty());
+    REQUIRE(s.virt_text.find("\uF057") == std::string::npos);
+    REQUIRE(s.virt_text.find("\uF071") == std::string::npos);
+    REQUIRE(s.virt_text.find("\uF05A") == std::string::npos);
+    REQUIRE(s.virt_text.find("\uF0EB") == std::string::npos);
     REQUIRE(s.virt_text.find("\u25CF") == std::string::npos);
   }
 

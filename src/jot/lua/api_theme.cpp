@@ -603,14 +603,15 @@ void LuaAPI::set_theme_color(std::string name, int fg, int bg)
   {
     set_pair(theme.fg_image_border, theme.bg_image_border);
   }
-  else if (name == "diagnostic_error" || name == "fg_diagnostic_error")
+  else if (name == "diagnostic_error" || name == "fg_diagnostic_error"
+           || name == "bg_diagnostic_error")
   {
-    set_fg(theme.fg_diagnostic_error);
+    set_pair(theme.fg_diagnostic_error, theme.bg_diagnostic_error);
   }
   else if (name == "diagnostic_warning" || name == "diagnostic_warn"
-           || name == "fg_diagnostic_warning")
+           || name == "fg_diagnostic_warning" || name == "bg_diagnostic_warning")
   {
-    set_fg(theme.fg_diagnostic_warning);
+    set_pair(theme.fg_diagnostic_warning, theme.bg_diagnostic_warning);
   }
   else if (name == "diagnostic_info" || name == "fg_diagnostic_info")
   {

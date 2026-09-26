@@ -83,6 +83,7 @@ add_executable(jot_tests
   test_sidebar_guides.cpp
   test_blank_guides.cpp
   test_bracket_match.cpp
+  test_diagnostic_line_bg.cpp
   test_right_panel.cpp
   test_markdown_http.cpp
   test_lua_markdown.cpp

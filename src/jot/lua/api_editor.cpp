@@ -296,8 +296,8 @@ void LuaAPI::push_theme_palette(lua_State *L)
   color("tab_hover", t.fg_tab_hover, t.bg_tab_hover);
   color("active_border", t.fg_active_border, t.bg_active_border);
   color("image_border", t.fg_image_border, t.bg_image_border);
-  color("diagnostic_error", t.fg_diagnostic_error, -1);
-  color("diagnostic_warning", t.fg_diagnostic_warning, -1);
+  color("diagnostic_error", t.fg_diagnostic_error, t.bg_diagnostic_error);
+  color("diagnostic_warning", t.fg_diagnostic_warning, t.bg_diagnostic_warning);
   color("diagnostic_info", t.fg_diagnostic_info, -1);
   color("diagnostic_hint", t.fg_diagnostic_hint, -1);
   color("bracket1", t.fg_bracket1, -1);

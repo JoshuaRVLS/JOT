@@ -266,7 +266,13 @@ deliberately does not, so a preview never depends on a file you cannot see.
   syntax errors - a constrained member as a missing `;`, a concept as an unknown
   type - and the project itself is never written to.
 - Debounced file sync, diagnostics overlay, and next/previous diagnostic
-  jumps.
+  jumps. A line that holds an error or a warning is drawn three ways: the
+  squiggle over the reported range, the line number in the severity colour, and
+  a band across the whole row (`DiagnosticError`/`DiagnosticWarn`'s `bg`, when
+  the theme sets one) from the gutter out past the end of the text, so a
+  finding is findable while scrolling instead of only where the squiggle sits.
+  Its message rides the end of that line in the severity colour -- the message
+  alone, with no severity icon in front of it.
 - Completion with fuzzy filtering and `textEdit` support, including the
   `additionalTextEdits` an item carries: accepting a symbol whose file does not
   import it yet writes the import with it (typescript/vtsls auto-import, and
