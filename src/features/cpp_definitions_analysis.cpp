@@ -12,7 +12,9 @@
 // template body and a class-body definition may repeat once per translation
 // unit, and a `static` (or anonymous-namespace) body is private to its own. A
 // body in a header that is *not* inline is reported separately -- it is the same
-// multiple-definition error one translation unit away.
+// multiple-definition error one translation unit away. A file-scope `main` is
+// the one name left out of the cross-file check: a folder of standalone programs
+// has one entry point per translation unit and they are compiled one by one.
 #include "cpp_definitions.h"
 #include "tools/string_util.h"
 
@@ -106,6 +108,17 @@ namespace CppDefinitions
         at = end + 2;
       }
       return false;
+    }
+
+    // A file-scope `main` is a program's entry point, so a workspace may hold
+    // one per translation unit on purpose: a folder of standalone programs
+    // (competitive programming, samples, one-off probes) is compiled file by
+    // file, and the duplicates the linker would see never meet. A `main` in a
+    // namespace or class is an ordinary function and keeps the rule, and two
+    // bodies in one file are still the redefinition the same-file rule catches.
+    bool is_program_entry(const FunctionRecord &record)
+    {
+      return record.name == "main" && record.scope.empty();
     }
 
     Issue issue_at(const FunctionRecord &record)
@@ -318,7 +331,8 @@ namespace CppDefinitions
       std::map<std::string, std::vector<const FunctionRecord *>> strong_by_platform;
       for (const FunctionRecord *record : comparable)
       {
-        if (record->inline_function || record->template_function || record->internal_linkage)
+        if (record->inline_function || record->template_function || record->internal_linkage
+            || is_program_entry(*record))
         {
           continue;
         }

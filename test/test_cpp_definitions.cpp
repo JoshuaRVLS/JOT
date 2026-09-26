@@ -209,6 +209,40 @@ TEST_CASE("C++ definitions: the same signature twice in one file is a redefiniti
   REQUIRE(issues[0].message.find("more than once in this file (also at line 1)") != std::string::npos);
 }
 
+TEST_CASE("C++ definitions: a file-scope main is each program's own entry point", "[jot]")
+{
+  // A folder of standalone programs (competitive programming, samples, probes) is
+  // compiled one file at a time, so a second `main` never reaches the same
+  // linker invocation and is not a duplicate.
+  const std::vector<Issue> standalone =
+      check({{"first.cpp", "int main() { return 0; }\n"},
+             {"second.cpp", "int main() { return 1; }\n"},
+             {"third.cpp", "int main(int argc, char **argv) { return argc; }\n"}});
+  REQUIRE(standalone.empty());
+
+  // The exemption is about the entry point, not about matching-signature pairs:
+  // two ordinary file-scope functions with one signature are still reported.
+  const std::vector<Issue> helpers =
+      check({{"first.cpp", "int helper() { return 0; }\n"},
+             {"second.cpp", "int helper() { return 1; }\n"}});
+  REQUIRE(helpers.size() == 1);
+  REQUIRE(helpers[0].severity == kError);
+
+  // A `main` under a namespace is an ordinary function: the rule still applies.
+  const std::vector<Issue> namespaced =
+      check({{"a.cpp", "namespace app { int main() { return 1; } }\n"},
+             {"b.cpp", "namespace app { int main() { return 2; } }\n"}});
+  REQUIRE(namespaced.size() == 1);
+  REQUIRE(namespaced[0].severity == kError);
+
+  // And one file cannot hold two entry points either.
+  const std::vector<Issue> twice =
+      check({{"one.cpp", "int main() { return 0; }\nint main() { return 1; }\n"}});
+  REQUIRE(twice.size() == 1);
+  REQUIRE(twice[0].severity == kError);
+  REQUIRE(twice[0].message.find("more than once in this file") != std::string::npos);
+}
+
 TEST_CASE("C++ definitions: inline, template and static bodies may repeat", "[jot]")
 {
   const std::vector<Issue> issues =

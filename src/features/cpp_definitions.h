@@ -11,7 +11,8 @@
 //   * a function declared in a header with no definition anywhere becomes a
 //     "missing implementation" diagnostic, and
 //   * a signature implemented more than once becomes a "multiple definitions"
-//     one (the linker's classic `multiple definition of f`).
+//     one (the linker's classic `multiple definition of f`), except a file-scope
+//     `main`, which a folder of standalone programs repeats on purpose.
 //
 // The parser is deliberately a *declaration-scope* parser: it walks namespaces,
 // classes and the preprocessor and skips every function body. At statement level
