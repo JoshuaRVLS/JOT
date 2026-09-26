@@ -62,6 +62,30 @@ public:
   {
     handle_lsp_switch_source_header_result(paired);
   }
+  // The dwell-hover arm (see request_lsp_hover_at): whether a rest armed a
+  // request, and the position and token it recorded. Only a pending arm fires
+  // in maybe_fire_lsp_mouse_hover, so a case can pin that blank space arms
+  // nothing while a real token arms the position the request will ask about.
+  bool lsp_mouse_hover_pending_for_test() const
+  {
+    return lsp_mouse_hover_pending;
+  }
+  int lsp_mouse_hover_line_for_test() const
+  {
+    return lsp_mouse_hover_line;
+  }
+  int lsp_mouse_hover_col_for_test() const
+  {
+    return lsp_mouse_hover_col;
+  }
+  int lsp_mouse_hover_token_start_for_test() const
+  {
+    return lsp_mouse_hover_token_start;
+  }
+  int lsp_mouse_hover_token_end_for_test() const
+  {
+    return lsp_mouse_hover_token_end;
+  }
   // The last statusline message, for asserting what an action reported. The
   // visible text comes from here too when no Lua status_line handler owns it.
   const std::string &message_for_test() const

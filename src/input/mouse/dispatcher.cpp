@@ -1042,6 +1042,11 @@ void Editor::handle_mouse(void *event_ptr)
   // not on line 0).
   int click_y =
       fold_view->buffer_line_for_visible_offset(buf.scroll_offset, rel_y, (int)buf.line_count());
+  // Whether the pointer's own row holds text, read before the step-back below
+  // hands the last line over. The blank rows under a short file are still
+  // inside the pane and still reach the hover path, but they sit on no text:
+  // only the click may be answered by the nearest line.
+  const bool row_holds_a_line = click_y >= 0;
   for (int fallback_row = rel_y - 1; click_y < 0 && fallback_row >= 0; fallback_row--)
   {
     click_y = fold_view->buffer_line_for_visible_offset(
@@ -1314,28 +1319,6 @@ void Editor::handle_mouse(void *event_ptr)
     return false;
   };
 
-  int second_click_y =
-      fold_view->buffer_line_for_visible_offset(buf.scroll_offset, rel_y, (int)buf.line_count());
-  if (second_click_y < 0)
-    second_click_y = 0;
-  if (second_click_y >= (int)buf.line_count())
-    second_click_y = buf.line_count() - 1;
-  if (second_click_y < 0)
-    return;
-  click_y = second_click_y;
-  if (is_motion && !mouse_selecting && !mouse_drag_started)
-  {
-    if (inside_pane && event->y >= content_top && event->y < content_bottom
-        && event->x == breakpoint_x && !buf.filepath.empty())
-    {
-      update_debugger_breakpoint_hover(current_pane, pane.buffer_id, click_y);
-      cancel_lsp_mouse_hover();
-      return;
-    }
-    // NOTE: no early return here - plain motion must fall through so the
-    // Ctrl+hover tracking below runs on every motion event.
-  }
-
   // VSCode-style Ctrl+hover goto-definition underline. Runs here (after
   // word_span_at_exact is defined and click_x/click_y are final) on every
   // motion/click event: holding Ctrl over a word underlines the token,
@@ -1394,6 +1377,7 @@ void Editor::handle_mouse(void *event_ptr)
     int hover_token_end = -1;
     if (is_motion && !mouse_selecting && !mouse_drag_started && !ctrl_held_now && inside_pane
         && event->y >= content_top && event->y < content_bottom && event->x >= code_start_x
+        && row_holds_a_line
         && word_span_at_exact(click_y, click_x, hover_token_start, hover_token_end))
     {
       request_lsp_hover_at(current_pane,

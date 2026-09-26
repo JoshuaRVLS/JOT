@@ -321,3 +321,58 @@ TEST_CASE("A press still reveals the caret", "[jot]")
   // the caret reveal exists for -- the fix must not disable it.
   REQUIRE(e.buffer_for_test().cursor.y == mouse_line);
 }
+
+// A hover is a claim about the text under the pointer, so the blank rows below
+// a short file's last line may not arm one. Those rows are still inside the
+// pane and still reach the hover path, and the row mapping steps a row past the
+// end of the buffer back to the last visible line (a click down there has to
+// land somewhere) -- reusing that line armed a request for the last line's
+// token at the pointer's column, and a stale second mapping of the same row
+// sent it to line 0 instead. Either way the popup appeared over empty space.
+TEST_CASE("Mouse hover in the blank rows below the file arms nothing", "[jot]")
+{
+  Editor &e = probe_editor();
+  // Line 0 and the token line carry a word at the same columns, so the wrong
+  // line still has something for word_span_at_exact to find.
+  load_lines(e,
+             {"int alpha_value = 1;", "int beta = 2;", "int gamma = 3;", "int delta = 4;",
+              "int omega_value = 5;"},
+             "blank_rows");
+  e.apply_resize_for_test(100, 30);
+  e.buffer_for_test().scroll_offset = 0;
+  e.render_for_test();
+
+  const SplitPane &pane = e.pane_for_test();
+  const int token_line = 4; // "int omega_value = 5;"
+  const int token_row = pane_content_top(pane) + token_line;
+  const int content_bottom = pane.y + pane.h - 1;
+  const int blank_row = content_bottom - 1; // the last row inside the pane
+  REQUIRE(blank_row >= token_row + 10);     // well past the file's own rows
+
+  // The probe editor is shared and the press test leaves its button down: end
+  // that drag so this case starts from a resting pointer. A motion while
+  // selecting is a drag and never reaches the hover path at all.
+  e.mouse_event_for_test(code_col(e, 4), token_row, /*bstate=*/2);
+
+  // Resting on the token's column down in the blank rows: no arm, so
+  // maybe_fire_lsp_mouse_hover has nothing to fire and no popup can follow.
+  e.reset_mouse_clicks_for_test();
+  e.mouse_event_for_test(code_col(e, 4), blank_row, /*bstate=*/32);
+  REQUIRE_FALSE(e.lsp_mouse_hover_pending_for_test());
+  REQUIRE(e.lsp_mouse_hover_line_for_test() == -1);
+  REQUIRE(e.lsp_mouse_hover_col_for_test() == -1);
+
+  // The same column on the file's own row still arms, on that row's token.
+  e.mouse_event_for_test(code_col(e, 4), token_row, /*bstate=*/32);
+  REQUIRE(e.lsp_mouse_hover_pending_for_test());
+  REQUIRE(e.lsp_mouse_hover_line_for_test() == token_line);
+  REQUIRE(e.lsp_mouse_hover_col_for_test() == 4);
+  REQUIRE(e.lsp_mouse_hover_token_start_for_test() == 4);
+  REQUIRE(e.lsp_mouse_hover_token_end_for_test() == 15);
+
+  // And a press in the blank rows still places the caret on the file's last
+  // line -- the fallback the mapping exists for -- not on line 0.
+  e.reset_mouse_clicks_for_test();
+  e.mouse_event_for_test(code_col(e, 4), blank_row, /*bstate=*/1);
+  REQUIRE(e.buffer_for_test().cursor.y == e.buffer_for_test().line_count() - 1);
+}
