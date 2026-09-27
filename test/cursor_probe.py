@@ -17,12 +17,15 @@ What this asserts, driving the real binary in a pty with a file open:
   * the shape is a STEADY DECSCUSR (ESC [ 6 q bar / ESC [ 2 q block), never a
     blinking one,
   * no hide is immediately undone by a shape write,
-  * the caret actually blinks: at the default 500 ms half-period a 3 s run
-    contains a long stretch with no show at all.
+  * the caret actually blinks, each half the configured cursor_blink_ms, and the
+    first half after input is a whole one: the cycle is timed from the end of
+    the input pause, not from the keystroke.
 
 Counting hides proves nothing on its own -- the renderer hides the caret at the
 start of every full frame and re-shows it at the end, so the hide/show churn is
-per-frame, not per-blink. Only the timing of the shows reveals the phase.
+per-frame, not per-blink. A read that carries a hide and no show is the phase
+flip to hidden; one that carries a show and no hide is the flip back. Only the
+spacing of those flips is the blink.
 
 Usage: test/cursor_probe.py [path-to-jot-binary]
 Exit codes: 0 pass, 1 fail, 2 binary missing / no pty support.
@@ -45,14 +48,23 @@ STEADY_SHAPES = (b"\x1b[2 q", b"\x1b[6 q")
 HIDE = b"\x1b[?25l"
 SHOW = b"\x1b[?25h"
 
-# The default cursor_blink_ms is 500, so a show-free stretch of at least this
-# long can only come from a blink phase (or from the caret being hidden, which
-# this probe rules out by keeping a file -- and a caret on screen -- open).
-MIN_HIDDEN_STRETCH_S = 0.3
+# The default cursor_blink_ms is 500, so a blink half is that long. The input
+# pause restart_blink() opens is 700 ms, and the cycle runs from its end: the
+# first flip to hidden after a keystroke lands a whole period after the pause.
+PERIOD_S = 0.5
+INPUT_PAUSE_S = 0.7
+# Generous enough for pty read coalescing and a busy machine, tight enough that
+# a half of the wrong length cannot pass.
+PHASE_TOLERANCE_S = 0.2
 
 
 def run_jot(binary: str, seconds: float, cols: int = 100, rows: int = 30):
-    """Run jot in a pty and return [(timestamp, bytes), ...]."""
+    """Run jot in a pty and return ([(timestamp, bytes), ...], [write times]).
+
+    The inputs are sent as one early burst, so the run ends with a long quiet
+    stretch: the blink halves can only be timed where the input pause is not
+    covering them.
+    """
     # An editor frame with a caret needs a file: started bare, jot shows the home
     # menu, which hides the caret by design and would make this probe vacuous.
     workdir = "/tmp/jot_cursor_probe_work"
@@ -74,6 +86,7 @@ def run_jot(binary: str, seconds: float, cols: int = 100, rows: int = 30):
 
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
     reads = []
+    writes = []
     deadline = time.time() + seconds
     # Move the caret while we watch: a caret that never moves is never
     # re-placed, and re-placement is where it went to the wrong cell.
@@ -94,7 +107,8 @@ def run_jot(binary: str, seconds: float, cols: int = 100, rows: int = 30):
                     os.write(fd, nudges.pop(0))
                 except OSError:
                     pass
-                nudge_at = time.time() + 0.22
+                writes.append(time.time())
+                nudge_at = time.time() + 0.12
             r, _, _ = select.select([fd], [], [], 0.05)
             if not r:
                 continue
@@ -118,7 +132,7 @@ def run_jot(binary: str, seconds: float, cols: int = 100, rows: int = 30):
             os.waitpid(pid, 0)
         except ChildProcessError:
             pass
-    return reads
+    return reads, writes
 
 
 def main() -> int:
@@ -128,7 +142,7 @@ def main() -> int:
         return 2
     os.makedirs("/tmp/jot_cursor_probe_cfg", exist_ok=True)
 
-    reads = run_jot(binary, seconds=3.0)
+    reads, writes = run_jot(binary, seconds=6.0)
     stream = b"".join(data for _, data in reads)
     if not stream:
         print("cursor probe: FAIL - the editor produced no output")
@@ -157,22 +171,60 @@ def main() -> int:
             return 1
     print("cursor probe: ok - no hide was undone by a shape write")
 
-    # Blinking, by timing. Each show is stamped with the read that carried it.
-    show_times = []
-    for t, data in reads:
-        # A read can carry several shows; spread them across the read's window so
-        # a burst does not look like one instant and hide the gaps being measured.
-        count = data.count(SHOW)
-        show_times.extend([t] * count)
-    if len(show_times) < 2:
-        print("cursor probe: FAIL - the caret was shown fewer than twice (no blink)")
+    # Blinking, by timing. A read carrying both a hide and a show is a full frame
+    # with the caret visible -- the per-frame churn -- and says nothing about the
+    # phase. The flips are the reads that carry one of the two: a hide alone is
+    # the flip to hidden, a show alone the flip back.
+    flip_off = sorted(t for t, data in reads if HIDE in data and SHOW not in data)
+    flip_on = sorted(t for t, data in reads if SHOW in data and HIDE not in data)
+    if not flip_off or not flip_on:
+        print("cursor probe: FAIL - the caret never flipped (no blink)")
         return 1
-    longest = max(b - a for a, b in zip(show_times, show_times[1:]))
-    if longest < MIN_HIDDEN_STRETCH_S:
-        print(f"cursor probe: FAIL - the caret never stayed hidden (longest show-free "
-              f"stretch {longest:.2f}s)")
+
+    # A visible half runs from a flip to visible to the next flip to hidden. A
+    # hidden half runs from the first flip to hidden after the previous visible
+    # half to the flip back: a repaint during the hidden half emits a hide of its
+    # own, and taking the first one keeps the half whole.
+    halves = []
+    for i, t_on in enumerate(flip_on):
+        t_off = next((t for t in flip_off if t > t_on), None)
+        if t_off is not None:
+            halves.append(("visible", t_on, t_off))
+        previous_on = flip_on[i - 1] if i else None
+        offs = [t for t in flip_off
+                if t < t_on and (previous_on is None or t > previous_on)]
+        if offs:
+            halves.append(("hidden", offs[0], t_on))
+
+    # Only the halves after the input burst are timed. The first frame places
+    # the caret a moment after the cycle began, so the startup half arrives short
+    # of a period, and a half that contains an input is covered by the pause.
+    last_input = max(writes)
+    measured = [(kind, end - start) for kind, start, end in halves if start > last_input]
+    if len(measured) < 3 or len({kind for kind, _ in measured}) < 2:
+        print(f"cursor probe: FAIL - only {len(measured)} caret halves to time (no blink)")
         return 1
-    print(f"cursor probe: ok - the caret blinked (longest show-free stretch {longest:.2f}s)")
+    off_period = [(kind, round(length, 3)) for kind, length in measured
+                  if abs(length - PERIOD_S) > PHASE_TOLERANCE_S]
+    if off_period:
+        print(f"cursor probe: FAIL - caret halves off the {PERIOD_S:g}s period: {off_period}")
+        return 1
+    print(f"cursor probe: ok - {len(measured)} caret halves all on the {PERIOD_S:g}s period")
+
+    # The first half after input must be a whole one. The cycle is timed from the
+    # end of the input pause, so the flip to hidden lands a whole period after it;
+    # timed from the keystroke instead, that flip landed on the fragment of a half
+    # left over when the pause ended -- the caret stumbled before it settled.
+    first_off = next((t for t in flip_off if t > last_input), None)
+    if first_off is None:
+        print("cursor probe: FAIL - no blink after the input burst")
+        return 1
+    half = first_off - last_input - INPUT_PAUSE_S
+    if abs(half - PERIOD_S) > PHASE_TOLERANCE_S:
+        print(f"cursor probe: FAIL - the first half after input was {half:.2f}s, not a "
+              f"whole {PERIOD_S:g}s period")
+        return 1
+    print(f"cursor probe: ok - the first half after input is a whole {half:.2f}s")
 
     # Where each show lands. jot shows the caret with ?25h and positions it with
     # a CUP move immediately before, so a show with no move behind it -- or one

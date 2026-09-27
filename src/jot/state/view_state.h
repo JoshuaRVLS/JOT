@@ -47,9 +47,10 @@ struct ViewState
   bool colorizer_defs_dirty = true;
 
   // One software blink clock for the terminal cursor and the extra-caret
-  // highlights: anchor in steady-clock ms, a suspension window (input keeps
-  // the cursor solid for a moment), and the effective visibility applied to
-  // both the cursor and the caret paint.
+  // highlights: anchor in steady-clock ms, the end of the input pause that
+  // keeps the cursor solid (the cycle runs from there, so the half after it is
+  // whole), and the effective visibility applied to both. See ui/cursor_blink.h
+  // for the phase itself.
   long long blink_anchor_ms;
   long long blink_suspend_until_ms;
   bool blink_visible = false;

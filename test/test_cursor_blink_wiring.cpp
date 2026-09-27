@@ -59,6 +59,13 @@ namespace
     return e.ui_for_test()->cursor_sequence().find("?25h") != std::string::npos;
   }
 
+  long long now_ms()
+  {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+  }
+
   // Samples the caret across a window comfortably longer than `period_ms`, so
   // whatever the anchor happens to be, both halves of the cycle are visited.
   struct BlinkSample
@@ -135,4 +142,37 @@ TEST_CASE("A slower period blinks more slowly", "[jot]")
   e.config_set_for_test("cursor_blink_ms", "15");
   const BlinkSample brisk = sample_blink(e, 15, 200);
   REQUIRE(brisk.saw_hidden);
+}
+
+TEST_CASE("The half after an input pause is a whole one", "[jot]")
+{
+  Editor &e = probe_editor();
+  load_file(e);
+  e.config_set_for_test("cursor_blink_ms", "200");
+
+  // restart_blink() opens an input pause on every keystroke; its end is moved
+  // here so the case does not sit through the real hold. It goes just before
+  // the keystroke-timed phase would hide the caret, so that timing leaves a
+  // 20 ms flash where the pause-timed cycle gives a whole 200 ms half.
+  e.reset_blink_phase_for_test();
+  const long long pause_end_ms = now_ms() + 180;
+  e.set_blink_pause_end_for_test(pause_end_ms);
+
+  long long first_hidden_ms = 0;
+  const auto deadline = std::chrono::steady_clock::now() + 1500ms;
+  while (std::chrono::steady_clock::now() < deadline)
+  {
+    e.render_frame_for_test();
+    if (!caret_shown(e))
+    {
+      first_hidden_ms = now_ms();
+      break;
+    }
+    std::this_thread::sleep_for(10ms);
+  }
+  REQUIRE(first_hidden_ms > 0);
+  // Solid through the pause, then a whole period of visible caret.
+  REQUIRE(first_hidden_ms >= pause_end_ms);
+  REQUIRE(first_hidden_ms - pause_end_ms >= 120);
+  REQUIRE(first_hidden_ms - pause_end_ms <= 500);
 }

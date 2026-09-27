@@ -275,6 +275,14 @@ public:
     blink_visible = true;
     needs_redraw = true;
   }
+  // Moves the end of the input pause without waiting it out: a case that pins
+  // the half after a pause would otherwise sit through the real hold first.
+  void set_blink_pause_end_for_test(long long until_ms)
+  {
+    blink_suspend_until_ms = until_ms;
+    blink_visible = true;
+    needs_redraw = true;
+  }
   // The choices drop-down state, and the cells the render pass recorded for a
   // visible row (what the mouse hit test reads).
   bool settings_dropdown_open_for_test() const

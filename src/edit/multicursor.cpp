@@ -9,6 +9,11 @@ namespace
 {
   constexpr int kMaxExtraCarets = 31;
 
+  // How long input keeps the caret solid before the blink cycle restarts. Vim's
+  // blinkwait, at its GUI default: a burst of typing never sees a blink land
+  // between keys, and a pause to read lets the blink start.
+  constexpr long long kBlinkHoldMs = 700;
+
   bool is_word_byte(char c)
   {
     const unsigned char uc = (unsigned char)c;
@@ -91,7 +96,7 @@ void Editor::restart_blink()
                           std::chrono::steady_clock::now().time_since_epoch())
                           .count();
   blink_anchor_ms = now_ms;
-  blink_suspend_until_ms = now_ms + 1200;
+  blink_suspend_until_ms = now_ms + kBlinkHoldMs;
   blink_visible = true;
   needs_redraw = true;
 }

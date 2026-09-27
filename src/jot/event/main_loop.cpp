@@ -85,10 +85,10 @@ void Editor::render_frame()
   }
   // One blink clock for both frontends. The phase comes from cursor_blink_ms and
   // is re-anchored by restart_blink() on every caret move and keystroke, so the
-  // caret lands solid, holds through the input pause, and resumes its cycle in
-  // the visible half. The terminal applies the phase by hiding/showing the
-  // hardware cursor; the GUI paints the caret from the same flag and needs a
-  // repaint to show the flip.
+  // caret lands solid and holds through the input pause. The cycle runs from the
+  // pause's end, so the first half after a pause is a whole one. The terminal
+  // applies the phase by hiding/showing the hardware cursor; the GUI paints the
+  // caret from the same flag and needs a repaint to show the flip.
   {
     bool any_carets = false;
     for (const auto &pane : panes)
@@ -107,9 +107,13 @@ void Editor::render_frame()
     const std::string style = config.get("cursor_style", "block");
     const bool steady = style == "steady_block" || style == "steadyblock"
                         || style == "steady_bar" || style == "steadybar";
-    const bool hold = steady || now_ms < blink_suspend_until_ms;
-    const bool want_visible =
-        jot_ui::blink_phase_visible(now_ms, blink_anchor_ms, period_ms, hold);
+    // The cycle runs from the end of the input pause, not from the keystroke
+    // that opened it: a future origin reads as the start of a visible half, so
+    // the caret stays solid through the pause and then blinks a whole half.
+    // Anchored at the keystroke, the first half was the fragment left when the
+    // pause ended -- a 300 ms flash at the default 500 ms half.
+    const long long phase_origin = std::max(blink_anchor_ms, blink_suspend_until_ms);
+    const bool want_visible = jot_ui::blink_phase_visible(now_ms, phase_origin, period_ms, steady);
     if (want_visible != blink_visible)
     {
       blink_visible = want_visible;
