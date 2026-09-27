@@ -747,6 +747,17 @@ their right, a `::` colon names the qualifier on its left, and a click anywhere
 inside a name asks about that name. The `Ctrl+hover` underline covers exactly
 that same element, so what is underlined is what the click will jump to.
 
+A link under the pointer is the exception, the way it is in VSCode: `Ctrl+click`
+hands an `http://`, `https://`, `mailto:` or `file://` URL to the desktop's own
+opener (`xdg-open`, `gio open` or `open`) instead of asking about a definition,
+and the `Ctrl+hover` underline covers the whole URL rather than the first name
+inside it. The caret stays where it was, and no language server is needed -- the
+URL travels to the machine's browser, not through a token. A machine with no
+opener gets a status message naming the URL rather than a silent click. The tail
+that belongs to the prose is not part of the link (`see https://example.com.`
+opens without the dot), while a bracket the URL opens itself stays (a Wikipedia
+link keeps its `)`).
+
 **Zen focus mode** (`F12` or `:zen`) strips the chrome: sidebar, right
 panel, and status line hide, and the pane area narrows to the
 `zen_content_width` config (default 100 columns) and centers - a

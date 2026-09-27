@@ -7,6 +7,8 @@
 #include "render/gutter.h"
 #include "folding.h"
 #include "input/mouse/mouse_internal.h"
+#include "tools/external_open.h"
+#include "tools/url_span.h"
 
 using namespace mouse_internal;
 #include <algorithm>
@@ -1319,30 +1321,38 @@ void Editor::handle_mouse(void *event_ptr)
     return false;
   };
 
-  // VSCode-style Ctrl+hover goto-definition underline. Runs here (after
-  // word_span_at_exact is defined and click_x/click_y are final) on every
-  // motion/click event: holding Ctrl over a word underlines the token,
-  // releasing Ctrl or moving off clears it.
+  // VSCode-style Ctrl+hover affordance. Runs here (after word_span_at_exact is
+  // defined and click_x/click_y are final) on every motion/click event: holding
+  // Ctrl over a word underlines the token, holding it over a link underlines
+  // the whole link, releasing Ctrl or moving off clears it.
   {
     bool found = false;
     int tok_start = -1, tok_end = -1;
     if ((is_motion || is_click) && ctrl_held_now && !mouse_selecting && !mouse_drag_started
         && inside_pane && ctrl_ev_y >= content_top && ctrl_ev_y < content_bottom
-        && ctrl_ev_x >= code_start_x
-        && word_span_at_exact(click_y, click_x, tok_start, tok_end))
+        && ctrl_ev_x >= code_start_x)
     {
-      // Underline the element the click would ask about, not the whole run:
-      // `counter.stored` is two symbols, and one underline across both promises
-      // a jump that the click is never going to make for half of it.
-      int element_start = 0;
-      int element_end = 0;
-      if (chain_element_span(
-              buf.line(click_y), tok_start, tok_end, click_x, element_start, element_end))
+      if (url_span::find(buf.line(click_y), click_x, tok_start, tok_end))
       {
-        tok_start = element_start;
-        tok_end = element_end;
+        // A link is one target however it reads: the underline covers the URL
+        // the click is going to open, not the first name inside it.
+        found = true;
       }
-      found = true;
+      else if (word_span_at_exact(click_y, click_x, tok_start, tok_end))
+      {
+        // Underline the element the click would ask about, not the whole run:
+        // `counter.stored` is two symbols, and one underline across both promises
+        // a jump that the click is never going to make for half of it.
+        int element_start = 0;
+        int element_end = 0;
+        if (chain_element_span(
+                buf.line(click_y), tok_start, tok_end, click_x, element_start, element_end))
+        {
+          tok_start = element_start;
+          tok_end = element_end;
+        }
+        found = true;
+      }
     }
     if (found)
     {
@@ -1399,6 +1409,25 @@ void Editor::handle_mouse(void *event_ptr)
   if (is_click && event->ctrl && inside_pane && event->y >= content_top && event->y < content_bottom
       && event->x >= code_start_x)
   {
+    int link_start = -1;
+    int link_end = -1;
+    if (url_span::find(buf.line(click_y), click_x, link_start, link_end))
+    {
+      // A link under the pointer opens in the desktop's own handler instead of
+      // asking the language server about a definition. The caret stays where it
+      // was: the click was about the link, not about a position in the text.
+      const std::string url = buf.line(click_y).substr(link_start, link_end - link_start);
+      if (external_open::open_url(url))
+      {
+        set_message("Opening " + url);
+      }
+      else
+      {
+        set_message("No browser opener found for " + url);
+      }
+      needs_redraw = true;
+      return;
+    }
     int token_start = -1;
     int token_end = -1;
     if (word_span_at_exact(click_y, click_x, token_start, token_end))

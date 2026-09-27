@@ -325,7 +325,8 @@ class Screen:
 
 def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float = 3.0,
                cols: int = 100, rows: int = 30, cfg: str = "/tmp/jot_probe_cfg",
-               cwd: str = None, phases=None, on_output=None, until_timeout: float = 15.0):
+               cwd: str = None, phases=None, on_output=None, until_timeout: float = 15.0,
+               env: dict = None):
     """Runs `binary args...` in a pty, sends `keys`, and returns the Screen.
 
     `settle` is how long the editor gets to start before the keys are sent (LSP
@@ -350,6 +351,11 @@ def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float
     write back through the returned writer. That is the only way to answer a
     query the editor makes of the terminal (its cursor-position probe): the
     reply has to land in the child's input while its read window is still open.
+
+    `env` adds variables to the child's environment (on top of the harness's
+    own TERM/config homes). A probe that pins how the editor looks a helper up
+    puts a stub directory first on PATH this way, instead of using the real
+    one.
     """
     os.makedirs(cfg, exist_ok=True)
     # Resolve before forking: the child may chdir to `cwd`, and a relative
@@ -361,6 +367,8 @@ def run_in_pty(binary: str, args, keys: bytes, settle: float = 2.5, after: float
         os.environ["COLORTERM"] = "truecolor"
         os.environ["JOT_CONFIG_HOME"] = cfg
         os.environ["JOT_CACHE_HOME"] = cfg
+        for key, value in (env or {}).items():
+            os.environ[key] = value
         try:
             if cwd:
                 os.chdir(cwd)
