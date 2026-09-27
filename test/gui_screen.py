@@ -26,7 +26,7 @@ import time
 
 try:
     import Xlib.display
-    from Xlib import X
+    from Xlib import X, XK
     from Xlib.ext import xtest
 except ImportError:  # probes exit 2 when the harness is unavailable
     Xlib = None
@@ -130,6 +130,18 @@ class GuiSession:
             self.dpy.sync()
             if delay:
                 time.sleep(delay)
+
+    def key(self, keysym, ctrl=False):
+        """Press and release one key (by X keysym), optionally holding Ctrl."""
+        code = self.dpy.keysym_to_keycode(keysym)
+        mods = [self.dpy.keysym_to_keycode(XK.XK_Control_L)] if ctrl else []
+        for mod in mods:
+            xtest.fake_input(self.dpy, X.KeyPress, mod)
+        xtest.fake_input(self.dpy, X.KeyPress, code)
+        xtest.fake_input(self.dpy, X.KeyRelease, code)
+        for mod in reversed(mods):
+            xtest.fake_input(self.dpy, X.KeyRelease, mod)
+        self.dpy.sync()
 
     def capture(self, x0=200, x1=240, y0=0, y1=None):
         """Pixels of a window strip as rows of (r, g, b) tuples.

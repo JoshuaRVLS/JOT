@@ -143,6 +143,7 @@ UIGui::UIGui(
                  "jot-gui: font_px=%d cell=%.1fx%.1f ascent=%.1f window=%dx%d grid=%dx%d\n",
                  font_px_, cell_w_, cell_h_, ascent_, window_w_, window_h_, cols, rows);
   }
+  report_buffers();
 }
 
 UIGui::~UIGui()
@@ -369,6 +370,26 @@ void UIGui::refit_grid()
                  (double)scale_,
                  font_family_.empty() ? "(default)" : font_family_.c_str());
   }
+  report_buffers();
+}
+
+void UIGui::report_buffers()
+{
+  if (!std::getenv("JOT_GUI_DEBUG"))
+  {
+    return;
+  }
+  // diff_rows is the terminal diff baseline (UI::last_grid), which this
+  // frontend never keeps: a non-zero value means the GUI started carrying a
+  // second copy of the grid. The batch scratch is one flush, flat whatever the
+  // grid, and the atlas lives on the GPU.
+  std::fprintf(stderr,
+               "jot-gui: buffers batch_floats=%zu batch_kib=%.0f atlas=%dx%d diff_rows=%zu\n",
+               vertex_.capacity(),
+               vertex_.capacity() * sizeof(float) / 1024.0,
+               kAtlasW,
+               kAtlasH,
+               last_grid.size());
 }
 
 bool UIGui::apply_font_family(const std::string &family)
@@ -509,7 +530,7 @@ bool UIGui::compile_shaders()
   glGenBuffers(1, &vbo_);
   glBindVertexArray(vao_);
   glBindBuffer(GL_ARRAY_BUFFER, vbo_);
-  glBufferData(GL_ARRAY_BUFFER, kMaxBatchVertices * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, kBatchFloats * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
   glEnableVertexAttribArray(1);
@@ -518,7 +539,7 @@ bool UIGui::compile_shaders()
   glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(4 * sizeof(float)));
   glBindVertexArray(0);
 
-  vertex_.reserve(kMaxBatchVertices);
+  vertex_.reserve(kBatchFloats);
   return true;
 }
 
@@ -535,21 +556,13 @@ bool UIGui::create_textures()
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-  // Glyph atlas: one R8 texture, filled lazily by ensure_glyph. Glyph
-  // uploads are sub-rectangles of the CPU-side 2048-wide atlas buffer, so
-  // the pixel-store must tell GL the source rows are kAtlasW bytes apart
-  // (GL_UNPACK_ROW_LENGTH) and not 4-byte aligned (GL_UNPACK_ALIGNMENT 1)
-  // or every glyph is read from a diagonal slice of mostly-empty memory
-  // and renders as a few stray pixels. The pixel-store is global GL state,
-  // so it is guarded here and restored after the upload -- otherwise every
-  // later texture upload reads rows with the wrong stride and can crash the
-  // driver.
-  AtlasPixelStoreGuard pixel_store(kAtlasW);
-  atlas_pixels_.assign((size_t)kAtlasW * kAtlasH, 0);
+  // Glyph atlas: one R8 texture, filled lazily by ensure_glyph, which uploads
+  // each glyph from FreeType's own bitmap (see AtlasPixelStoreGuard for the
+  // row-stride state those uploads need). Allocated without CPU data: nothing
+  // here has to carry a copy of the atlas.
   glGenTextures(1, &atlas_tex_);
   glBindTexture(GL_TEXTURE_2D, atlas_tex_);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, kAtlasW, kAtlasH, 0, GL_RED, GL_UNSIGNED_BYTE,
-               atlas_pixels_.data());
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, kAtlasW, kAtlasH, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -559,11 +572,18 @@ bool UIGui::create_textures()
 
 void UIGui::clear_atlas()
 {
-  AtlasPixelStoreGuard pixel_store(kAtlasW);
-  std::fill(atlas_pixels_.begin(), atlas_pixels_.end(), 0);
+  // With no CPU-side bitmap left to upload, the texture is zeroed from a
+  // transient row band: 128 KB of scratch instead of 4 MB kept for this one
+  // call, and the clear still costs a handful of uploads.
+  constexpr int kClearRows = 64;
+  std::vector<unsigned char> zeros((size_t)kAtlasW * kClearRows, 0);
   glBindTexture(GL_TEXTURE_2D, atlas_tex_);
-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, kAtlasW, kAtlasH, GL_RED, GL_UNSIGNED_BYTE,
-                  atlas_pixels_.data());
+  for (int y = 0; y < kAtlasH; y += kClearRows)
+  {
+    const int rows = std::min(kClearRows, kAtlasH - y);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, kAtlasW, rows, GL_RED, GL_UNSIGNED_BYTE,
+                    zeros.data());
+  }
   atlas_x_ = 0;
   atlas_y_ = 0;
   atlas_row_h_ = 0;

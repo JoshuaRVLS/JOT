@@ -123,15 +123,13 @@ protected:
   // (constructor, resize, clear, invalidate) mark every row dirty so the
   // next frame is a full repaint.
   std::vector<unsigned char> row_dirty;
-  // Retained copy of the last frame actually written to the terminal.
-  // The draw layer rewrites the whole grid every frame (immediate mode),
-  // so per-row dirty flags alone would mark every row dirty. render()
-  // instead compares each dirty row against last_grid and skips the row's
-  // terminal write when the content is identical; rows that did change
-  // are diffed at cell granularity (emit_row_diff) so only the changed
-  // runs reach the terminal. A typical typing frame then writes a few
-  // short cursor moves + SGR runs instead of whole rows or the whole
-  // screen.
+  // Retained copy of the last frame actually written to the terminal. The
+  // draw layer rewrites the whole grid every frame (immediate mode), so
+  // per-row dirty flags alone would mark every row dirty; render() compares
+  // each dirty row against this and skips the terminal write when the content
+  // is identical, diffing the rest at cell granularity (emit_row_diff).
+  // Allocated only when there is a terminal to diff against: the GUI backend
+  // repaints from the model every frame and never compares rows.
   std::vector<std::vector<UICell>> last_grid;
   // Renders since the last full-screen paint. Terminals can occasionally
   // drop or garble a row's bytes mid-frame; since an unchanged row is now

@@ -1,8 +1,10 @@
 // Glyph atlas: renders codepoints with FreeType into the shared R8 atlas
 // texture on demand, caching UV rects + pen metrics per (codepoint, style).
-// The atlas is one 2048-wide row band at a time; when a glyph would overflow
-// it, ensure_glyph returns false and the caller (paint path) clears the
-// whole atlas once and retries, rebuilding the cache lazily.
+// Each glyph is uploaded from FreeType's own bitmap, so there is no CPU-side
+// copy of the atlas to carry. The atlas is one 2048-wide row band at a time;
+// when a glyph would overflow it, ensure_glyph returns false and the caller
+// (paint path) clears the whole atlas once and retries, rebuilding the cache
+// lazily.
 #include "gui/gui.h"
 
 #include <ft2build.h>
@@ -11,7 +13,6 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 
 bool UIGui::ensure_glyph(uint32_t codepoint, int style)
 {
@@ -58,19 +59,14 @@ bool UIGui::ensure_glyph(uint32_t codepoint, int style)
     return false; // atlas full; caller clears and retries
   }
 
-  for (int y = 0; y < gh; y++)
   {
-    const unsigned char *src = slot->bitmap.buffer + (size_t)y * slot->bitmap.pitch;
-    unsigned char *dst = atlas_pixels_.data() + (size_t)(atlas_y_ + y) * kAtlasW + atlas_x_;
-    std::memcpy(dst, src, (size_t)gw);
-  }
-  {
-    // Rows come from the 2048-wide CPU atlas buffer; restore the global
-    // pixel-store state afterwards (see AtlasPixelStoreGuard).
-    AtlasPixelStoreGuard pixel_store(kAtlasW);
+    // Uploaded straight from FreeType's bitmap, which is the only copy of the
+    // glyph: rows are its own pitch apart, and the pixel-store is global GL
+    // state, so the guard restores it afterwards (see AtlasPixelStoreGuard).
+    AtlasPixelStoreGuard pixel_store(slot->bitmap.pitch);
     glBindTexture(GL_TEXTURE_2D, atlas_tex_);
     glTexSubImage2D(GL_TEXTURE_2D, 0, atlas_x_, atlas_y_, gw, gh, GL_RED, GL_UNSIGNED_BYTE,
-                    atlas_pixels_.data() + (size_t)atlas_y_ * kAtlasW + atlas_x_);
+                    slot->bitmap.buffer);
   }
 
   GuiGlyph g;

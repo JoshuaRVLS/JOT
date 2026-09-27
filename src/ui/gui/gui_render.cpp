@@ -438,7 +438,7 @@ void UIGui::paint_sprite(const GuiScrollAnim &a, const std::vector<std::vector<U
 
   // Backgrounds.
   size_t quads = 0;
-  begin_batch();
+  begin_batch(white_tex_);
   for (int r = 0; r < n; r++)
   {
     const std::vector<UICell> &row =
@@ -448,12 +448,11 @@ void UIGui::paint_sprite(const GuiScrollAnim &a, const std::vector<std::vector<U
   }
   if (quads)
   {
-    flush_tex(white_tex_);
     end_batch();
   }
 
   // Glyphs.
-  begin_batch();
+  begin_batch(atlas_tex_);
   for (int r = 0; r < n; r++)
   {
     const std::vector<UICell> &row =
@@ -461,12 +460,11 @@ void UIGui::paint_sprite(const GuiScrollAnim &a, const std::vector<std::vector<U
     paint_row_glyphs(row, rows ? 0 : a.x1, rows ? want_w : a.x2, x0px, (float)(a.y1 + r) * cell_h_,
                      dy, clip_top, clip_bottom);
   }
-  flush_tex(atlas_tex_);
   end_batch();
 
   // Underlines.
   bool any = false;
-  begin_batch();
+  begin_batch(white_tex_);
   for (int r = 0; r < n; r++)
   {
     const std::vector<UICell> &row =
@@ -483,7 +481,6 @@ void UIGui::paint_sprite(const GuiScrollAnim &a, const std::vector<std::vector<U
   }
   if (any)
   {
-    flush_tex(white_tex_);
     end_batch();
   }
 }
@@ -554,7 +551,7 @@ void UIGui::paint_plain()
   };
 
   size_t quads = 0;
-  begin_batch();
+  begin_batch(white_tex_);
   for (int y = 0; y < height; y++)
   {
     row_segments(y);
@@ -566,11 +563,10 @@ void UIGui::paint_plain()
   }
   if (quads)
   {
-    flush_tex(white_tex_);
     end_batch();
   }
 
-  begin_batch();
+  begin_batch(atlas_tex_);
   for (int y = 0; y < height; y++)
   {
     row_segments(y);
@@ -580,11 +576,10 @@ void UIGui::paint_plain()
       paint_row_glyphs((*content_grid_)[(size_t)y], s.first, s.second, 0.0f, y_top, 0.0f);
     }
   }
-  flush_tex(atlas_tex_);
   end_batch();
 
   bool any = false;
-  begin_batch();
+  begin_batch(white_tex_);
   for (int y = 0; y < height; y++)
   {
     row_segments(y);
@@ -597,7 +592,6 @@ void UIGui::paint_plain()
   }
   if (any)
   {
-    flush_tex(white_tex_);
     end_batch();
   }
 }
@@ -1028,7 +1022,7 @@ void UIGui::paint_float_overlays(float dt)
   }
   if (dim_alpha_ > 0.003f)
   {
-    begin_batch();
+    begin_batch(white_tex_);
     push_quad(0.0f,
               0.0f,
               (float)width * cell_w_,
@@ -1041,7 +1035,6 @@ void UIGui::paint_float_overlays(float dt)
               0.0f,
               0.0f,
               dim_alpha_);
-    flush_tex(white_tex_);
     end_batch();
   }
   for (const FloatOverlay &ov : float_overlays)
@@ -1115,7 +1108,7 @@ void UIGui::paint_float_cells(int x, int y, int w, int h, float dx_px, float dy_
 
   // Backgrounds (runs coalesce on the blended bg color).
   size_t quads = 0;
-  begin_batch();
+  begin_batch(white_tex_);
   for (int r = 0; r < n; r++)
   {
     const float py = (float)(y + r) * cell_h_ + dy_px;
@@ -1141,12 +1134,11 @@ void UIGui::paint_float_cells(int x, int y, int w, int h, float dx_px, float dy_
   }
   if (quads)
   {
-    flush_tex(white_tex_);
     end_batch();
   }
 
   // Glyphs.
-  begin_batch();
+  begin_batch(atlas_tex_);
   for (int r = 0; r < n; r++)
   {
     const std::vector<UICell> &row = cells[(size_t)r];
@@ -1190,12 +1182,11 @@ void UIGui::paint_float_cells(int x, int y, int w, int h, float dx_px, float dy_
       push_quad(gx, gy, gx + gw, gy + gh, g.u0, g.v0, g.u1, g.v1, p[0], p[1], p[2], alpha);
     }
   }
-  flush_tex(atlas_tex_);
   end_batch();
 
   // Underlines.
   bool any = false;
-  begin_batch();
+  begin_batch(white_tex_);
   for (int r = 0; r < n; r++)
   {
     const std::vector<UICell> &row = cells[(size_t)r];
@@ -1229,7 +1220,6 @@ void UIGui::paint_float_cells(int x, int y, int w, int h, float dx_px, float dy_
   }
   if (any)
   {
-    flush_tex(white_tex_);
     end_batch();
   }
 }

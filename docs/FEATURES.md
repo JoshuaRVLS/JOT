@@ -87,6 +87,13 @@ kicking the content back. The panel is reported every frame, so even the first
 notch of a session has a frame to slide from, and only a step too big to be a
 scroll (another buffer opened over the pane, a fold flip, a resize) snaps.
 
+The frontend keeps what it allocates small: the quad batch is a 256 KiB working
+set that flushes when it fills instead of a buffer sized for the largest grid it
+might draw, the glyph atlas lives on the GPU alone (every glyph is uploaded from
+FreeType's own bitmap), and the terminal renderer's row diff baseline is never
+allocated. A slide retains its viewports while it moves and drops them as it
+settles, so scrolling a long way does not grow the process.
+
 ## Feature tour
 
 ### Editing

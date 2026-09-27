@@ -233,15 +233,26 @@ UI::UI(Terminal *t)
       cursor_shape(UICursorShape::Block), cursor_hidden(true)
 {
   grid.resize(height);
-  last_grid.resize(height);
+  // No terminal, no diff baseline: the GUI repaints every frame from the
+  // model, so it would carry a second copy of the grid for nothing.
+  if (term)
+  {
+    last_grid.resize(height);
+  }
   for (int y = 0; y < height; y++)
   {
     grid[y].resize(width);
-    last_grid[y].resize(width);
+    if (term)
+    {
+      last_grid[y].resize(width);
+    }
     for (int x = 0; x < width; x++)
     {
       grid[y][x] = blank_cell();
-      last_grid[y][x] = blank_cell();
+      if (term)
+      {
+        last_grid[y][x] = blank_cell();
+      }
     }
   }
   mark_all_rows_dirty();
@@ -310,11 +321,17 @@ void UI::resize(int w, int h)
   // are default-constructed and get painted over before anything reads
   // them.
   grid.resize(height);
-  last_grid.resize(height);
+  if (term)
+  {
+    last_grid.resize(height);
+  }
   for (int y = 0; y < height; y++)
   {
     grid[y].resize(width);
-    last_grid[y].resize(width);
+    if (term)
+    {
+      last_grid[y].resize(width);
+    }
   }
   // The grid was just re-dimensioned, so the next frame must repaint every
   // row. Marking rows dirty is not enough on its own: the diff pass compares

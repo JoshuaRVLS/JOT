@@ -43,7 +43,7 @@ void UIGui::paint_cursor()
     y0 = cursor_py_;
   }
 
-  begin_batch();
+  begin_batch(white_tex_);
   if (cursor_shape == UICursorShape::Block)
   {
     push_quad(x0, y0, x0 + cell_w_, y0 + cell_h_, 0, 0, 1, 1, fr, fg_, fb, 1.0f);
@@ -55,16 +55,13 @@ void UIGui::paint_cursor()
     const float bar_w = std::max(2.0f, std::round(cell_w_ / 6.0f));
     push_quad(x0, y0, x0 + bar_w, y0 + cell_h_, 0, 0, 1, 1, fr, fg_, fb, 1.0f);
   }
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, white_tex_);
-  glUniform1i(u_tex_loc_, 0);
   end_batch();
 
   // Redraw the cursor cell's glyph in the ink color so it stays
   // legible inside the block.
   if (cursor_shape == UICursorShape::Block && !cell.ch.empty() && cell.ch != " ")
   {
-    begin_batch();
+    begin_batch(atlas_tex_);
     size_t i = 0;
     uint32_t cp = decode_utf8(cell.ch.c_str(), cell.ch.size(), i);
     if (cp != 0)
@@ -88,9 +85,6 @@ void UIGui::paint_cursor()
         push_quad(gx, gy, gx + gw, gy + gh, g.u0, g.v0, g.u1, g.v1, ir, ig, ib, 1.0f);
       }
     }
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, atlas_tex_);
-    glUniform1i(u_tex_loc_, 0);
     end_batch();
   }
 }

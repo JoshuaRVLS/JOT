@@ -235,6 +235,9 @@ private:
   // Re-fits the cell grid to the window after a font change (size or family)
   // and reports it under JOT_GUI_DEBUG.
   void refit_grid();
+  // JOT_GUI_DEBUG: the frontend's own buffers (batch scratch, atlas, diff
+  // baseline) after a grid change, so a probe can pin what the GUI allocates.
+  void report_buffers();
   // Renders `codepoint` in `style` into the atlas if not already cached.
   // Returns false when the atlas is full (caller clears and retries once).
   bool ensure_glyph(uint32_t codepoint, int style);
@@ -246,18 +249,18 @@ private:
   // device-pixel per point ratio the resize and input paths need).
   void refresh_scale();
 
-  // Batch helpers: accumulate quads into vertex_ and flush with one draw.
-  void begin_batch();
+  // Batch helpers: accumulate quads into vertex_ and flush them with one draw
+  // call. begin_batch(tex) starts a run for that texture; end_batch() draws
+  // what the run queued, and a run longer than the scratch flushes early, so
+  // no buffer is sized for the largest possible grid and no quad is dropped.
+  void begin_batch(unsigned int tex);
   void push_quad(float x0, float y0, float x1, float y1, float u0, float v0,
                  float u1, float v1, float r, float g, float b, float a);
   void end_batch();
-  // Binds `tex` to unit 0 and sets the u_tex sampler uniform (shared by all
-  // passes). The uniform locations are looked up once at link time:
-  // glGetUniformLocation walks the driver's name table and is far too slow to
-  // call a dozen times per frame, which is what this used to do.
-  void flush_tex(unsigned int tex);
-  // Scratch vertex buffer size in floats (8 floats/vertex, 6 verts/quad).
-  static constexpr int kMaxBatchVertices = 1 << 20;
+  // One flush's worth of vertices: 8 floats each, 6 vertices per quad, so a
+  // full scratch is 1365 quads. Long enough that a typical pane paints as a
+  // handful of draw calls, small enough to stay at 256 KiB whatever the grid.
+  static constexpr int kBatchFloats = 1 << 16;
 
   struct GuiScrollAnim; // defined with the animation state below
   // Paint: animated panes draw every retained frame translated to its
@@ -323,16 +326,19 @@ private:
   unsigned int vbo_ = 0;
   unsigned int white_tex_ = 0;
   unsigned int atlas_tex_ = 0;
-  // Scratch vertex buffer (8 floats/vertex, 6 vertices/quad). Grown on
-  // demand; sized for the max grid observed so far.
+  // Scratch vertex buffer (8 floats/vertex, 6 vertices/quad), sized once for
+  // one flush (kBatchFloats) and refilled per run.
   std::vector<float> vertex_;
-  size_t vertex_quads_ = 0;
+  // Texture the queued quads belong to; set by begin_batch, bound by the flush
+  // (a glyph rasterized mid-run binds the atlas itself, so the draw cannot
+  // rely on whatever binding happens to be current).
+  unsigned int batch_tex_ = 0;
 
   FT_Library ft_lib_ = nullptr;
   FT_Face faces_[kStyleCount] = {nullptr, nullptr, nullptr, nullptr};
-  // Atlas: 2048x2048 R8. One row of glyphs at a time; cleared wholesale
-  // when full (the cache is rebuilt lazily on the next frame).
-  std::vector<unsigned char> atlas_pixels_;
+  // Atlas: 2048x2048 R8, GPU-side only (each glyph is uploaded from
+  // FreeType's own bitmap, so no CPU copy of it is kept). One row of glyphs at
+  // a time, cleared wholesale when full; the cache rebuilds lazily.
   static constexpr int kAtlasW = 2048;
   static constexpr int kAtlasH = 2048;
   int atlas_x_ = 0;
