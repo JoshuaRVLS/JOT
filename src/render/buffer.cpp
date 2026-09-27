@@ -146,9 +146,16 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
     {
       gui_pane_scroll_xs_.resize(pane_index + 1, -1);
     }
+    if ((int)gui_pane_buffer_ids_.size() <= pane_index)
+    {
+      gui_pane_buffer_ids_.resize(pane_index + 1, -1);
+    }
     const int old_top = gui_pane_top_lines_[(size_t)pane_index];
     int delta = 0;
-    if (old_top >= 0 && new_top >= 0 && old_top != new_top)
+    // A pane that switched buffers has no slide to report: the retained
+    // viewports hold the previous file's rows, so this frame snaps.
+    const bool same_buffer = gui_pane_buffer_ids_[(size_t)pane_index] == pane.buffer_id;
+    if (same_buffer && old_top >= 0 && new_top >= 0 && old_top != new_top)
     {
       if (new_top > old_top)
       {
@@ -162,6 +169,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
       }
     }
     gui_pane_top_lines_[(size_t)pane_index] = new_top;
+    gui_pane_buffer_ids_[(size_t)pane_index] = pane.buffer_id;
     // Horizontal window changes have no slide animation, so the GUI only needs
     // to know that this pane's columns moved: it places the caret instead of
     // easing it sideways after the text has already jumped.

@@ -95,6 +95,7 @@ add_executable(jot_tests
   test_overlay_placement.cpp
   test_completion_selection.cpp
   test_gui_fit.cpp
+  test_gui_scroll_math.cpp
   test_resize_sync.cpp
   test_key_decode.cpp
 )

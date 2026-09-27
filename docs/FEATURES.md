@@ -80,6 +80,13 @@ directories), and an unknown name is reported and ignored, leaving the
 current font in place. `JOT_GUI_FONT` still overrides the regular face with
 an explicit font file.
 
+Scrolling is a pixel slide, not a jump: a wheel notch retargets the slide and
+the content carries on from the velocity it already has, so a burst reads as
+one glide and turning the wheel around decelerates through the stop rather than
+kicking the content back. The panel is reported every frame, so even the first
+notch of a session has a frame to slide from, and only a step too big to be a
+scroll (another buffer opened over the pane, a fold flip, a resize) snaps.
+
 ## Feature tour
 
 ### Editing

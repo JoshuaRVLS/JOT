@@ -18,6 +18,7 @@
 #define UI_GUI_H
 
 #include "ui.h"
+#include "gui/gui_scroll_math.h"
 #include <cstdint>
 // glad provides every GL entry point the frontend calls. It must be included
 // before any other GL header (none is included alongside it), and its loader
@@ -486,46 +487,35 @@ private:
   // Storage for the last synthesized paste payload (EVENT_PASTE text).
   std::string pending_paste_text_;
 
-  // --- Smooth-scroll / cursor animation state ---------------------------
-  // Per-pane scroll animation (neovide-style). The slide is a strip of
-  // buffer content: its display position (rows from the chain start) is
-  // s = total_px/cell_h - offset_px/cell_h, easing from 0 to the net
-  // scroll. Each frame -- the live grid plus every viewport the chain has
-  // visited (captured at the end of each render into `frames`) -- is
-  // painted translated by (frame_top - s)*cell_h, so wherever two frames
-  // overlap they hold the same file rows and draw the same pixels: no
-  // ghosting, and the retained set always covers the displayed strip in
-  // both scroll directions (quick reversals can't leave an edge unrendered
-  // because the viewports at both extremes are retained). Deltas arriving
-  // mid-slide ACCUMULATE into total_px/offset_px so wheel bursts stay
-  // continuous; when a slide settles (offset eases to 0) total_px resets
-  // and `frames` clears, so the next chain starts from the settled
-  // viewport. Jumps bigger than a pane snap (offset/total reset, frames
-  // cleared, recaptured next frame).
+  // Scroll slide and cursor glide (neovide-style).
   // The grid the current frame's content passes paint from: the pre-float
   // snapshot when floats are visible, the live grid otherwise. Set at the
   // top of render(); never null inside render().
   const std::vector<std::vector<UICell>> *content_grid_ = nullptr;
 
-  // One retained copy of a pane body: the viewport at `top_row` rows from
-  // the current chain start. Frames with the same top replace each other,
-  // so `frames` holds one copy per distinct viewport the chain visited.
+  // One retained viewport of the sliding strip: a pane body at `top_row` rows
+  // from the chain start. Frames with the same top replace each other.
   struct GuiFrame
   {
     int top_row = 0;
     std::vector<std::vector<UICell>> rows; // pane-relative columns
   };
+  // The strip a pane glides through: the live grid sits at `total_px` and the
+  // display eases toward it on the curve in gui_scroll_math.h. Deltas arriving
+  // mid-slide move `total_px`, so a wheel burst extends one glide instead of
+  // restarting it.
   struct GuiScrollAnim
   {
     int x1 = 0, y1 = 0, x2 = 0, y2 = 0; // body region (grid cells, x2/y2 exclusive)
-    float offset_px = 0.0f;             // current shift of the new content (eases to 0)
-    float total_px = 0.0f;              // net scroll of the chain (delta * cell_h)
+    jot_gui::SlideState slide;          // display position of the strip, and its velocity
+    float total_px = 0.0f;              // strip position (px) of the live grid's viewport
     // The pane's horizontal window changed this frame. There is no horizontal
-    // slide animation to ride, so the caret has to be placed rather than eased
+    // slide to ride, so the caret is placed rather than eased
     // (see advance_cursor_glide); refreshed by every notify_pane_scroll call.
     bool jumped_x = false;
-    // Retained viewports of this slide chain, oldest first. Empty until at
-    // least one frame has been rendered for this pane.
+    // Viewports the chain has visited, oldest first. capture_pane_rows drops
+    // the ones the display can no longer reach, so both edges stay covered
+    // through bursts and quick reversals without the set growing without bound.
     std::vector<GuiFrame> frames;
   };
   std::unordered_map<int, GuiScrollAnim> scroll_anims_;

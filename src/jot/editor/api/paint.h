@@ -217,5 +217,9 @@ private:
   // pane per frame (editor side, where the fold ranges live). gui_pane_scroll_xs_
   // is the same per pane for the horizontal window: it has no slide animation,
   // so the GUI uses the change to place the caret instead of easing it.
+  // gui_pane_buffer_ids_ remembers which buffer each pane last reported for:
+  // a pane whose buffer changed must report no delta (the retained viewports
+  // belong to the previous file, so the new one snaps into place).
   std::vector<int> gui_pane_top_lines_;
   std::vector<int> gui_pane_scroll_xs_;
+  std::vector<int> gui_pane_buffer_ids_;

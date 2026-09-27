@@ -1,10 +1,9 @@
 // Frame painting: walks the cell grid and emits batched GL passes -- opaque
 // background quads (coalesced into horizontal runs), glyph quads from the
-// FreeType atlas, and underline quads. Animated panes draw as two
-// translated sprites (the retained previous frame sliding out, the current
-// frame settling in) so both pane edges always have content; every static
-// row paints on top afterward so borders, tab strips and neighbouring
-// panes win where sliding content crossed them.
+// FreeType atlas, and underline quads. An animating pane draws as translated
+// sprites of its retained viewports, so both pane edges always have content;
+// every static row paints on top afterward so borders, tab strips and
+// neighbouring panes win where sliding content crossed them.
 #include "gui/gui.h"
 
 #include <SDL2/SDL.h>
@@ -54,13 +53,13 @@ void UIGui::render()
   for (auto &kv : scroll_anims_)
   {
     GuiScrollAnim &a = kv.second;
-    if (std::abs(a.offset_px) < 0.25f)
+    if (jot_gui::slide_settled(a.slide, a.total_px))
     {
       continue;
     }
     const int body_rows = std::max(1, a.y2 - a.y1);
     // Display position of the slide, in rows from the chain start.
-    const float s = (a.total_px - a.offset_px) / cell_h_;
+    const float s = a.slide.pos_px / cell_h_;
     const int grid_top = (int)std::lround(a.total_px / cell_h_);
     for (const GuiFrame &f : a.frames)
     {
@@ -76,7 +75,7 @@ void UIGui::render()
       }
       paint_sprite(a, &f.rows, (float)(f.top_row - s) * cell_h_);
     }
-    paint_sprite(a, nullptr, a.offset_px);
+    paint_sprite(a, nullptr, a.total_px - a.slide.pos_px);
   }
 
   // Native-floated surfaces mid-entrance: their rects are skipped in the
@@ -511,7 +510,7 @@ void UIGui::paint_plain()
     for (const auto &kv : scroll_anims_)
     {
       const GuiScrollAnim &a = kv.second;
-      if (std::abs(a.offset_px) < 0.25f)
+      if (jot_gui::slide_settled(a.slide, a.total_px))
       {
         continue;
       }
@@ -604,9 +603,9 @@ void UIGui::paint_plain()
 }
 
 // Retains this frame's grid as the chain's viewport at `total/cell_h` rows
-// from the chain start (replacing any older copy of the same viewport), so
-// every viewport a slide visits stays available to the animation -- the
-// slide can always draw the strip positions it shows, in both directions.
+// from the chain start (replacing any older copy of the same viewport), then
+// drops the copies the display can no longer reach, so a long scroll stays
+// bounded while both edges of the sliding strip keep their content.
 void UIGui::capture_pane_rows()
 {
   for (auto &kv : scroll_anims_)
@@ -620,18 +619,23 @@ void UIGui::capture_pane_rows()
     }
     const int top = (int)std::lround(a.total_px / cell_h_);
     GuiFrame *dst = nullptr;
-    for (GuiFrame &f : a.frames)
+    size_t insert_at = a.frames.size();
+    for (size_t i = 0; i < a.frames.size(); i++)
     {
-      if (f.top_row == top)
+      if (a.frames[i].top_row == top)
       {
-        dst = &f;
+        dst = &a.frames[i];
         break;
+      }
+      if (a.frames[i].top_row > top && insert_at == a.frames.size())
+      {
+        insert_at = i; // keep the set ordered by top: the drop below walks neighbours
       }
     }
     if (!dst)
     {
-      a.frames.push_back(GuiFrame{});
-      dst = &a.frames.back();
+      a.frames.insert(a.frames.begin() + (long)insert_at, GuiFrame{});
+      dst = &a.frames[insert_at];
       dst->top_row = top;
       dst->rows.assign((size_t)h, std::vector<UICell>((size_t)w));
     }
@@ -646,6 +650,33 @@ void UIGui::capture_pane_rows()
       for (int c = 0; c < w; c++)
       {
         drow[(size_t)c] = src[(size_t)(a.x1 + c)];
+      }
+    }
+    // The display window sweeps between the slide's position and its target,
+    // a pane tall at each stop. One pane of slack either side covers momentum
+    // past the target and the viewports a reversal needs before new captures
+    // land; anything beyond that can never draw again.
+    const float s_min = std::min(a.slide.pos_px, a.total_px) / cell_h_;
+    const float s_max = std::max(a.slide.pos_px, a.total_px) / cell_h_;
+    const float lo = s_min - (float)h;
+    const float hi = s_max + 2.0f * (float)h;
+    a.frames.erase(
+        std::remove_if(a.frames.begin(), a.frames.end(),
+                       [&](const GuiFrame &f) { return !jot_gui::frame_retained(f.top_row, h, lo, hi); }),
+        a.frames.end());
+    // Sparse retention: a viewport whose neighbours already cover every row it
+    // holds never draws a pixel of its own. Dropping those keeps the set at a
+    // handful of panes however long the scroll runs, instead of one copy per
+    // visited viewport.
+    for (size_t i = 1; i + 1 < a.frames.size();)
+    {
+      if (jot_gui::frame_redundant(a.frames[i - 1].top_row, a.frames[i + 1].top_row, h))
+      {
+        a.frames.erase(a.frames.begin() + (long)i);
+      }
+      else
+      {
+        i++;
       }
     }
   }

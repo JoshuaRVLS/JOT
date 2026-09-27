@@ -1,11 +1,10 @@
 // Scroll + cursor animation (neovide-style). The editor reports each pane's
-// body region and its net scroll delta every render; a pane that scrolled
-// starts an easing animation from delta*cell_h toward 0, and the render
-// pass draws the pane body shifted by the current offset (see gui_render).
-// The cursor glides toward its cell (plus any pane offset covering it)
-// with a faster exponential approach, snapping on teleports. needs_repaint
-// keeps the editor pump repainting while anything is in flight, so the
-// animation advances at the monitor's refresh.
+// body region and its net scroll delta every render; the delta moves the
+// strip's target and the display eases toward it on the critically damped
+// curve in gui_scroll_math.h, drawn shifted by the render pass (gui_render).
+// The cursor glides toward its cell (plus any pane offset covering it),
+// snapping on teleports. needs_repaint keeps the editor pump repainting while
+// anything is in flight, so the animation advances at the monitor's refresh.
 #include "gui/gui.h"
 #include "gui/gui_fit.h"
 
@@ -32,60 +31,38 @@ void UIGui::notify_pane_scroll(int pane_id, int x, int y, int w, int h, int delt
   if (old_w != anim.x2 - anim.x1 || old_h != anim.y2 - anim.y1)
   {
     anim.frames.clear();
-    anim.offset_px = 0.0f;
+    anim.slide = jot_gui::SlideState{};
     anim.total_px = 0.0f;
   }
   if (delta_rows == 0)
   {
     return;
   }
-  // The editor reports the net delta since the last rendered frame. The
-  // slide display position is s = (total - offset)/cell_h rows from the
-  // chain start; every viewport the chain visits is retained in `frames`,
-  // so the painted strip always covers the pane in both directions -- a
-  // quick reversal can't strand an edge without content. Deltas that arrive
-  // while a slide is in flight ACCUMULATE into total/offset (the editor
-  // repaints the grid with the newer viewport anyway), keeping wheel bursts
-  // continuous instead of restarting the slide every notch.
   const float dpx = (float)delta_rows * cell_h_;
   const int body_rows = std::max(1, anim.y2 - anim.y1);
-  // Up to one full pane of net slide animates (page flips glide); anything
-  // bigger (buffer switches, huge jumps) snaps.
+  // A step bigger than one pane is a jump, not a scroll: snap instead of
+  // sliding content clear across the window (buffer switches, fold flips).
   const float max_slide = (float)body_rows * cell_h_;
-  if (anim.frames.empty())
+  if (anim.frames.empty() || std::abs(dpx) > max_slide)
   {
-    // Pane just appeared (no retained viewport yet): snap; the capture at
-    // the end of this render seeds a fresh frame for the next chain.
-    anim.offset_px = 0.0f;
-    anim.total_px = 0.0f;
-  }
-  else if (std::abs(anim.offset_px) < 0.25f)
-  {
-    // Previous slide settled (or never started): fresh chain from the
-    // settled viewport.
-    anim.total_px = dpx;
-    anim.offset_px = dpx;
-  }
-  else if (std::abs(anim.total_px + dpx) <= max_slide)
-  {
-    anim.total_px += dpx;
-    anim.offset_px += dpx;
-  }
-  else
-  {
-    // Jump bigger than the pane: snap instead of sliding content across
-    // the whole screen; the next capture re-seeds the retained set.
-    anim.offset_px = 0.0f;
+    // Nothing retained to slide from (the pane just appeared) or a jump: the
+    // capture at the end of this render seeds the next chain.
+    anim.slide = jot_gui::SlideState{};
     anim.total_px = 0.0f;
     anim.frames.clear();
+    return;
   }
+  // The editor reports the net delta since the last rendered frame; it moves
+  // only the target. The glide carries on from the position and velocity it
+  // has, so a burst extends one glide and a reversal decelerates through zero.
+  anim.total_px += dpx;
 }
 
 bool UIGui::needs_repaint() const
 {
   for (const auto &kv : scroll_anims_)
   {
-    if (std::abs(kv.second.offset_px) > 0.25f)
+    if (!jot_gui::slide_settled(kv.second.slide, kv.second.total_px))
     {
       return true;
     }
@@ -126,22 +103,19 @@ float UIGui::frame_dt()
 
 void UIGui::advance_animations(float dt)
 {
-  // Exponential approach: fast start, smooth settle, frame-rate independent.
-  const float k = 1.0f - std::exp(-dt / 0.06f);
   for (auto &kv : scroll_anims_)
   {
     GuiScrollAnim &a = kv.second;
-    if (a.offset_px == 0.0f)
+    if (jot_gui::slide_settled(a.slide, a.total_px))
     {
       continue;
     }
-    a.offset_px += -a.offset_px * k;
-    if (std::abs(a.offset_px) < 0.1f)
+    a.slide = jot_gui::slide_step(a.slide, a.total_px, dt, jot_gui::kSlideOmega);
+    if (jot_gui::slide_settled(a.slide, a.total_px))
     {
-      // Settled: drop the chain's retained viewports (the next render
-      // captures the settled grid as the next chain's start) and reset the
-      // net distance so the next delta starts a fresh chain.
-      a.offset_px = 0.0f;
+      // Settled on the target: the live grid alone describes the screen, so
+      // the retained viewports go and the chain restarts from zero.
+      a.slide = jot_gui::SlideState{};
       a.total_px = 0.0f;
       a.frames.clear();
     }
@@ -154,14 +128,14 @@ UIGui::CursorPaneView UIGui::cursor_pane_view(int x, int y) const
   for (const auto &kv : scroll_anims_)
   {
     const GuiScrollAnim &a = kv.second;
-    const bool animating = std::abs(a.offset_px) >= 0.25f;
+    const bool animating = !jot_gui::slide_settled(a.slide, a.total_px);
     if (!animating && !a.jumped_x)
     {
       continue;
     }
     if (x >= a.x1 && x < a.x2 && y >= a.y1 && y < a.y2)
     {
-      view.offset_px = a.offset_px;
+      view.offset_px = a.total_px - a.slide.pos_px;
       view.jumped_x = a.jumped_x;
       return view;
     }
@@ -200,12 +174,10 @@ void UIGui::advance_cursor_glide(float dt)
     cursor_py_ = ty;
     return;
   }
-  // While the pane is scrolling, the caret is placed rather than eased. The
-  // content slides on the pane's own curve (tau 60ms); easing the caret toward
-  // its cell on a second curve (tau 45ms) left it visibly trailing its line,
-  // which read as the caret being dragged along by the scroll. Riding the same
-  // offset keeps it glued to the text. A horizontal window jump has no slide to
-  // ride, so that axis snaps for the same reason.
+  // While the pane slides, the caret rides that same offset instead of easing
+  // toward its cell: a second curve left it visibly trailing its own line,
+  // which read as the caret being dragged along by the scroll. A horizontal
+  // window jump has no slide to ride, so that axis snaps.
   const bool snap = pane.offset_px != 0.0f || pane.jumped_x;
   cursor_px_ = jot_gui::glide_axis(cursor_px_, tx, dt, snap);
   cursor_py_ = jot_gui::glide_axis(cursor_py_, ty, dt, snap);
