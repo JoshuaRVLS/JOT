@@ -79,6 +79,7 @@ add_executable(jot_tests
   test_themes.cpp
   test_terminal_panel.cpp
   test_terminal_float.cpp
+  test_terminal_links.cpp
   test_bottom_panel.cpp
   test_win_probe.cpp
   test_inlay_hints.cpp

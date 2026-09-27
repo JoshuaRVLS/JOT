@@ -444,6 +444,13 @@ Install helpers also cover Rust, Go, Lua, and Bash.
 - **Mouse selection**: click and drag in the terminal to highlight text
   (drag beyond the panel edges is clamped to the visible rows); releasing
   copies the selection to the system clipboard.
+- **Ctrl+click a link** in the shell's own output opens it in the desktop's
+  opener, the way a buffer's link does: the same `http://`, `https://`,
+  `mailto:` and `file://` rules (a sentence's trailing dot stays out of the
+  URL), the same status message, and the same report when the machine has no
+  opener. The click is the link's, so it leaves no selection behind, and
+  `Ctrl+hover` underlines exactly the URL the click would open -- in the
+  docked panel and in the floating box, which stays up across the click.
 - `Esc` returns focus to the editor; the mouse switches/closes tabs or opens
   new ones.
 - Local and global task files:
@@ -756,7 +763,9 @@ URL travels to the machine's browser, not through a token. A machine with no
 opener gets a status message naming the URL rather than a silent click. The tail
 that belongs to the prose is not part of the link (`see https://example.com.`
 opens without the dot), while a bracket the URL opens itself stays (a Wikipedia
-link keeps its `)`).
+link keeps its `)`). The same rules read the integrated terminal's own output: a
+URL a command printed opens on `Ctrl+click` there too, with `Ctrl+hover`
+underlining exactly it, in the docked panel and the floating box alike.
 
 **Zen focus mode** (`F12` or `:zen`) strips the chrome: sidebar, right
 panel, and status line hide, and the pane area narrows to the

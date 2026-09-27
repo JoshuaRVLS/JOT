@@ -93,11 +93,11 @@ private:
   bool handle_menu_bar_input(int ch);
   bool handle_menu_bar_mouse(int x, int y, bool is_click, bool is_motion);
   bool handle_integrated_terminal_mouse(
-      int x, int y, bool is_click, bool is_motion, bool is_click_release);
+      int x, int y, bool is_click, bool is_motion, bool is_click_release, bool ctrl = false);
   bool handle_integrated_terminal_scroll(int x, int y, bool is_scroll_up, bool is_scroll_down);
   void handle_floating_terminal_input(int ch, bool is_ctrl, bool is_shift, bool is_alt);
   bool handle_floating_terminal_mouse(
-      int x, int y, bool is_click, bool is_motion, bool is_click_release);
+      int x, int y, bool is_click, bool is_motion, bool is_click_release, bool ctrl = false);
   bool handle_floating_terminal_scroll(int x, int y, bool is_scroll_up, bool is_scroll_down);
   void begin_floating_terminal_selection(int x, int y);
   // One terminal view's rows, drawn from the vterm: the trimming, the

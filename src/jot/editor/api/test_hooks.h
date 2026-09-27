@@ -408,9 +408,17 @@ public:
   {
     handle_floating_terminal_input(ch, ctrl, shift, alt);
   }
-  bool floating_terminal_mouse_for_test(int x, int y, bool click, bool motion, bool release)
+  // `ctrl` is the modifier state the dispatcher passes through: a Ctrl+click
+  // on a link opens it instead of starting a selection.
+  bool floating_terminal_mouse_for_test(
+      int x, int y, bool click, bool motion, bool release, bool ctrl = false)
   {
-    return handle_floating_terminal_mouse(x, y, click, motion, release);
+    return handle_floating_terminal_mouse(x, y, click, motion, release, ctrl);
+  }
+  // The box's own shell, for tests that feed it output or read its rows.
+  IntegratedTerminal *floating_terminal_for_test()
+  {
+    return floating_terminal.get();
   }
   bool floating_terminal_visible_for_test() const
   {

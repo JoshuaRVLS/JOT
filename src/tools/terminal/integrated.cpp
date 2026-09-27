@@ -253,6 +253,14 @@ void IntegratedTerminal::destroy_vterm()
   scroll_offset = 0;
 }
 
+void IntegratedTerminal::feed_output_for_test(const std::string &bytes)
+{
+  ensure_vterm(rows, cols);
+  vterm_input_write(vterm, bytes.data(), bytes.size());
+  vterm_screen_flush_damage(screen);
+  refresh_current_line();
+}
+
 void IntegratedTerminal::append_output(const char *s, size_t len)
 {
   if (!s || len == 0)
@@ -597,6 +605,39 @@ int IntegratedTerminal::get_top_visible_row(int visible_rows) const
   return std::max(0, total - offset - take);
 }
 
+std::vector<IntegratedTerminal::StyledCell>
+IntegratedTerminal::get_row_cells_at(int full_row) const
+{
+  std::vector<StyledCell> cells;
+  if (full_row < 0)
+  {
+    return cells;
+  }
+  if (full_row < (int)scrollback.size())
+  {
+    return scrollback[(size_t)full_row];
+  }
+  int screen_row = full_row - (int)scrollback.size();
+  if (screen && screen_row >= 0 && screen_row < rows)
+  {
+    cells.reserve((size_t)cols);
+    for (int col = 0; col < cols; col++)
+    {
+      VTermScreenCell cell{};
+      VTermPos pos{screen_row, col};
+      if (vterm_screen_get_cell(screen, pos, &cell))
+      {
+        cells.push_back(styled_from_vterm_cell(screen, cell));
+      }
+      else
+      {
+        cells.push_back({" ", 7, 0});
+      }
+    }
+  }
+  return cells;
+}
+
 std::string IntegratedTerminal::get_row_text_at(int full_row) const
 {
   if (full_row < 0)
@@ -610,22 +651,7 @@ std::string IntegratedTerminal::get_row_text_at(int full_row) const
   int screen_row = full_row - (int)scrollback.size();
   if (screen && screen_row >= 0 && screen_row < rows)
   {
-    OutputRow out;
-    out.cells.reserve((size_t)cols);
-    for (int col = 0; col < cols; col++)
-    {
-      VTermScreenCell cell{};
-      VTermPos pos{screen_row, col};
-      if (vterm_screen_get_cell(screen, pos, &cell))
-      {
-        out.cells.push_back(styled_from_vterm_cell(screen, cell));
-      }
-      else
-      {
-        out.cells.push_back({" ", 7, 0});
-      }
-    }
-    return row_text(out.cells);
+    return row_text(get_row_cells_at(full_row));
   }
   if (!screen && screen_row == 0)
   {

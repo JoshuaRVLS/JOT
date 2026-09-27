@@ -122,6 +122,9 @@ public:
   {
     active = true;
   }
+  // Test hook: runs bytes through the vterm the way a shell's own output is
+  // (poll_output's write), so a headless test can put rows on screen.
+  void feed_output_for_test(const std::string &bytes);
   const std::string &get_label() const
   {
     return label;
@@ -161,6 +164,9 @@ public:
   int get_top_visible_row(int visible_rows) const;
   // Full row text for a full-space index ("" when out of range).
   std::string get_row_text_at(int full_row) const;
+  // The cells behind that text, one per column: the mouse paths need the cell
+  // a screen column maps to (a link click turns it into a byte offset).
+  std::vector<StyledCell> get_row_cells_at(int full_row) const;
 
   std::vector<std::string> get_recent_lines(int max_lines) const;
   std::vector<std::vector<StyledCell>> get_recent_styled_lines(int max_lines) const;

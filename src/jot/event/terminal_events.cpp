@@ -93,6 +93,13 @@ void Editor::handle_terminal_event(const Event &ev)
       ctrl_hover_end = -1;
       needs_redraw = true;
     }
+    // A key means the pointer is no longer the subject (Ctrl itself is one
+    // when it comes up): the terminal link underline goes with the editor's.
+    if (terminal_link_hover_active)
+    {
+      terminal_link_hover_active = false;
+      needs_redraw = true;
+    }
     // A key can arrive before a delayed mouse release. Preserve the current
     // selection, but prevent that release from restoring an obsolete cursor.
     mouse_selecting = false;

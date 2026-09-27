@@ -1,5 +1,7 @@
 #include "editor.h"
 #include "render/pane_edges.h"
+#include "tools/external_open.h"
+#include "tools/url_span.h"
 #include "ui/text.h"
 #include <algorithm>
 
@@ -435,6 +437,132 @@ TerminalView Editor::docked_terminal_view()
   return view;
 }
 
+std::string Editor::terminal_link_at(
+    const TerminalView &view, int x, int y, int &start_col, int &end_col)
+{
+  start_col = 0;
+  end_col = 0;
+  if (!view.term || x < view.x || y < view.y || y >= view.y + view.h)
+  {
+    return "";
+  }
+  const int cell_col = x - view.x;
+  const int full_row = view.term->get_top_visible_row(view.h) + (y - view.y);
+  const std::vector<IntegratedTerminal::StyledCell> cells = view.term->get_row_cells_at(full_row);
+
+  // The row's text with the byte offset each cell starts at: the pointer names
+  // a cell, but link detection works on the text.
+  std::vector<int> offsets;
+  offsets.reserve(cells.size() + 1);
+  std::string text;
+  for (const auto &cell : cells)
+  {
+    offsets.push_back((int)text.size());
+    text += cell.ch;
+  }
+  offsets.push_back((int)text.size());
+  if (cell_col < 0 || cell_col + 1 >= (int)offsets.size())
+  {
+    return "";
+  }
+
+  int start = 0;
+  int end = 0;
+  if (!url_span::find(text, offsets[(size_t)cell_col], start, end))
+  {
+    return "";
+  }
+
+  // Back to cell columns for the underline: the span starts at the cell
+  // holding its first byte and ends past the one holding its last.
+  auto cell_of_byte = [&offsets](int byte)
+  {
+    for (int i = 0; i + 1 < (int)offsets.size(); i++)
+    {
+      if (byte < offsets[(size_t)i + 1])
+      {
+        return i;
+      }
+    }
+    return (int)offsets.size() - 2;
+  };
+  start_col = cell_of_byte(start);
+  end_col = cell_of_byte(end - 1) + 1;
+  return text.substr((size_t)start, (size_t)(end - start));
+}
+
+bool Editor::open_terminal_link_at(const TerminalView &view, int x, int y)
+{
+  int start_col = 0;
+  int end_col = 0;
+  const std::string url = terminal_link_at(view, x, y, start_col, end_col);
+  if (url.empty())
+  {
+    return false;
+  }
+  if (external_open::open_url(url))
+  {
+    set_message("Opening " + url);
+  }
+  else
+  {
+    set_message("No browser opener found for " + url);
+  }
+  needs_redraw = true;
+  return true;
+}
+
+void Editor::update_terminal_link_hover(int x, int y)
+{
+  // The floating box is painted over the dock and takes the pointer first, the
+  // same order the click routing uses; the view under the pointer is the one
+  // that answers, so a dock link still underlines with the box open.
+  auto holds = [](const TerminalView &view, int px, int py) {
+    return view.term && px >= view.x && px < view.x + view.w && py >= view.y
+           && py < view.y + view.h;
+  };
+
+  TerminalView view;
+  if (show_floating_terminal && floating_terminal)
+  {
+    const TerminalView box = floating_terminal_view();
+    if (holds(box, x, y))
+    {
+      view = box;
+    }
+  }
+  if (!view.term && show_integrated_terminal && get_integrated_terminal())
+  {
+    const TerminalView dock = docked_terminal_view();
+    if (holds(dock, x, y))
+    {
+      view = dock;
+    }
+  }
+
+  int start_col = 0;
+  int end_col = 0;
+  const std::string url =
+      view.term ? terminal_link_at(view, x, y, start_col, end_col) : std::string();
+  const bool on_link = !url.empty();
+  const int row = on_link ? view.term->get_top_visible_row(view.h) + (y - view.y) : -1;
+
+  // Only a real change repaints: a run of Ctrl+motions over one link is one
+  // underline, not a frame each.
+  if (on_link == terminal_link_hover_active && view.floating == terminal_link_hover_in_float
+      && row == terminal_link_hover_row && start_col == terminal_link_hover_start
+      && end_col == terminal_link_hover_end)
+  {
+    return;
+  }
+  terminal_link_hover_active = on_link;
+  terminal_link_hover_in_float = view.floating;
+  terminal_link_hover_row = row;
+  terminal_link_hover_start = start_col;
+  terminal_link_hover_end = end_col;
+  needs_redraw = true;
+}
+
 TerminalView Editor::terminal_selection_view()
 {
   return terminal_sel_in_float ? floating_terminal_view() : docked_terminal_view();
@@ -543,7 +671,8 @@ bool Editor::handle_integrated_terminal_mouse(int x,
                                               int y,
                                               bool is_click,
                                               bool is_motion,
-                                              bool is_click_release)
+                                              bool is_click_release,
+                                              bool ctrl)
 {
   if (!show_integrated_terminal || integrated_terminals.empty())
   {
@@ -642,6 +771,15 @@ bool Editor::handle_integrated_terminal_mouse(int x,
     show_integrated_terminal = true;
     activate_integrated_terminal(current_integrated_terminal, true);
     needs_redraw = true;
+    return true;
+  }
+
+  // Ctrl+click on a link in the shell's own output opens it, the way it does
+  // in the editor (and in VSCode's terminal). The click still lands the focus
+  // on the shell; it only skips the selection a plain click begins.
+  if (is_click && ctrl && open_terminal_link_at(docked_terminal_view(), x, y))
+  {
+    activate_integrated_terminal(current_integrated_terminal, true);
     return true;
   }
 
@@ -1043,6 +1181,9 @@ void Editor::render_terminal_rows(const TerminalView &view, int term_fg, int ter
   const bool sel = terminal_sel_active && terminal_sel_in_float == view.floating
                    && sel_end_row >= 0;
   const bool full_window = (int)rows.size() >= content_h;
+  // The Ctrl+hover underline belongs to the view it was armed in.
+  const bool link_hover =
+      terminal_link_hover_active && terminal_link_hover_in_float == view.floating;
   for (int i = 0; i < content_h; i++)
   {
     int idx = i;
@@ -1095,7 +1236,10 @@ void Editor::render_terminal_rows(const TerminalView &view, int term_fg, int ter
           int fg = colors.fg;
           bool sel_cell = row_sel && j >= sel_left && j < sel_right;
           int bg = sel_cell ? theme.bg_selection : colors.bg;
-          ui->draw_text(sx, content_y + i, styled[j].ch, fg, bg);
+          bool link_cell = link_hover && full_row == terminal_link_hover_row
+                           && j >= terminal_link_hover_start && j < terminal_link_hover_end;
+          ui->draw_text(sx, content_y + i, styled[j].ch, fg, bg, false, false,
+                        link_cell ? 1 : 0, link_cell ? theme.fg_function : -1);
           sx++;
         }
         drew_styled = true;

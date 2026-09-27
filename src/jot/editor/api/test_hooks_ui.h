@@ -45,10 +45,31 @@ public:
     last_left_click_pos = {0, 0};
   }
   // Terminal mouse-selection hooks for headless tests: feeds clicks,
-  // motions and releases through the real private handlers.
-  bool terminal_mouse_for_test(int x, int y, bool click, bool motion, bool release)
+  // motions and releases through the real private handlers. `ctrl` is the
+  // modifier state the dispatcher passes through: a Ctrl+click on a link
+  // opens it instead of starting a selection.
+  bool terminal_mouse_for_test(
+      int x, int y, bool click, bool motion, bool release, bool ctrl = false)
   {
-    return handle_integrated_terminal_mouse(x, y, click, motion, release);
+    return handle_integrated_terminal_mouse(x, y, click, motion, release, ctrl);
+  }
+  // The focused docked terminal, for tests that feed it output or read rows.
+  IntegratedTerminal *terminal_for_test()
+  {
+    return get_integrated_terminal();
+  }
+  // The armed terminal link underline, if any: a full-space row and half-open
+  // cell columns, the target the Ctrl+click would open.
+  bool terminal_link_hover_span_for_test(int &row, int &start, int &end) const
+  {
+    if (!terminal_link_hover_active)
+    {
+      return false;
+    }
+    row = terminal_link_hover_row;
+    start = terminal_link_hover_start;
+    end = terminal_link_hover_end;
+    return true;
   }
   bool terminal_sel_active_for_test() const
   {

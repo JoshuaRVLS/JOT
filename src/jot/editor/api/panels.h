@@ -50,6 +50,18 @@ private:
   // from: the docked panel's content rows, or the floating box.
   TerminalView docked_terminal_view();
   TerminalView floating_terminal_view() const;
+  // The URL under a screen cell in a terminal view, detected with the editor's
+  // own rules (src/tools/url_span.h) on the row's text; the out-params take
+  // the half-open cell range it covers ("" when the cell is not on a link).
+  std::string terminal_link_at(
+      const TerminalView &view, int x, int y, int &start_col, int &end_col);
+  // Ctrl+click on a link: opens it and reports it, exactly as the editor path
+  // does. Returns true when a link was there (the click is the link's).
+  bool open_terminal_link_at(const TerminalView &view, int x, int y);
+  // Ctrl+hover over a terminal link, driven from the mouse dispatcher for
+  // every event: arms the underline over the URL the click would open, and
+  // drops it when the pointer leaves the link, the view or Ctrl.
+  void update_terminal_link_hover(int x, int y);
   void load_terminal_tasks();
   std::vector<std::string> list_terminal_task_names();
   void show_terminal_tasks();

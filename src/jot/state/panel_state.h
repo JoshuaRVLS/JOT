@@ -38,6 +38,15 @@ struct PanelState
   int terminal_sel_anchor_col = 0;
   int terminal_sel_cur_row = 0;
   int terminal_sel_cur_col = 0;
+  // Ctrl+hover over a link in a terminal: the underline that advertises what
+  // the click would open, as a full-space row and half-open cell columns (the
+  // same coordinates the selection anchors use). in_float says which view owns
+  // it; only that view paints it.
+  bool terminal_link_hover_active = false;
+  bool terminal_link_hover_in_float = false;
+  int terminal_link_hover_row = -1;
+  int terminal_link_hover_start = 0;
+  int terminal_link_hover_end = 0;
   // Dragging the terminal panel's top border resizes its height live.
   bool terminal_resize_dragging = false;
   int terminal_resize_start_y = 0;

@@ -230,7 +230,7 @@ void Editor::begin_floating_terminal_selection(int x, int y)
 }
 
 bool Editor::handle_floating_terminal_mouse(
-    int x, int y, bool is_click, bool is_motion, bool is_click_release)
+    int x, int y, bool is_click, bool is_motion, bool is_click_release, bool ctrl)
 {
   if (!show_floating_terminal || !floating_terminal)
   {
@@ -266,6 +266,14 @@ bool Editor::handle_floating_terminal_mouse(
       return true;
     }
     return false;
+  }
+
+  // Ctrl+click on a link in the box's shell opens it, like everywhere else;
+  // the box stays up and the click is the link's, not a selection's.
+  if (is_click && ctrl && open_terminal_link_at(floating_terminal_view(), x, y))
+  {
+    floating_terminal->set_focused(true);
+    return true;
   }
 
   if (is_click)

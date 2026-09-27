@@ -391,6 +391,19 @@ void Editor::handle_mouse(void *event_ptr)
     {
       clear_debugger_breakpoint_hover();
     }
+    // Ctrl+hover over a link in a terminal is the terminal views' own
+    // affordance, driven here for every event so leaving the link, leaving the
+    // panel or releasing Ctrl drops the underline. A click keeps it: it
+    // advertises what the click itself is opening.
+    if (event->ctrl && (is_click || is_click_release || is_motion))
+    {
+      update_terminal_link_hover(event->x, event->y);
+    }
+    else if (terminal_link_hover_active)
+    {
+      terminal_link_hover_active = false;
+      needs_redraw = true;
+    }
   }
 
   // A save / rename / quit prompt is a modal panel over the dimmed frame: while
@@ -748,7 +761,7 @@ void Editor::handle_mouse(void *event_ptr)
       && (is_motion || is_click_release || is_click || is_right_click || is_middle_click))
   {
     if (handle_integrated_terminal_mouse(
-            event->x, event->y, is_click, is_motion, is_click_release))
+            event->x, event->y, is_click, is_motion, is_click_release, event->ctrl))
     {
       return;
     }
@@ -763,7 +776,7 @@ void Editor::handle_mouse(void *event_ptr)
   {
     if ((is_click || is_motion || is_click_release)
         && handle_integrated_terminal_mouse(
-            event->x, event->y, is_click, is_motion, is_click_release))
+            event->x, event->y, is_click, is_motion, is_click_release, event->ctrl))
     {
       return;
     }
@@ -862,7 +875,7 @@ void Editor::handle_mouse(void *event_ptr)
   // dismisses it.
   if ((is_click || is_motion || is_click_release)
       && handle_floating_terminal_mouse(
-          event->x, event->y, is_click, is_motion, is_click_release))
+          event->x, event->y, is_click, is_motion, is_click_release, event->ctrl))
   {
     return;
   }
@@ -880,7 +893,7 @@ void Editor::handle_mouse(void *event_ptr)
   // cell, closing two terminals from one click.
   if ((is_click || is_motion || is_click_release)
       && handle_integrated_terminal_mouse(
-          event->x, event->y, is_click, is_motion, is_click_release))
+          event->x, event->y, is_click, is_motion, is_click_release, event->ctrl))
   {
     return;
   }
