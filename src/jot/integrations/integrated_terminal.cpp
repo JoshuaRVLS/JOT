@@ -26,6 +26,28 @@ int shell_tab_label_cells(int panel_w)
 {
   return std::max(12, panel_w / 4);
 }
+
+// The selected run in reading order. Each end carries its own row's column, so
+// a drag kept inside a single row still has two distinct ends.
+struct TerminalSelectionRange
+{
+  int start_row = 0;
+  int start_col = 0;
+  int end_row = 0;
+  int end_col = 0;
+};
+
+TerminalSelectionRange
+terminal_selection_range(int anchor_row, int anchor_col, int cur_row, int cur_col)
+{
+  const bool forward = anchor_row < cur_row || (anchor_row == cur_row && anchor_col <= cur_col);
+  TerminalSelectionRange range;
+  range.start_row = forward ? anchor_row : cur_row;
+  range.start_col = forward ? anchor_col : cur_col;
+  range.end_row = forward ? cur_row : anchor_row;
+  range.end_col = forward ? cur_col : anchor_col;
+  return range;
+}
 } // namespace
 
 std::string Editor::integrated_terminal_tab_label(int index) const
@@ -610,30 +632,22 @@ std::string Editor::terminal_selection_text()
   {
     return "";
   }
-  int start_row = std::min(terminal_sel_anchor_row, terminal_sel_cur_row);
-  int end_row = std::max(terminal_sel_anchor_row, terminal_sel_cur_row);
-  int start_col =
-      (start_row == terminal_sel_anchor_row) ? terminal_sel_anchor_col : terminal_sel_cur_col;
-  int end_col =
-      (end_row == terminal_sel_anchor_row) ? terminal_sel_anchor_col : terminal_sel_cur_col;
-  if (start_col > end_col)
-  {
-    std::swap(start_col, end_col);
-  }
+  const TerminalSelectionRange range = terminal_selection_range(
+      terminal_sel_anchor_row, terminal_sel_anchor_col, terminal_sel_cur_row, terminal_sel_cur_col);
 
   std::string out;
-  for (int r = start_row; r <= end_row; r++)
+  for (int r = range.start_row; r <= range.end_row; r++)
   {
     std::string line = term->get_row_text_at(r);
     int line_len = (int)line.size();
-    int from = std::clamp(start_col, 0, line_len);
-    int to = (r == end_row) ? std::clamp(end_col, 0, line_len) : line_len;
+    int from = std::clamp(range.start_col, 0, line_len);
+    int to = (r == range.end_row) ? std::clamp(range.end_col, 0, line_len) : line_len;
     if (to < from)
     {
       to = from;
     }
     out += line.substr(from, (size_t)(to - from));
-    if (r != end_row)
+    if (r != range.end_row)
     {
       out += "\n";
     }
@@ -785,10 +799,8 @@ bool Editor::handle_integrated_terminal_mouse(int x,
 
   if (is_click)
   {
-    // Content area: a primary click starts a mouse selection (drag to
-    // extend, release copies it) and refocuses / restarts the terminal.
-    begin_terminal_selection(x, y);
-
+    // Content area: a primary click refocuses / restarts the terminal, then
+    // starts a mouse selection (drag to extend, release copies it).
     show_integrated_terminal = true;
     activate_integrated_terminal(current_integrated_terminal, true);
     IntegratedTerminal *term = get_integrated_terminal();
@@ -813,6 +825,9 @@ bool Editor::handle_integrated_terminal_mouse(int x,
     {
       term->poll_output();
     }
+    // Anchored after the restart and the poll, which move the rows the panel
+    // shows: the anchor must name the row under the pointer in the next frame.
+    begin_terminal_selection(x, y);
     needs_redraw = true;
     return true;
   }
@@ -1166,20 +1181,12 @@ void Editor::render_terminal_rows(const TerminalView &view, int term_fg, int ter
   // row full_base + i when the window is full (synthetic placeholder rows
   // for a dead terminal map back to 0-based instead).
   const int full_base = term->get_top_visible_row(content_h);
-  const int sel_start_row = std::min(terminal_sel_anchor_row, terminal_sel_cur_row);
-  const int sel_end_row = std::max(terminal_sel_anchor_row, terminal_sel_cur_row);
-  int sel_start_col =
-      (sel_start_row == terminal_sel_anchor_row) ? terminal_sel_anchor_col : terminal_sel_cur_col;
-  int sel_end_col =
-      (sel_end_row == terminal_sel_anchor_row) ? terminal_sel_anchor_col : terminal_sel_cur_col;
-  if (sel_start_col > sel_end_col)
-  {
-    std::swap(sel_start_col, sel_end_col);
-  }
+  const TerminalSelectionRange sel = terminal_selection_range(
+      terminal_sel_anchor_row, terminal_sel_anchor_col, terminal_sel_cur_row, terminal_sel_cur_col);
   // Only the view that began the drag paints the band: the anchors are shared
   // state, so a selection made in the floating box must not tint the dock.
-  const bool sel = terminal_sel_active && terminal_sel_in_float == view.floating
-                   && sel_end_row >= 0;
+  const bool selected =
+      terminal_sel_active && terminal_sel_in_float == view.floating && sel.end_row >= 0;
   const bool full_window = (int)rows.size() >= content_h;
   // The Ctrl+hover underline belongs to the view it was armed in.
   const bool link_hover =
@@ -1201,18 +1208,18 @@ void Editor::render_terminal_rows(const TerminalView &view, int term_fg, int ter
     // Selection window on this row: sel_left inclusive, sel_right
     // exclusive; unbounded in between the boundary rows.
     int full_row = full_window ? full_base + i : i;
-    bool row_sel = sel && full_row >= sel_start_row && full_row <= sel_end_row;
+    bool row_sel = selected && full_row >= sel.start_row && full_row <= sel.end_row;
     int sel_left = 0;
     int sel_right = INT_MAX;
     if (row_sel)
     {
-      if (full_row == sel_start_row)
+      if (full_row == sel.start_row)
       {
-        sel_left = sel_start_col;
+        sel_left = sel.start_col;
       }
-      if (full_row == sel_end_row)
+      if (full_row == sel.end_row)
       {
-        sel_right = sel_end_col;
+        sel_right = sel.end_col;
       }
       if (sel_right < sel_left)
       {

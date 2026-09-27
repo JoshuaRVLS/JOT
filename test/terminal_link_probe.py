@@ -10,20 +10,21 @@ The editor looks the platform opener up on PATH (`xdg-open` here) and runs it,
 so the probe puts a stub first on PATH that appends the URL it was handed to a
 file, and reads back what it got -- the production path, not a seam.
 
-The mouse clicks are drags (press, move over a few cells a row down, button
-still down): a terminal selection is painted as a band, so "this click
-selected" is readable off the grid. A one-cell press would leave an empty
-selection and nothing to see, and the status line's message channel is owned by
-the Lua UI in a real session, so neither is used as the observable.
+The mouse clicks are drags (press, move over a few cells of one row, release):
+a terminal selection is painted as a band and the release copies the run, so
+"this click selected" is read off the grid and "the copy carried it" off a stub
+`xclip` first on PATH (the production writer on this platform, like the
+opener). The status line's message channel is owned by the Lua UI in a real
+session, so it is not used as the observable.
 
 Four scenes, each its own session (a scene must not inherit another's shell):
   * click: Ctrl+click on the URL opens exactly it, with no selection band;
   * hover: Ctrl+motion over the URL underlines exactly its cells, and no
     opener runs;
-  * off-link: Ctrl+click on the word beside the URL still selects, and nothing
-    is opened;
+  * off-link: Ctrl+click on the word beside the URL still selects a run of
+    that one row and copies exactly it, and nothing is opened;
   * plain: a click without Ctrl selects the URL instead of opening it, so Ctrl
-    is what opens it.
+    is what opens it, and the copy carries the URL's run again.
 
 The first scene's grid fixes the cells the other scenes click and the band's
 absence is compared against: the panel's rows depend on the shell's prompt, so
@@ -77,13 +78,18 @@ def write_workspace() -> None:
         fh.write(LINE + "\n")
     shutil.rmtree(BIN, ignore_errors=True)
     os.makedirs(BIN)
-    # The stub the editor will find first on PATH. It records what it was
-    # handed and exits; the editor backgrounds it, so the record may land a
+    # The stubs the editor will find first on PATH. Each records what it was
+    # handed and exits; the editor backgrounds them, so the records may land a
     # moment after the click.
     stub = os.path.join(BIN, "xdg-open")
     with open(stub, "w") as fh:
         fh.write('#!/bin/sh\nprintf \'%s\\n\' "$1" >> "$JOT_LINK_RECORD"\n')
     os.chmod(stub, os.stat(stub).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    # The clipboard writer: its stdin is the copied run.
+    clip = os.path.join(BIN, "xclip")
+    with open(clip, "w") as fh:
+        fh.write('#!/bin/sh\ncat >> "$JOT_CLIP_RECORD"\nprintf \'\\n\' >> "$JOT_CLIP_RECORD"\n')
+    os.chmod(clip, os.stat(clip).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
 def press(col: int, row: int, mods: int = 0) -> bytes:
@@ -100,15 +106,14 @@ def click(col: int, row: int, mods: int = 0) -> bytes:
 
 
 def drag(col: int, row: int, cells: int, mods: int = 0) -> bytes:
-    """Press at (col, row) and walk right `cells` times one row down.
+    """Press at (col, row) and walk right `cells` times along that same row.
 
-    The walk ends a row below because a selection kept within one row paints
-    no band; the button is not released, so the band is read while the drag is
-    still in flight and the scene does not wait on the clipboard write.
+    The button stays down, so the band is read while the drag is in flight; the
+    scene sends `release` and reads the clipboard afterwards.
     """
     out = press(col, row, mods)
     for step in range(1, cells + 1):
-        out += press(col + step, row + 1, mods | MOTION)
+        out += press(col + step, row, mods | MOTION)
     return out
 
 
@@ -139,8 +144,15 @@ def wait_record(path: str):
     return phase
 
 
-def run(binary: str, cfg: str, record: str, extra=None):
-    env = {"PATH": BIN + ":/usr/bin:/bin", "JOT_LINK_RECORD": record}
+def run(binary: str, cfg: str, record: str, clip: str, extra=None):
+    # No Wayland display: the editor's clipboard writer would take the wl-copy
+    # branch and reach the host's clipboard instead of the xclip stub.
+    env = {
+        "PATH": BIN + ":/usr/bin:/bin",
+        "JOT_LINK_RECORD": record,
+        "JOT_CLIP_RECORD": clip,
+        "WAYLAND_DISPLAY": "",
+    }
     phases = [
         (0.3, lambda s: any("terminal_link_probe" in row for row in rows(s))),
         (0.6, PALETTE),
@@ -170,8 +182,30 @@ def recorded(record: str, want: int, timeout: float = 1.5):
     return lines
 
 
+def clip_recorded(record: str, timeout: float = 1.5):
+    """The clipboard texts the xclip stub wrote, once there is one."""
+    deadline = time.time() + timeout
+    lines = []
+    while time.time() < deadline:
+        lines = []
+        if os.path.exists(record):
+            with open(record) as fh:
+                lines = [line.rstrip("\n") for line in fh if line.strip()]
+        if lines:
+            return lines
+        time.sleep(0.05)
+    return lines
+
+
 def fresh_record(name: str) -> str:
     path = "/tmp/jot_terminal_link_probe_urls_" + name
+    if os.path.exists(path):
+        os.remove(path)
+    return path
+
+
+def fresh_clip(name: str) -> str:
+    path = "/tmp/jot_terminal_link_probe_clip_" + name
     if os.path.exists(path):
         os.remove(path)
     return path
@@ -197,7 +231,8 @@ def main() -> int:
 
     # The mapping session: the shell's URL row, where its cells are, and what
     # they look like with no selection on them.
-    base = run(binary, "/tmp/jot_terminal_link_probe_cfg_base", fresh_record("base"))
+    base = run(binary, "/tmp/jot_terminal_link_probe_cfg_base", fresh_record("base"),
+               fresh_clip("base"))
     if dump:
         print(base.text())
         print("-" * 70)
@@ -211,12 +246,18 @@ def main() -> int:
     mid_col = url_col + 5            # a cell inside the URL
     word_col = url_col - 3           # the middle of the "see" before it
     base_url_bg = [base.bg[row][c] for c in range(url_col, url_end)]
+    base_line = rows(base)[row]
     print("URL row: %s at cols %d..%d on row %d" % (URL, url_col, url_end - 1, row))
+
+    def band_of(screen) -> list[int]:
+        """The screen columns of `row` the scene's band painted."""
+        return [c for c in range(1, COLS) if screen.bg[row][c] != base.bg[row][c]]
 
     # Scene 1: Ctrl+click opens exactly the URL, and paints no selection band
     # over it (the click was the link's, not a position in the output).
     record = fresh_record("click")
-    screen = run(binary, "/tmp/jot_terminal_link_probe_cfg_click", record,
+    clip = fresh_clip("click")
+    screen = run(binary, "/tmp/jot_terminal_link_probe_cfg_click", record, clip,
                  [(0.3, click(mid_col, row, CTRL)), (0.5, wait_record(record))])
     if dump:
         print(screen.text())
@@ -233,7 +274,7 @@ def main() -> int:
 
     # Scene 2: Ctrl+hover underlines exactly the URL cells, and opens nothing.
     record = fresh_record("hover")
-    screen = run(binary, "/tmp/jot_terminal_link_probe_cfg_hover", record,
+    screen = run(binary, "/tmp/jot_terminal_link_probe_cfg_hover", record, fresh_clip("hover"),
                  [(0.3, ctrl_motion(mid_col, row))])
     if dump:
         print(screen.text())
@@ -245,35 +286,54 @@ def main() -> int:
     if recorded(record, 1):
         failures.append("ctrl+hover: a hover must not open anything")
 
-    # Scene 3: off the link, Ctrl+click is still a selection.
+    # Scene 3: off the link, Ctrl+click is still a selection: the drag stays
+    # inside the word's row, the band covers exactly that row's run, and the
+    # release copies exactly it.
     record = fresh_record("offlink")
-    screen = run(binary, "/tmp/jot_terminal_link_probe_cfg_offlink", record,
-                 [(0.3, drag(word_col, row, 2, CTRL))])
+    clip = fresh_clip("offlink")
+    screen = run(binary, "/tmp/jot_terminal_link_probe_cfg_offlink", record, clip,
+                 [(0.3, drag(word_col, row, 2, CTRL)),
+                  (0.3, release(word_col + 2, row, CTRL)),
+                  (0.6, wait_record(clip))])
     if dump:
         print(screen.text())
         print("-" * 70)
-    band_starts = [c for c in range(1, COLS) if screen.bg[row][c] != base.bg[row][c]]
-    print("ctrl+off:     band starts at col %s (want %d), opener got %s"
-          % (band_starts[0] if band_starts else "(nowhere)", word_col, recorded(record, 1)))
-    if not band_starts or band_starts[0] != word_col:
-        failures.append("ctrl+off: the click off the link did not select from its cell")
+    run_band = band_of(screen)
+    want_band = list(range(word_col, word_col + 2))
+    want_clip = base_line[word_col:word_col + 2]
+    clips = clip_recorded(clip)
+    print("ctrl+off:     band %s (want %s), opener got %s, clipboard %r (want %r)"
+          % (run_band, want_band, recorded(record, 1), clips, want_clip))
+    if run_band != want_band:
+        failures.append("ctrl+off: the one-row drag painted %r, not %r"
+                        % (run_band, want_band))
+    if want_clip not in clips:
+        failures.append("ctrl+off: the release copied %r, not %r" % (clips, want_clip))
     if recorded(record, 1):
         failures.append("ctrl+off: it opened something")
 
-    # Scene 4: no Ctrl, the URL is text like any other: it selects, not opens.
+    # Scene 4: no Ctrl, the URL is text like any other: it selects and copies,
+    # not opens.
     record = fresh_record("plain")
-    screen = run(binary, "/tmp/jot_terminal_link_probe_cfg_plain", record,
-                 [(0.3, drag(mid_col, row, 2))])
+    clip = fresh_clip("plain")
+    screen = run(binary, "/tmp/jot_terminal_link_probe_cfg_plain", record, clip,
+                 [(0.3, drag(mid_col, row, 2)),
+                  (0.3, release(mid_col + 2, row)),
+                  (0.6, wait_record(clip))])
     if dump:
         print(screen.text())
         print("-" * 70)
-    print("plain click:  band starts at col %s (want %d), opener got %s"
-          % (mid_col if screen.bg[row][mid_col] != base.bg[row][mid_col] else "(nowhere)",
-             mid_col, recorded(record, 1)))
-    if screen.bg[row][mid_col] == base.bg[row][mid_col]:
-        failures.append("plain click: the URL was not selected like text")
-    if screen.bg[row][url_col] != base_url_bg[0]:
-        failures.append("plain click: the band starts before the click, not at it")
+    url_run = band_of(screen)
+    want_band = list(range(mid_col, mid_col + 2))
+    want_clip = base_line[mid_col:mid_col + 2]
+    clips = clip_recorded(clip)
+    print("plain click:  band %s (want %s), opener got %s, clipboard %r (want %r)"
+          % (url_run, want_band, recorded(record, 1), clips, want_clip))
+    if url_run != want_band:
+        failures.append("plain click: the one-row drag painted %r, not %r"
+                        % (url_run, want_band))
+    if want_clip not in clips:
+        failures.append("plain click: the release copied %r, not %r" % (clips, want_clip))
     if recorded(record, 1):
         failures.append("plain click: it opened without Ctrl")
 

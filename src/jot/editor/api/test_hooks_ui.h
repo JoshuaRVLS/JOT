@@ -95,6 +95,11 @@ public:
   {
     return terminal_sel_cur_col;
   }
+  // The selected run, exactly as a release hands it to the clipboard.
+  std::string terminal_selection_text_for_test()
+  {
+    return terminal_selection_text();
+  }
   // Which view owns the live selection: the anchors are shared between the
   // docked panel and the floating box.
   bool terminal_sel_in_float_for_test() const

@@ -278,13 +278,15 @@ bool Editor::handle_floating_terminal_mouse(
 
   if (is_click)
   {
-    begin_floating_terminal_selection(x, y);
     if (!floating_terminal->is_active() && floating_terminal->open_shell())
     {
       watch_integrated_terminal_fd(floating_terminal.get());
     }
     floating_terminal->poll_output();
     floating_terminal->set_focused(true);
+    // Anchored after the restart and the poll, which move the rows the box
+    // shows: the anchor must name the row under the pointer in the next frame.
+    begin_floating_terminal_selection(x, y);
     needs_redraw = true;
     return true;
   }

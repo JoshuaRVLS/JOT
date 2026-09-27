@@ -3,8 +3,10 @@
 // test accessors (no shell is spawned), and the panel rect + drag math is
 // exercised against a real UI instance.
 #include "editor.h"
+#include "tools/terminal/integrated.h"
 #include <catch2/catch_test_macros.hpp>
 #include <cstdlib>
+#include <string>
 
 namespace
 {
@@ -185,6 +187,58 @@ TEST_CASE("Terminal mouse selection: click starts, drag extends, release copies"
   e.clear_terminal_selection();
   REQUIRE_FALSE(e.terminal_sel_active_for_test());
   REQUIRE_FALSE(e.terminal_sel_dragging_for_test());
+}
+
+TEST_CASE("A terminal drag kept inside one row paints and copies that run", "[jot]")
+{
+  Editor &e = probe_editor();
+  const Theme &th = e.theme_for_test();
+  e.set_home_menu_visible(false);
+  e.set_terminal_state_for_test(true, false, 12);
+  e.add_terminal_for_test();
+  e.render_for_test(); // sizes the vterm to the panel's own rows
+  IntegratedTerminal *term = e.terminal_for_test();
+  REQUIRE(term != nullptr);
+  term->feed_output_for_test("copy this run");
+  const int content_y = e.bottom_panel_content_y_for_test();
+  const int content_h = e.bottom_panel_content_h_for_test();
+
+  // The output row, as displayed (the panel shows the vterm's last rows, so
+  // its top row is not always the vterm's own row 0).
+  int text_row = -1;
+  const int top = term->get_top_visible_row(content_h);
+  for (int i = 0; i < content_h; i++)
+  {
+    if (term->get_row_text_at(top + i).find("copy this run") != std::string::npos)
+    {
+      text_row = i;
+      break;
+    }
+  }
+  REQUIRE(text_row >= 0);
+  const int row_y = content_y + text_row;
+
+  // Press on column 2 of that row and drag to column 6 of the same row: both
+  // the band and the copy are the run between the two columns.
+  REQUIRE(e.terminal_mouse_for_test(1 + 2, row_y, true, false, false));
+  REQUIRE(term->get_row_text_at(e.terminal_sel_anchor_row_for_test()) == "copy this run");
+  REQUIRE(e.terminal_mouse_for_test(1 + 6, row_y, false, true, false));
+  REQUIRE(e.terminal_sel_anchor_col_for_test() == 2);
+  REQUIRE(e.terminal_sel_cur_col_for_test() == 6);
+  REQUIRE(e.terminal_sel_anchor_row_for_test() == e.terminal_sel_cur_row_for_test());
+  REQUIRE(e.terminal_selection_text_for_test() == "py t");
+
+  e.render_for_test();
+  UI *ui = e.ui_for_test();
+  REQUIRE(ui->cell_at(1 + 2, row_y)->bg == th.bg_selection);
+  REQUIRE(ui->cell_at(1 + 5, row_y)->bg == th.bg_selection);
+  REQUIRE(ui->cell_at(1 + 1, row_y)->bg != th.bg_selection);
+  REQUIRE(ui->cell_at(1 + 6, row_y)->bg != th.bg_selection);
+
+  REQUIRE(e.terminal_mouse_for_test(1 + 6, row_y, false, false, true));
+  REQUIRE_FALSE(e.terminal_sel_dragging_for_test());
+  REQUIRE(e.terminal_sel_active_for_test());
+  REQUIRE(e.message_for_test() == "Copied 4 chars from terminal");
 }
 
 TEST_CASE("Terminal selection clears when the panel closes", "[jot]")
