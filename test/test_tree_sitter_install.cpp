@@ -1,10 +1,42 @@
 #include "tree_sitter/install.h"
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstdlib>
 #include <string>
 
 namespace
 {
+  // Saves and restores an environment variable, so a test that forces a
+  // platform or a toolchain never leaks it into the next one.
+  struct EnvGuard
+  {
+    explicit EnvGuard(const char *name) : name_(name)
+    {
+      const char *value = std::getenv(name);
+      had_ = value != nullptr;
+      if (had_)
+      {
+        old_ = value;
+      }
+    }
+    ~EnvGuard()
+    {
+      if (had_)
+      {
+        setenv(name_.c_str(), old_.c_str(), 1);
+      }
+      else
+      {
+        unsetenv(name_.c_str());
+      }
+    }
+    EnvGuard(const EnvGuard &) = delete;
+    EnvGuard &operator=(const EnvGuard &) = delete;
+    std::string name_;
+    std::string old_;
+    bool had_ = false;
+  };
+
   void register_install_metadata()
   {
     for (const auto &name : {"cpp", "javascript", "typescript", "tsx", "zig"})
@@ -36,11 +68,11 @@ TEST_CASE("Tree Sitter Install Language Validation", "[jot]")
 TEST_CASE("Tree Sitter Install Command Mapping", "[jot]")
 {
   register_install_metadata();
+  // Which script gets generated follows the installer's platform, not the
+  // host, so both renderers are covered from anywhere.
+  EnvGuard platform("JOT_INSTALL_PLATFORM");
+  setenv("JOT_INSTALL_PLATFORM", "linux", 1);
   auto cpp = TreeSitterInstall::command_for_language("cpp");
-#ifdef _WIN32
-  REQUIRE_FALSE(cpp.supported);
-  REQUIRE(cpp.message.find("not implemented on Windows") != std::string::npos);
-#else
   REQUIRE(cpp.supported);
   REQUIRE(cpp.language == "cpp");
   REQUIRE(cpp.command.find("github.com/tree-sitter/tree-sitter-cpp") != std::string::npos);
@@ -103,5 +135,68 @@ TEST_CASE("Tree Sitter Install Command Mapping", "[jot]")
   auto bad = TreeSitterInstall::command_for_language("unknown");
   REQUIRE_FALSE(bad.supported);
   REQUIRE(bad.message.find("Unsupported Tree-sitter language") != std::string::npos);
-#endif
+}
+
+TEST_CASE("Tree Sitter Install Renders A cmd.exe Build On Windows", "[jot]")
+{
+  register_install_metadata();
+  EnvGuard platform("JOT_INSTALL_PLATFORM");
+  EnvGuard local_app_data("LOCALAPPDATA");
+  EnvGuard app_data("APPDATA");
+  EnvGuard user_profile("USERPROFILE");
+  EnvGuard ts_prefix("JOT_TREESITTER_PREFIX");
+  EnvGuard temp("TEMP");
+  EnvGuard cxx("CXX");
+  setenv("JOT_INSTALL_PLATFORM", "win", 1);
+  setenv("LOCALAPPDATA", "/tmp/jot-ts-win", 1);
+  setenv("TEMP", "/tmp/jot-ts-win", 1);
+  unsetenv("JOT_TREESITTER_PREFIX");
+
+  auto cpp = TreeSitterInstall::command_for_language("cpp");
+  REQUIRE(cpp.supported);
+  REQUIRE(cpp.language == "cpp");
+  REQUIRE(cpp.command.find("github.com/tree-sitter/tree-sitter-cpp") != std::string::npos);
+  REQUIRE(cpp.command.find("git clone --depth 1") != std::string::npos);
+  // The parser lands where the runtime searches for it, as a DLL (the name
+  // list the tree-sitter registry offers on Windows).
+  REQUIRE(cpp.command.find("libtree-sitter-cpp.dll") != std::string::npos);
+  REQUIRE(cpp.command.find("-Wl,--export-all-symbols") != std::string::npos);
+  REQUIRE(cpp.command.find("-static-libstdc++") != std::string::npos);
+  // parser.c is C99: the C driver compiles it, in both build variants.
+  REQUIRE(cpp.command.find("-x c ") != std::string::npos);
+  REQUIRE(cpp.command.find("gcc") != std::string::npos);
+  // Markers, each on its own short line: the command is echoed into the
+  // terminal it runs in, and a wrapped row must not start with a marker.
+  REQUIRE(cpp.command.find("echo [jot:treesitter] start cpp") != std::string::npos);
+  REQUIRE(cpp.command.find("echo [jot:treesitter] prefix ") != std::string::npos);
+  REQUIRE(cpp.command.find("echo [jot:treesitter] clone cpp") != std::string::npos);
+  REQUIRE(cpp.command.find("echo [jot:treesitter] build cpp") != std::string::npos);
+  REQUIRE(cpp.command.find("echo [jot:treesitter] query cpp") != std::string::npos);
+  REQUIRE(cpp.command.find("echo [jot:treesitter] success cpp") != std::string::npos);
+  REQUIRE(cpp.command.find("echo [jot:treesitter] failed cpp exit=1") != std::string::npos);
+  REQUIRE(cpp.command.find("treesitter") != std::string::npos);
+  // Nothing POSIX may survive: no shell, no uname, no mktemp, no find.
+  REQUIRE(cpp.command.find("$HOME") == std::string::npos);
+  REQUIRE(cpp.command.find("uname") == std::string::npos);
+  REQUIRE(cpp.command.find("mktemp") == std::string::npos);
+  REQUIRE(cpp.command.find("set -e") == std::string::npos);
+  REQUIRE(cpp.command.find("/bin/sh") == std::string::npos);
+
+  // The explicit prefix overrides the LOCALAPPDATA default, and CC/CXX pick the
+  // compiler when the environment names one.
+  auto custom = TreeSitterInstall::command_for_language("cpp", "/tmp/jot-ts-out");
+  REQUIRE(custom.command.find("/tmp/jot-ts-out") != std::string::npos);
+  setenv("CXX", "clang++", 1);
+  auto tooled = TreeSitterInstall::command_for_language("cpp");
+  REQUIRE(tooled.command.find("clang++") != std::string::npos);
+
+  // With no install root to write into there is nothing to generate, and the
+  // reason says so instead of producing a script that cannot work.
+  unsetenv("JOT_TREESITTER_PREFIX");
+  unsetenv("LOCALAPPDATA");
+  unsetenv("APPDATA");
+  unsetenv("USERPROFILE");
+  auto rootless = TreeSitterInstall::command_for_language("cpp");
+  REQUIRE_FALSE(rootless.supported);
+  REQUIRE(rootless.message.find("JOT_TREESITTER_PREFIX") != std::string::npos);
 }

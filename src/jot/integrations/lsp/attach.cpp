@@ -109,8 +109,11 @@ LSPClient *Editor::ensure_lsp_client_process(const std::string &server,
   {
     return nullptr;
   }
-  auto client =
-      std::make_unique<LSPClient>(server, root_path, command, library_dirs, initialization_options);
+  auto client = std::make_unique<LSPClient>(server,
+                                            root_path,
+                                            lsp_internal::launcher_argv(command),
+                                            library_dirs,
+                                            initialization_options);
   if (!client->start())
   {
     set_message("LSP start failed for " + server + ": " + client->get_last_error());

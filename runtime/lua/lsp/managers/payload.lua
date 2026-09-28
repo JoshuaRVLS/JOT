@@ -43,4 +43,24 @@ function M.install_lines(entry, dirs, platform)
   return L
 end
 
+-- Windows renderer. Nothing to link -- a Windows package copies the shipped
+-- binary into the managed bin dir, which keeps the payload tree itself
+-- read-only and makes `:lspremove` a plain delete. The shipped copy is a .exe
+-- there (clangd.exe), which the POSIX search above would never match.
+function M.install_lines_win(entry, dirs)
+  local win = dirs.win
+  local payload = entry.payload_dir
+  if not payload or payload == "" then
+    return nil
+  end
+  local lines = {}
+  for _, b in ipairs(entry.bin or {}) do
+    for _, l in ipairs(win.publish(payload, { b .. ".exe", b .. ".cmd", b .. ".bat", b },
+                                   dirs.bin_dir .. "\\" .. b)) do
+      lines[#lines + 1] = l
+    end
+  end
+  return lines
+end
+
 return M

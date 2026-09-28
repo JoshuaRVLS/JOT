@@ -3,8 +3,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
+#include <filesystem>
 #include <sstream>
 #include <unordered_map>
+
+namespace fs = std::filesystem;
 
 namespace
 {
@@ -45,6 +49,167 @@ namespace
       return "javascript";
     }
     return normalized;
+  }
+
+  // Windows quoting for cmd.exe: double quotes, doubled inside.
+  std::string win_quote(const std::string &value)
+  {
+    std::string out = "\"";
+    for (char c : value)
+    {
+      if (c == '"')
+      {
+        out += "\"\"";
+      }
+      else
+      {
+        out.push_back(c);
+      }
+    }
+    out.push_back('"');
+    return out;
+  }
+
+  std::string win_join(const std::string &dir, const std::string &leaf)
+  {
+    if (dir.empty())
+    {
+      return leaf;
+    }
+    const char last = dir.back();
+    return (last == '\\' || last == '/') ? dir + leaf : dir + "\\" + leaf;
+  }
+
+  std::string win_env(const char *name)
+  {
+    const char *value = std::getenv(name);
+    return value && *value ? std::string(value) : std::string();
+  }
+
+  // Install root for a source build. The same chain the POSIX script walks in
+  // its own shell, resolved here instead because every path in a cmd command
+  // line is expanded before the line runs: a prefix set mid-line would be read
+  // stale, so it has to be a literal by the time the script is built.
+  std::string windows_install_prefix(const std::string &override_prefix)
+  {
+    if (!override_prefix.empty())
+    {
+      return override_prefix;
+    }
+    const std::string explicit_prefix = win_env("JOT_TREESITTER_PREFIX");
+    if (!explicit_prefix.empty())
+    {
+      return explicit_prefix;
+    }
+    // LOCALAPPDATA first, which is where the runtime looks for parsers.
+    for (const char *name : {"LOCALAPPDATA", "APPDATA"})
+    {
+      const std::string base = win_env(name);
+      if (!base.empty())
+      {
+        return (fs::path(base) / "jot" / "treesitter").string();
+      }
+    }
+    const std::string home = win_env("USERPROFILE");
+    if (!home.empty())
+    {
+      return (fs::path(home) / ".local" / "share" / "jot" / "treesitter").string();
+    }
+    return std::string();
+  }
+
+  std::string windows_temp_dir(const std::string &fallback)
+  {
+    for (const char *name : {"TEMP", "TMP"})
+    {
+      const std::string value = win_env(name);
+      if (!value.empty())
+      {
+        return value;
+      }
+    }
+    return fallback;
+  }
+
+  std::string windows_tool(const char *env_name, const char *fallback)
+  {
+    const std::string value = win_env(env_name);
+    return value.empty() ? std::string(fallback) : value;
+  }
+
+  // Windows source build. The POSIX script cannot run there -- no sh, no
+  // mktemp, no uname, no find, no git-bash assumption -- so the same steps are
+  // rendered as cmd.exe lines instead. Each line is expanded when it runs, so
+  // variables are usable across lines, and the completion marker is decided by
+  // the parser DLL being on disk rather than by a chain of exit codes: that is
+  // the one signal cmd cannot get wrong.
+  std::string source_build_command_win(const TreeSitterInstallMetadata &entry,
+                                       const std::string &prefix_in)
+  {
+    const std::string prefix = windows_install_prefix(prefix_in);
+    const std::string temp = windows_temp_dir(prefix);
+    const std::string lib_stem = library_stem(entry);
+    const std::string cc = windows_tool("CC", "gcc");
+    const std::string cxx = windows_tool("CXX", "g++");
+    const std::string libdir = win_join(prefix, "parsers");
+    const std::string querydir = win_join(win_join(prefix, "queries"), entry.name);
+    const std::string work = win_join(temp, "jot-tree-sitter-" + entry.name);
+    const std::string src = entry.source_subdir.empty()
+                                ? win_join(work, "src")
+                                : win_join(win_join(work, entry.source_subdir), "src");
+    const std::string libfile = win_join(libdir, lib_stem + ".dll");
+    const std::string parser = win_join(src, "parser.c");
+    const std::string scanner_c = win_join(src, "scanner.c");
+    const std::string scanner_cc = win_join(src, "scanner.cc");
+
+    // Static runtimes: the release ships a single self-contained exe with no
+    // DLLs, so a parser DLL must not be the thing that reintroduces a
+    // libstdc++/libgcc dependency. A grammar whose scanner is C is built with
+    // the C driver, which has no C++ runtime to bring along at all.
+    const std::string cxx_flags = " -shared -o " + win_quote(libfile)
+                                  + " -Wl,--export-all-symbols -static-libgcc"
+                                    " -static-libstdc++ -I"
+                                  + win_quote(src);
+
+    std::ostringstream cmd;
+    auto line = [&cmd](const std::string &text) { cmd << text << "\n"; };
+    // All markers are printed on their own short line: the command is echoed
+    // into the integrated terminal it runs in, and a wrapped row must never
+    // start with a marker the poll loop would believe.
+    line("echo [jot:treesitter] start " + entry.name);
+    line("if not exist " + win_quote(prefix) + " mkdir " + win_quote(prefix));
+    line("echo [jot:treesitter] prefix " + prefix);
+    line("if not exist " + win_quote(libdir) + " mkdir " + win_quote(libdir));
+    line("if not exist " + win_quote(querydir) + " mkdir " + win_quote(querydir));
+    line("if exist " + win_quote(work) + " rd /s /q " + win_quote(work));
+    line("echo [jot:treesitter] clone " + entry.name);
+    line("git clone --depth 1 " + win_quote(entry.url) + " " + win_quote(work));
+    line("echo [jot:treesitter] build " + entry.name);
+    // -x forces the language per source: parser.c is C99 with designated
+    // initializers, which the C++ front end would reject.
+    line("if exist " + win_quote(scanner_cc) + " " + cxx + cxx_flags + " -x c " + win_quote(parser)
+         + " -x c++ " + win_quote(scanner_cc));
+    line("if not exist " + win_quote(scanner_cc) + " if exist " + win_quote(scanner_c) + " " + cc
+         + " -shared -o " + win_quote(libfile) + " -Wl,--export-all-symbols -I" + win_quote(src)
+         + " " + win_quote(parser) + " " + win_quote(scanner_c));
+    line("if not exist " + win_quote(scanner_cc) + " if not exist " + win_quote(scanner_c) + " "
+         + cc + " -shared -o " + win_quote(libfile) + " -Wl,--export-all-symbols -I"
+         + win_quote(src) + " " + win_quote(parser));
+    line("echo [jot:treesitter] query " + entry.name);
+    line("if exist " + win_quote(win_join(work, "queries") + "\\*.scm") + " copy /Y "
+         + win_quote(win_join(work, "queries") + "\\*.scm") + " " + win_quote(querydir + "\\")
+         + " >NUL");
+    line("if exist " + win_quote(win_join(work, "highlights.scm")) + " copy /Y "
+         + win_quote(win_join(work, "highlights.scm")) + " "
+         + win_quote(win_join(querydir, "highlights.scm")) + " >NUL");
+    line("if exist " + win_quote(work) + " rd /s /q " + win_quote(work));
+    // The library on disk is the only honest completion signal: cmd has no
+    // equivalent of `set -e`, so exit codes from the steps above are not one.
+    line("set \"_jot_ts=\"");
+    line("if exist " + win_quote(libfile) + " set \"_jot_ts=1\"");
+    line("if defined _jot_ts echo [jot:treesitter] success " + entry.name);
+    line("if not defined _jot_ts echo [jot:treesitter] failed " + entry.name + " exit=1");
+    return cmd.str();
   }
 
   std::string source_build_command(const TreeSitterInstallMetadata &entry,
@@ -201,14 +366,20 @@ namespace TreeSitterInstall
       return result;
     }
 
-#ifdef _WIN32
-    result.message = "Tree-sitter source install is not implemented on Windows; use parser DLLs";
-    return result;
-#else
     result.supported = true;
-    result.command = source_build_command(*entry, prefix);
+    const bool windows = shell_util::install_platform() == "win";
+    if (windows && windows_install_prefix(prefix).empty())
+    {
+      // Every path in the generated script is literal, so with no install root
+      // to write into there is nothing to generate.
+      result.supported = false;
+      result.message = "Tree-sitter install needs an install root: JOT_TREESITTER_PREFIX "
+                       "or LOCALAPPDATA is not set";
+      return result;
+    }
+    result.command =
+        windows ? source_build_command_win(*entry, prefix) : source_build_command(*entry, prefix);
     result.message = "Installing Tree-sitter " + result.language + "…";
     return result;
-#endif
   }
 } // namespace TreeSitterInstall

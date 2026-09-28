@@ -20,6 +20,11 @@ for _, name in ipairs({ "npm", "pypi", "golang", "cargo", "gem", "nuget",
   managers[name] = dofile(_G.jot_lsp_lua_root .. "/managers/" .. name .. ".lua")
 end
 
+-- cmd.exe step builders shared by the Windows renderers (managers/*_win).
+-- Windows has no POSIX shell, so a package that should install there needs a
+-- second renderer rather than a translation of the first one.
+local win = dofile(_G.jot_lsp_lua_root .. "/managers/win.lua")
+
 local M = {}
 
 local ROOT = _G.jot_lsp_root or ""
@@ -119,16 +124,13 @@ local function link_lines(entry)
   return out
 end
 
-local function build_install_script(entry)
-  local dir = package_dir(entry.id)
-  local bin_dir = ROOT .. "/bin"
-  local dirs = { root = ROOT, dir = dir, bin_dir = bin_dir,
-                 dl_dir = dir .. "/dl" }
-  -- The bundled payload wins over the entry's manager when the package ships
-  -- one. The payload path rides on a copy: `entry` is shared registry state and
-  -- must not be stamped with per-install fields.
+-- Manager and entry for one install. A package that ships the server under
+-- share/jot/payload/<bin> (a release vendors clangd that way) is installed from
+-- that copy instead of the entry's manager: no network, and no unpacking
+-- either. The host answers nil when this package carries no payload for the
+-- binary, which keeps every unbundled server on its normal manager.
+local function select_manager(entry)
   local payload = bundled_dir(entry)
-  local manager
   if payload then
     local copy = {}
     for k, v in pairs(entry) do
@@ -139,11 +141,24 @@ local function build_install_script(entry)
     -- would look for the binaries under $PDIR, where a payload install puts
     -- nothing.
     copy.no_bin_link = true
-    entry = copy
-    manager = managers.payload
-  else
-    manager = managers[entry.manager]
+    return copy, managers.payload
   end
+  return entry, managers[entry.manager]
+end
+
+-- The package dir, bin dir and download dir for one id. The separator follows
+-- the platform being rendered, not the host: a Windows script has to speak
+-- cmd.exe path syntax even when it is generated for a packaged build.
+local function package_dirs(id, sep)
+  local dir = ROOT .. sep .. id
+  return { root = ROOT, dir = dir, bin_dir = ROOT .. sep .. "bin",
+           dl_dir = dir .. sep .. "dl" }
+end
+
+local function build_install_script(entry)
+  local dirs = package_dirs(entry.id, "/")
+  local manager
+  entry, manager = select_manager(entry)
   if not manager or not manager.install_lines then
     return nil
   end
@@ -152,7 +167,7 @@ local function build_install_script(entry)
     return nil
   end
   local script = {
-    PREAMBLE:format(dir, bin_dir),
+    PREAMBLE:format(dirs.dir, dirs.bin_dir),
   }
   for _, l in ipairs(lines) do
     script[#script + 1] = l
@@ -164,7 +179,44 @@ local function build_install_script(entry)
   end
   -- A receipt is only written after every step succeeded (set -e).
   script[#script + 1] = "printf 'name=%s\\n' " .. sh_quote(entry.id) .. " > "
-    .. sh_quote(dir .. "/receipt")
+    .. sh_quote(dirs.dir .. "/receipt")
+  return table.concat(script, "\n") .. "\n"
+end
+
+-- Windows script. The steps come from each manager's install_lines_win and the
+-- host runs them as a cmd.exe batch file (LspInstall::wrap_script), because
+-- there is no POSIX shell, no `set -e`, no ln, no unzip and no find on Windows.
+-- Inside a batch a failed step aborts the whole script with `exit /b`, which is
+-- what keeps the receipt below and the host's success marker honest.
+--
+-- The catalog's win_cmd / win_remove_cmd are superseded by these renderers: a
+-- global `npm install -g` puts a launcher on PATH that the editor cannot
+-- resolve as a managed bin, while the renderer installs into the package dir
+-- and publishes a real path. win_cmd stays in the registry for packagers.
+local function build_install_script_win(entry)
+  local dirs = package_dirs(entry.id, "\\")
+  dirs.win = win
+  local manager
+  entry, manager = select_manager(entry)
+  if not manager or not manager.install_lines_win then
+    return nil
+  end
+  local lines = manager.install_lines_win(entry, dirs)
+  if not lines then
+    return nil
+  end
+  -- setlocal keeps the scratch variables out of the shell the user is looking
+  -- at: the fallback transport runs this in an integrated terminal.
+  local script = { "setlocal" }
+  for _, l in ipairs(win.ensure_dirs(dirs)) do
+    script[#script + 1] = l
+  end
+  for _, l in ipairs(lines) do
+    script[#script + 1] = l
+  end
+  -- Written last, so it can only exist once every step ran. Leading
+  -- redirection keeps the file name off echo's argument line.
+  script[#script + 1] = "> " .. win.quote(dirs.dir .. "\\receipt") .. " echo name=" .. entry.id
   return table.concat(script, "\n") .. "\n"
 end
 
@@ -174,6 +226,21 @@ local function build_remove_script(entry)
     lines[#lines + 1] = "rm -f " .. sh_quote(ROOT .. "/bin/" .. b)
   end
   lines[#lines + 1] = "rm -rf " .. sh_quote(package_dir(entry.id))
+  return table.concat(lines, "\n") .. "\n"
+end
+
+-- Windows counterpart: a managed bin can be the bare name, a .exe or a
+-- launcher script, and every one of them has to go before the package dir.
+local function build_remove_script_win(entry)
+  local dirs = package_dirs(entry.id, "\\")
+  local lines = { "setlocal" }
+  for _, b in ipairs(entry.bin or {}) do
+    for _, ext in ipairs({ "", ".exe", ".cmd", ".bat" }) do
+      lines[#lines + 1] = win.remove(dirs.bin_dir .. "\\" .. b .. ext)
+    end
+  end
+  lines[#lines + 1] = "if exist " .. win.quote(dirs.dir) .. " rd /s /q "
+    .. win.quote(dirs.dir)
   return table.concat(lines, "\n") .. "\n"
 end
 
@@ -192,20 +259,20 @@ function M.plan_install(name)
     return nil
   end
   local base = { id = entry.id }
+  -- Not the `a and b() or c()` idiom: a renderer that declines this package
+  -- returns nil, and that must read as "unsupported", not as "try the POSIX
+  -- script on Windows".
+  local script
   if PLATFORM == "win" then
-    if not entry.win_cmd then
-      base.script = ""
-      base.message = entry.display .. " is not supported by the Windows installer yet"
-      return base
-    end
-    base.script = entry.win_cmd
-    base.message = "LSP install started: " .. entry.id
-    return base
+    script = build_install_script_win(entry)
+  else
+    script = build_install_script(entry)
   end
-  local script = build_install_script(entry)
   if not script then
     base.script = ""
-    base.message = entry.display .. " is not supported on this platform yet"
+    base.message = entry.display .. (PLATFORM == "win"
+      and " has no Windows installer yet"
+      or " is not supported on this platform yet")
     return base
   end
   base.script = script
@@ -223,17 +290,10 @@ function M.plan_remove(name)
   end
   local base = { id = entry.id }
   if PLATFORM == "win" then
-    local remove = entry.win_remove_cmd
-    if not remove then
-      base.script = ""
-      base.message = entry.display .. " has no Windows remove command"
-      return base
-    end
-    base.script = remove
-    base.message = "LSP remove started: " .. entry.id
-    return base
+    base.script = build_remove_script_win(entry)
+  else
+    base.script = build_remove_script(entry)
   end
-  base.script = build_remove_script(entry)
   base.message = "LSP remove started: " .. entry.id
   return base
 end

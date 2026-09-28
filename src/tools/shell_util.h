@@ -12,11 +12,10 @@
 #define SHELL_UTIL_H
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 
-#ifdef _WIN32
-#include <cstdlib>
-#else
+#ifndef _WIN32
 #include <sys/wait.h>
 #endif
 
@@ -117,6 +116,24 @@ namespace shell_util
       return WEXITSTATUS(status);
     }
     return 1;
+#endif
+  }
+
+  // The installers' platform tag ("linux" | "mac" | "win"). Overridable so a
+  // probe or a unit test on any host can drive another platform's install path
+  // (the Windows installer renders cmd.exe scripts instead of POSIX ones).
+  inline std::string install_platform()
+  {
+    if (const char *env = std::getenv("JOT_INSTALL_PLATFORM"); env && *env)
+    {
+      return env;
+    }
+#ifdef _WIN32
+    return "win";
+#elif defined(__APPLE__)
+    return "mac";
+#else
+    return "linux";
 #endif
   }
 

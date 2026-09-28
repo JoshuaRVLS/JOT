@@ -32,4 +32,32 @@ function M.install_lines(entry, dirs)
   return { line }
 end
 
+-- Windows renderer. npm is the same command there (npm.cmd is on PATH and cmd
+-- finds it without a shell), but what it produces is not: node_modules\.bin
+-- holds a .cmd launcher, a .ps1 and the extensionless sh script the POSIX side
+-- links. Only the .cmd can be spawned by a Windows process, and it is what the
+-- managed bin keeps -- so the launcher, never the sh script, is published.
+function M.install_lines_win(entry, dirs)
+  local win = dirs.win
+  local spec = entry.pkg
+  if entry.version and entry.version ~= "" then
+    spec = spec .. "@" .. entry.version
+  else
+    spec = spec .. "@latest"
+  end
+  local line = "npm install --prefix " .. win.quote(dirs.dir) .. " " .. win.quote(spec)
+  for _, extra in ipairs(entry.extra_pkgs or {}) do
+    line = line .. " " .. win.quote(extra)
+  end
+  local lines = { win.fail(line) }
+  for _, b in ipairs(entry.bin or {}) do
+    for _, l in ipairs(win.publish(dirs.dir .. "\\node_modules\\.bin",
+                                   { b .. ".cmd", b .. ".exe", b .. ".bat" },
+                                   dirs.bin_dir .. "\\" .. b)) do
+      lines[#lines + 1] = l
+    end
+  end
+  return lines
+end
+
 return M

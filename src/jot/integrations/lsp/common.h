@@ -7,6 +7,7 @@
 #include "jot/integrations/lsp_attach_data.h"
 #include "lsp/client.h"
 #include "lsp/install.h"
+#include "tools/shell_util.h"
 #include "tools/string_util.h"
 #include <algorithm>
 #include <cctype>
@@ -207,23 +208,32 @@ namespace lsp_internal
       return false;
     if (!LspInstall::resolve_managed_bin(bin).empty())
       return true;
+    const bool windows = shell_util::install_platform() == "win";
     const char *env = std::getenv("PATH");
     if (!env || !*env)
       return false;
     std::error_code ec;
     std::istringstream paths(env);
     std::string dir;
-    while (std::getline(paths, dir, ':'))
+    // Windows splits PATH with ';' and its executables carry an extension (a
+    // .cmd launcher for anything npm installed). Reading it as a POSIX PATH
+    // split C:\... at the drive colon and then looked for a name that cannot
+    // exist there, so no Windows server on PATH was ever found.
+    while (std::getline(paths, dir, windows ? ';' : ':'))
     {
       if (dir.empty())
         continue;
-#ifdef _WIN32
-      const std::filesystem::path cand = std::filesystem::path(dir) / (bin + ".exe");
-#else
-      const std::filesystem::path cand = std::filesystem::path(dir) / bin;
-#endif
-      if (std::filesystem::is_regular_file(cand, ec))
+      const std::filesystem::path base = std::filesystem::path(dir) / bin;
+      if (std::filesystem::is_regular_file(base, ec))
         return true;
+      if (windows)
+      {
+        for (const char *ext : {".exe", ".cmd", ".bat"})
+        {
+          if (std::filesystem::is_regular_file(base.string() + ext, ec))
+            return true;
+        }
+      }
     }
     return false;
   }
@@ -244,6 +254,26 @@ namespace lsp_internal
   {
     const std::string managed = LspInstall::resolve_managed_bin(bin);
     return managed.empty() ? bin : managed;
+  }
+
+  // What to actually spawn for a resolved command. A managed bin on Windows is
+  // often a launcher script (npm publishes <name>.cmd, packages can ship
+  // <name>.bat), and CreateProcess cannot run those: only cmd.exe can, so it is
+  // asked to. Binaries and everything on POSIX pass through untouched.
+  inline std::vector<std::string> launcher_argv(const std::vector<std::string> &argv)
+  {
+    if (argv.empty() || shell_util::install_platform() != "win")
+    {
+      return argv;
+    }
+    const std::string lower = to_lower_copy(argv.front());
+    if (!ends_with(lower, ".cmd") && !ends_with(lower, ".bat"))
+    {
+      return argv;
+    }
+    std::vector<std::string> out = {"cmd", "/c", argv.front()};
+    out.insert(out.end(), argv.begin() + 1, argv.end());
+    return out;
   }
 
   inline std::vector<std::string> command_for_language(const std::string &language)

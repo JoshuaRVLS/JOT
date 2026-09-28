@@ -33,3 +33,9 @@ Windows: %LOCALAPPDATA%/jot/treesitter
 metadata registered by Lua. `JOT_TREESITTER_PREFIX` explicitly replaces the
 root; it is checked for writability before clone/build. `:tsreload` reloads Lua
 metadata and queries, then clears all native runtime caches.
+
+On Windows the same source build is rendered as cmd.exe steps instead of a
+shell script: `git` plus a compiler from `%CC%`/`%CXX%` (default `gcc`/`g++`)
+produce `parsers/libtree-sitter-<language>.dll`. A grammar whose scanner is
+written in C is built with the C driver, so the parser carries no C++ runtime,
+and the build is reported successful only when that DLL is on disk.

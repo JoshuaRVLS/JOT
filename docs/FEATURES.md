@@ -356,12 +356,21 @@ deliberately does not, so a preview never depends on a file you cannot see.
   outline.
 - Status, start/stop/restart, a manager, and install/remove helpers for 100+
   servers (`:lspinstall <server>`, `:lspremove <server>`).
+- **Windows installs use the catalog too**: there is no POSIX shell there, so
+  each supporting manager renders a second script out of cmd.exe steps, built
+  on `curl.exe` and `tar.exe` (both shipped with Windows 10) and run as a batch
+  file so a failed step aborts the install instead of reporting success. Servers
+  land in `%LOCALAPPDATA%/jot/lsp/bin`. A managed bin that is a `.cmd` launcher,
+  which is what npm publishes, is spawned through `cmd /c`, the only way Windows
+  runs one. Managers without a Windows renderer say so instead of generating a
+  script that cannot run there.
 - **Bundled servers**: a release package vendors clangd under
   `share/jot/payload/clangd`, so C/C++ support needs no system package and no
   network. Opening a C/C++ buffer installs it on the spot (once per binary per
   session, and only when the package ships it): the shipped binary is linked
-  into the per-user LSP dir (`~/.local/share/jot/lsp/bin`) and the usual
-  receipt is written, after which the waiting buffer attaches.
+  (copied on Windows) into the per-user LSP dir (`~/.local/share/jot/lsp/bin`,
+  or `%LOCALAPPDATA%/jot/lsp/bin`) and the usual receipt is written, after
+  which the waiting buffer attaches.
   `:lspinstall cpp` does the same by hand and `:lspremove cpp` removes that
   link and the receipt only, never the shipped copy. A payload may sit beside the executable or at the compiled-in prefix,
   and `JOT_LSP_PAYLOAD_DIR` overrides the lookup (authoritatively, which is

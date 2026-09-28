@@ -34,4 +34,30 @@ function M.install_lines(entry, dirs)
   return { line }
 end
 
+-- Windows renderer. The interpreter is `python` there, not `python3`, and
+-- --target puts the console scripts in <dir>\bin as .exe launchers rather than
+-- the sh scripts the POSIX side wraps: there is nothing to wrap on Windows, the
+-- launcher is already the runnable file, so it is published as is.
+function M.install_lines_win(entry, dirs)
+  local win = dirs.win
+  local spec = entry.pkg
+  local extra = (entry.extras or {}).extra
+  if extra and extra ~= "" then
+    spec = spec .. "[" .. extra .. "]"
+  end
+  if entry.version and entry.version ~= "" then
+    spec = spec .. "==" .. entry.version
+  end
+  local line = "python -m pip install --quiet --disable-pip-version-check --target "
+    .. win.quote(dirs.dir) .. " " .. win.quote(spec)
+  local lines = { win.fail(line) }
+  for _, b in ipairs(entry.bin or {}) do
+    for _, l in ipairs(win.publish(dirs.dir .. "\\bin", { b .. ".exe", b },
+                                   dirs.bin_dir .. "\\" .. b)) do
+      lines[#lines + 1] = l
+    end
+  end
+  return lines
+end
+
 return M

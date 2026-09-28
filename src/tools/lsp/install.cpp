@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <vector>
 
 #ifdef _WIN32
@@ -24,6 +25,20 @@ namespace fs = std::filesystem;
 namespace
 {
 
+  // Server ids are registry slugs, but they reach a filename here, so anything
+  // that could escape the scripts dir or trip cmd's parser becomes a dash.
+  std::string script_file_stem(const std::string &server)
+  {
+    std::string out;
+    out.reserve(server.size());
+    for (char c : server)
+    {
+      const bool safe = std::isalnum((unsigned char)c) || c == '-' || c == '_';
+      out.push_back(safe ? c : '-');
+    }
+    return out.empty() ? std::string("server") : out;
+  }
+
   fs::path data_root()
   {
 #ifdef _WIN32
@@ -41,6 +56,19 @@ namespace
     const char *home = getenv("HOME");
 #endif
     return home ? fs::path(home) / ".local" / "share" / "jot" / "lsp" : fs::path();
+  }
+
+  // Directory the generated Windows batch files live in. It sits beside the
+  // install tree the rest of this module already owns, and falls back to the
+  // temp dir for an environment with no data root at all (no LOCALAPPDATA, no
+  // APPDATA, no USERPROFILE).
+  fs::path script_dir()
+  {
+    const fs::path root = data_root();
+    fs::path dir = root.empty() ? fs::temp_directory_path() : root / "scripts";
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    return ec ? fs::temp_directory_path() : dir;
   }
 
   // Directory the running executable lives in, or empty when it cannot be
@@ -92,13 +120,12 @@ namespace LspInstall
 
   std::string platform_tag()
   {
-#ifdef _WIN32
-    return "win";
-#elif defined(__APPLE__)
-    return "mac";
-#else
-    return "linux";
-#endif
+    return shell_util::install_platform();
+  }
+
+  ScriptShell default_shell()
+  {
+    return platform_tag() == "win" ? ScriptShell::Cmd : ScriptShell::Sh;
   }
 
   std::string bundled_payload_dir(const std::string &bin_name)
@@ -141,11 +168,30 @@ namespace LspInstall
 
   std::string resolve_managed_bin(const std::string &bin_name)
   {
-    fs::path candidate = data_root() / "bin" / bin_name;
-    std::error_code ec;
-    if (fs::is_regular_file(candidate, ec) || fs::is_symlink(candidate, ec))
+    if (bin_name.empty())
     {
-      return candidate.string();
+      return "";
+    }
+    const fs::path dir = data_root() / "bin";
+    std::vector<fs::path> candidates = {dir / bin_name};
+    if (platform_tag() == "win")
+    {
+      // A managed bin is never the bare POSIX name on Windows: clangd links as
+      // clangd.exe, npm publishes a node_modules/.bin launcher as <name>.cmd,
+      // and a package script can be <name>.bat. The extension is what the
+      // spawner needs, so it is resolved here rather than guessed later.
+      for (const char *ext : {".exe", ".cmd", ".bat"})
+      {
+        candidates.push_back(dir / (bin_name + ext));
+      }
+    }
+    std::error_code ec;
+    for (const auto &candidate : candidates)
+    {
+      if (fs::is_regular_file(candidate, ec) || fs::is_symlink(candidate, ec))
+      {
+        return candidate.string();
+      }
     }
     return "";
   }
@@ -185,8 +231,56 @@ namespace LspInstall
 
   std::string wrap_script(const std::string &server, const std::string &body)
   {
-    // The body may carry its own `set -e` (fail-fast installs): run it in a
-    // subshell so a failed step can never swallow the completion marker.
+    return wrap_script(server, body, default_shell());
+  }
+
+  std::string wrap_script(const std::string &server, const std::string &body, ScriptShell shell)
+  {
+    if (shell == ScriptShell::Cmd)
+    {
+      // cmd.exe has no `set -e`, so an install script cannot be one command
+      // line and still fail loudly: a step in the middle could fail, the last
+      // one succeed, and the completion marker would lie. Handing the body to
+      // a batch file instead gives the script `exit /b`, which aborts it on the
+      // first failure; `cmd /c <file>` then returns that status, so the same
+      // &&/|| chain the POSIX wrapper uses decides the marker honestly. The
+      // batch is written to disk because cmd can only read one from a file.
+      static unsigned long long counter = 0;
+      counter++;
+      const std::string stem = script_file_stem(server);
+      const fs::path file =
+          script_dir() / ("install_" + stem + "_" + std::to_string(counter) + ".cmd");
+      std::ofstream out(file, std::ios::binary | std::ios::trunc);
+      if (!out)
+      {
+        return "echo [jot:lsp] failed " + server + " exit=1";
+      }
+      // CRLF: cmd's parser is line oriented, and a bare LF misparses some
+      // builtins. The body arrives with LF endings from Lua.
+      for (char c : body)
+      {
+        if (c == '\n')
+        {
+          out << "\r\n";
+        }
+        else if (c != '\r')
+        {
+          out << c;
+        }
+      }
+      out << "\r\n";
+      out.close();
+      if (!out)
+      {
+        return "echo [jot:lsp] failed " + server + " exit=1";
+      }
+      return "echo [jot:lsp] start " + server + " && cmd /c "
+             + shell_util::shell_quote(file.string()) + " && echo [jot:lsp] success " + server
+             + " exit=0 || echo [jot:lsp] failed " + server + " exit=1";
+    }
+    // POSIX: the body may carry its own `set -e` (fail-fast installs), so run
+    // it in a subshell: a failed step can then never swallow the completion
+    // marker.
     const std::string script = "printf '[jot:lsp] start " + server + "\\n'; ( "
                                + body + " ); rc=$?; if [ \"$rc\" -eq 0 ]; then "
                                  "printf '[jot:lsp] success "
