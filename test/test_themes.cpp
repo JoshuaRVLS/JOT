@@ -517,7 +517,8 @@ TEST_CASE("Every bundled theme colour is an exact 24-bit value", "[jot][theme]")
   // index, which would be the quiet way for the themes to drift back onto the
   // 256-entry grid (an index paints fine, it just is not the colour the scheme
   // was designed with). The only numeric slots allowed are the -1s that mean
-  // "this group only sets a foreground".
+  // "this group only sets one half": WordHighlight names a band and no ink, the
+  // git slots name an ink and no band.
   for (const std::string &name : bundled_theme_files())
   {
     const auto groups = parse_theme(bundled_themes_dir() / name);

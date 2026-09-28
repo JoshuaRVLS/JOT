@@ -201,6 +201,7 @@ const KnownSetting kKnownSettings[] = {
     {"trim_trailing_whitespace_on_save", "Trim trailing whitespace on save", SettingsEntry::Type::Bool},
     {"update.build_dir", "Update build dir", SettingsEntry::Type::String},
     {"update.check_on_startup", "Check updates on startup", SettingsEntry::Type::Bool},
+    {"word_highlight", "Highlight word occurrences", SettingsEntry::Type::Bool},
     {"word_wrap", "Word wrap", SettingsEntry::Type::Bool},
     {"zen_content_width", "Zen content width", SettingsEntry::Type::Int},
 };
@@ -306,7 +307,7 @@ const char *const kAppearanceKeys[] = {
     "relative_line_numbers", "render_margin",         "show_indent_guides", "show_line_numbers",
     "show_minimap",          "smooth_scroll",         "status_clock",       "status_session_time",
     "tabline",               "tabline_auto_hide",     "tabline_insert",     "truecolor",
-    "winbar",                "zen_content_width",
+    "winbar",                "word_highlight",     "zen_content_width",
 };
 const char *const kAppearanceFamilies[] = {"smooth_scroll_"};
 const char *const kColorPreviewKeys[] = {"colorizer", "colorizer_mode"};

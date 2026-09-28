@@ -307,6 +307,8 @@ void LuaAPI::push_theme_palette(lua_State *L)
   color("bracket5", t.fg_bracket5, -1);
   color("bracket6", t.fg_bracket6, -1);
   color("bracket_match", t.fg_bracket_match, t.bg_bracket_match);
+  color("word_highlight", t.fg_word_highlight, t.bg_word_highlight);
+  color("word_highlight_strong", t.fg_word_highlight_strong, t.bg_word_highlight_strong);
   color("telescope", t.fg_telescope, t.bg_telescope);
   color("telescope_selected", t.fg_telescope_selected, t.bg_telescope_selected);
   color("telescope_preview", t.fg_telescope_preview, t.bg_telescope_preview);

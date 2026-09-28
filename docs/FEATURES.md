@@ -111,6 +111,15 @@ settles, so scrolling a long way does not grow the process.
 - Auto-indent, bracket matching and jumping, rainbow bracket colors
   (`rainbow_brackets`), an active bracket guide, and a highlight on the bracket
   under the caret together with its partner (the `BracketMatch` theme group).
+- The identifier under the caret is highlighted at every other place it
+  appears in the viewport, VS Code's occurrence highlight: the caret's own word
+  wears the strong band and the rest of the uses the plain one, from the
+  `WordHighlight` and `WordHighlightStrong` theme groups. Only whole words
+  count, so the `int` inside `printf` is not a use of `int`; a caret parked one
+  cell past a word still answers for that word, the same rule the word motions
+  use. The highlight steps aside while a selection is up and on a row that
+  carries a diagnostic band, which stays edge to edge rather than having a word
+  clipped out of it; `word_highlight=false` turns it off.
 - Smart indent on Enter. A bracket left open on the line lines the new line up
   under the argument after it, so a wrapped call stays aligned:
   `res = call(arg,` continues at `arg`'s column. In the C family a control
@@ -1095,7 +1104,7 @@ variant. A bundled starter config lives in `.configs/configs/`.
 Built-in defaults include `explorer_width=25`, `minimap_width=15`,
 `tab_size=2`, `show_line_numbers=true`, `rainbow_brackets=true`,
 `relative_line_numbers=true`, `cursor_style=block`, `cursor_blink_ms=500`,
-`render_fps=120`, `idle_fps=60`,
+`render_fps=120`, `idle_fps=60`, `word_highlight=true`,
 `auto_save=false`, `auto_save_interval_ms=2000`, `lsp_change_debounce_ms=120`,
 `lsp_diagnostics_quiet_ms=700`, `lsp_inlay_hints=true`,
 `lsp_inlay_type_hints=true`, `cpp_definitions=true`

@@ -174,6 +174,9 @@ void Config::load_defaults()
   // GUI to it (:font lists what is available).
   settings["gui_font_family"] = "";
   settings["highlight_cursor_line"] = "true";
+  // Tint every place the identifier under the caret shows in the viewport, VS
+  // Code's occurrencesHighlight: a rename's blast radius without a search.
+  settings["word_highlight"] = "true";
   settings["render_fps"] = "120";
   settings["idle_fps"] = "60";
   // Smooth scrolling (features/smooth_scroll.cpp, neoscroll.nvim's model): the

@@ -205,6 +205,8 @@ void LuaAPI::set_theme_color(std::string name, int fg, int bg)
       {"Search", "search_match"},
       {"CurSearch", "search_current"},
       {"BracketMatch", "bracket_match"},
+      {"WordHighlight", "word_highlight"},
+      {"WordHighlightStrong", "word_highlight_strong"},
       {"StatusLine", "status"},
       {"StatusLineMsg", "status_message"},
       {"StatusLineLogo", "status_logo"},
@@ -624,6 +626,16 @@ void LuaAPI::set_theme_color(std::string name, int fg, int bg)
   else if (name == "bracket_match")
   {
     set_pair(theme.fg_bracket_match, theme.bg_bracket_match);
+  }
+  else if (name == "word_highlight" || name == "wordhighlight" || name == "fg_word_highlight"
+           || name == "bg_word_highlight")
+  {
+    set_pair(theme.fg_word_highlight, theme.bg_word_highlight);
+  }
+  else if (name == "word_highlight_strong" || name == "wordhighlightstrong"
+           || name == "fg_word_highlight_strong" || name == "bg_word_highlight_strong")
+  {
+    set_pair(theme.fg_word_highlight_strong, theme.bg_word_highlight_strong);
   }
   else if (name == "bracket1" || name == "fg_bracket1")
   {

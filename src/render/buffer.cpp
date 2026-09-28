@@ -44,6 +44,13 @@ namespace
     int width = 0;
   };
 
+  // One occurrence of the word under the caret, on the row being painted.
+  struct WordHit
+  {
+    int col = 0;
+    int len = 0;
+  };
+
   // The full-width background a line wears for its severity: the error and
   // warning slots a theme can set. -1 (a diagnostic that is only info or a
   // hint, no diagnostic at all, or a theme that asked for no band) reads as
@@ -55,6 +62,55 @@ namespace
     if (severity == 2)
       return theme.bg_diagnostic_warning;
     return -1;
+  }
+
+  // A word byte: what an identifier is made of. The edit commands keep the same
+  // set, and each file carries its own copy of it.
+  bool is_word_byte(char c)
+  {
+    const unsigned char uc = (unsigned char)c;
+    return std::isalnum(uc) || c == '_';
+  }
+
+  // The word the caret sits on, as [start, end) byte columns. A caret parked
+  // just past a word still answers for that word, which is what the edit
+  // commands mean by "the word at the cursor".
+  void word_span_at(const std::string &line, int x, int &start, int &end)
+  {
+    start = std::clamp(x, 0, (int)line.size());
+    end = start;
+    while (start > 0 && is_word_byte(line[(size_t)start - 1]))
+      start--;
+    while (end < (int)line.size() && is_word_byte(line[end]))
+      end++;
+  }
+
+  // Whether `len` bytes at `at` are a whole word. A plain substring match also
+  // lands inside a longer identifier ("int" in "printf"), which is not an
+  // occurrence the highlight means.
+  bool whole_word_at(const std::string &line, int at, int len)
+  {
+    if (at > 0 && is_word_byte(line[(size_t)at - 1]))
+      return false;
+    const int after = at + len;
+    return after >= (int)line.size() || !is_word_byte(line[(size_t)after]);
+  }
+
+  // Whether a caret in the buffer holds selected text. A selection is the
+  // user's own answer to "which text", so the occurrence highlight steps aside
+  // while one is up; an empty one, which a click leaves behind, is not one.
+  bool buffer_has_selection(const FileBuffer &buf)
+  {
+    auto holds_text = [](const Selection &sel)
+    { return sel.active && (sel.start.y != sel.end.y || sel.start.x != sel.end.x); };
+    if (holds_text(buf.selection))
+      return true;
+    for (const auto &caret : buf.extra_carets)
+    {
+      if (holds_text(caret))
+        return true;
+    }
+    return false;
   }
 
 } // namespace
@@ -82,6 +138,28 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
                             || cursor_style_raw == "steadyblock";
   const bool inlay_hints_enabled = config.get_bool("lsp_inlay_hints", true);
   const bool inlay_type_hints_enabled = config.get_bool("lsp_inlay_type_hints", true);
+  // The occurrence highlight, resolved once for the frame: the identifier under
+  // the caret, and where on its line it sits. The row walk below only looks for
+  // that word. Only the focused pane paints it, and only while the caret is on
+  // a word and nothing is selected.
+  const bool word_highlight_on = config.get_bool("word_highlight", true);
+  std::string word_highlight_word;
+  int word_highlight_caret_col = -1;
+  int word_highlight_caret_line = -1;
+  if (word_highlight_on && pane.active && !buffer_has_selection(buf) && buf.cursor.y >= 0
+      && buf.cursor.y < (int)buf.line_count())
+  {
+    const std::string &caret_line = buf.line(buf.cursor.y);
+    int start = 0;
+    int end = 0;
+    word_span_at(caret_line, buf.cursor.x, start, end);
+    if (end > start)
+    {
+      word_highlight_word = caret_line.substr((size_t)start, (size_t)(end - start));
+      word_highlight_caret_col = start;
+      word_highlight_caret_line = buf.cursor.y;
+    }
+  }
 
   UIRect pane_rect = {x, y, w, h};
   ui->fill_rect(pane_rect, " ", theme.fg_default, theme.bg_default);
@@ -303,6 +381,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
   std::vector<jot_color::ColorSpan> color_spans;
   std::vector<std::uint8_t> colorizer_scope;
   std::vector<Editor::SearchMatch> search_hits;
+  std::vector<WordHit> word_hits;
   // Second scratch for the blank-line indent-guide source walk (it needs the
   // target row's columns at the same time as `visual_cols`).
   std::vector<int> guide_source_visual_cols;
@@ -314,6 +393,7 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
     color_spans.clear();
     colorizer_scope.clear();
     search_hits.clear();
+    word_hits.clear();
     int line_idx =
         fold_view->buffer_line_for_visible_offset(buf.scroll_offset, i, (int)buf.line_count());
     // The per-row walk normally carries depth across consecutive visible
@@ -692,6 +772,22 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
         }
         size_t next_search_hit = 0;
 
+        // This row's occurrences of the word under the caret, bounded to the
+        // window the row paints: the search is per row per frame, and a
+        // minified single line must not be walked end to end for it.
+        if (!word_highlight_word.empty())
+        {
+          const int needle_len = (int)word_highlight_word.size();
+          for (int at = clamped_scroll_x; at + needle_len <= render_limit; at++)
+          {
+            if (line.compare((size_t)at, (size_t)needle_len, word_highlight_word) != 0)
+              continue;
+            if (whole_word_at(line, at, needle_len))
+              word_hits.push_back({at, needle_len});
+          }
+        }
+        size_t next_word_hit = 0;
+
         auto draw_chunk = [&](int start_idx, int len, int color)
         {
           if (len <= 0)
@@ -800,6 +896,32 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
                   // upstream applies with its bright_fg/dark_fg pair.
                   span_fg_rgb = jot_color::contrast_text_color(rgb);
                 }
+              }
+            }
+
+            // Occurrence highlight: the identifier under the caret is tinted
+            // everywhere it shows, over syntax and brackets but under selection
+            // and search hits. A row wearing a severity band keeps it: that
+            // band is the row's own signal and has to stay edge to edge, so the
+            // tint steps aside there instead of punching holes in it.
+            if (!word_hits.empty() && !row_has_band)
+            {
+              while (next_word_hit < word_hits.size()
+                     && char_idx >= word_hits[next_word_hit].col + word_hits[next_word_hit].len)
+              {
+                next_word_hit++;
+              }
+              if (next_word_hit < word_hits.size()
+                  && char_idx >= word_hits[next_word_hit].col
+                  && char_idx < word_hits[next_word_hit].col + word_hits[next_word_hit].len)
+              {
+                const bool caret_word = line_idx == word_highlight_caret_line
+                                        && word_hits[next_word_hit].col == word_highlight_caret_col;
+                bg = caret_word ? theme.bg_word_highlight_strong : theme.bg_word_highlight;
+                const int hl_fg =
+                    caret_word ? theme.fg_word_highlight_strong : theme.fg_word_highlight;
+                if (hl_fg != -1)
+                  fg = hl_fg;
               }
             }
 

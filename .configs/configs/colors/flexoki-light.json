@@ -36,6 +36,8 @@
   "Search": {"fg": "#100F0F", "bg": "#D0A215"},
   "CurSearch": {"fg": "#100F0F", "bg": "#ad8301"},
   "BracketMatch": {"fg": "#100F0F", "bg": "#DAD8CE"},
+  "WordHighlight": {"fg": -1, "bg": "#E6E4D9"},
+  "WordHighlightStrong": {"fg": -1, "bg": "#CECDC3"},
   "StatusLine": {"fg": "#100F0F", "bg": "#F2F0E5"},
   "StatusLineMsg": {"fg": "#8a6801", "bg": "#F2F0E5"},
   "StatusLineLogo": {"fg": "#b34e14", "bg": "#F2F0E5"},

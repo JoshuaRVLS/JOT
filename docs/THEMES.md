@@ -150,7 +150,8 @@ one explicitly in a theme overrides the fallback.
 
 `Normal`, `NormalFloat`, `LineNr`, `Comment`, `Keyword`, `String`, `Number`,
 `Function`, `Type`, `Cursor`, `CursorLine`, `CursorLineNr`, `Visual`,
-`Search`, `CurSearch`, `BracketMatch`, `StatusLine`,
+`Search`, `CurSearch`, `BracketMatch`, `WordHighlight`,
+`WordHighlightStrong`, `StatusLine`,
 `StatusLineMsg`, `StatusLineLogo`, `StatusLineFile`, `StatusLineInfo`,
 `StatusLineWarn`, `StatusLineError`, `StatusLineMuted`, `FloatBorder`,
 `WinSeparator`, `WinActiveBorder`, `TabLine`, `TabLineSel`, `TabLineFill`,
@@ -169,7 +170,12 @@ stepping), which reads brighter than the plain `Search` hits so the current
 target never blends into the rest. `BracketMatch` boxes the bracket under the
 caret and its partner while the pair is in view (`fg` colors the bracket
 glyphs, `bg` the band behind both cells), and each bundled theme keeps it on
-the same soft surface as its hover bands. `DiagnosticError` and
+the same soft surface as its hover bands. `WordHighlight` and
+`WordHighlightStrong` are the occurrence highlight: every other place the
+identifier under the caret shows in the viewport wears the plain band and the
+caret's own word the strong one. Both are bands only, so a theme names `bg` and
+leaves `fg` at `-1` to keep the token's own colour, the same spelling the git
+slots use for the half they do not set. `DiagnosticError` and
 `DiagnosticWarn` colour the squiggle, the line number and the inline message of
 their severity, and their `bg` is the band the renderer paints across the
 *whole* line that holds such a finding - the gutter, the code, and the space
@@ -177,7 +183,8 @@ past the end of the text - so a problem is findable while scrolling instead of
 only where the squiggle sits. A theme that names no band leaves those rows on
 the pane background; `DiagnosticInfo` and `DiagnosticHint` carry no band (their
 `bg` is ignored), and selection, search hits and decorations still paint over
-the band. The cursor-row tint can be turned off with
+the band, while the occurrence highlight steps aside and leaves the row edge to
+edge. The cursor-row tint can be turned off with
 the `highlight_cursor_line` setting (`false`), and both `CurSearch` and
 `CursorLine` fall back to sensible defaults when a theme omits them.
 

@@ -195,6 +195,14 @@ struct Theme
   int fg_bracket6 = 6;
   int fg_bracket_match = 3;
   int bg_bracket_match = 0;
+  // The occurrence highlight: every other place the identifier under the caret
+  // appears wears the plain pair, the caret's own word the strong one. fg -1
+  // keeps the token's own syntax colour and moves only the band behind it,
+  // which is how the bundled themes name these two.
+  int fg_word_highlight = -1;
+  int bg_word_highlight = 236;
+  int fg_word_highlight_strong = -1;
+  int bg_word_highlight_strong = 240;
   int fg_telescope = 7;
   int bg_telescope = 0;
   int fg_telescope_selected = 0;

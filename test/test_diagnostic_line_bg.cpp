@@ -5,7 +5,9 @@
 //
 // Two rules keep the band from becoming a wash over everything. It is a base
 // rather than an overlay, so selection, search hits and anchored decorations
-// still paint on top of it; and it exists only when the theme asks for one, so
+// still paint on top of it (the occurrence highlight is the one that does not:
+// it is ambient, and a tint clipping a corner out of a banded row reads as a
+// rendering fault); and it exists only when the theme asks for one, so
 // a theme that never mentions a band gets plain rows instead of the editor
 // inventing a tint out of the severity colour. Info and hint rows carry no band
 // at all.
@@ -117,6 +119,10 @@ TEST_CASE("Diagnostic band: error and warning rows are painted edge to edge", "[
   buf.diagnostics = {diagnostic(0, 1, "error here"), diagnostic(2, 2, "warning here"),
                      diagnostic(3, 3, "info here")};
   buf.diag_severity_dirty = true;
+  // Park the caret on `fine`, which these rows name once. Every row here starts
+  // with `int`, so a caret left on it would tint those cells and pull the clean
+  // row off the pane background this case asserts.
+  e.scroll_cursor_to_for_test(1, 4);
   repaint(e);
 
   const SplitPane &pane = e.pane_for_test();
@@ -192,6 +198,18 @@ TEST_CASE("Diagnostic band: the band is a base, so the overlays still win", "[jo
   repaint(e);
   REQUIRE(row_bg(e, 0, code + 6) == 11);
   REQUIRE(row_bg(e, 0, code + 10) == 52);
+
+  // The occurrence highlight is the one overlay the band beats. It is ambient
+  // (the caret lands on a word by itself), and a tint that clipped a corner out
+  // of a banded row reads as a rendering fault, so the whole row stays banded.
+  e.scroll_cursor_to_for_test(2, 4);
+  repaint(e);
+  REQUIRE(t.bg_word_highlight_strong != 58);
+  REQUIRE(row_bg(e, 2, code) == 58);
+  REQUIRE(row_bg(e, 2, code + 4) == 58);
+  REQUIRE(row_bg(e, 2, code + 9) == 58);
+  REQUIRE(row_bg(e, 2, code + 20) == 58);
+  REQUIRE(row_bg(e, 1, code) == t.bg_default);
 
   // The cursor row keeps its band: severity is the louder signal, and the
   // number's own colour already says where the caret is.
