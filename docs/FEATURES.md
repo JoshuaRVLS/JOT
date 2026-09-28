@@ -795,7 +795,7 @@ except when a label actually moved.
 The chip is `status_coding_time`, and what it shows is the time coded today for
 the workspace in front of you, from one of two places:
 
-* **WakaTime** (`wakatime` in the Extensions category of `:settings`) is the one
+- **WakaTime** (`wakatime` in the Extensions category of `:settings`) is the one
   that survives across machines and editors. Turning it on makes the editor
   report heartbeats to `wakatime-cli`, exactly as the [plugin spec][waka]
   describes: a save, a file change, or two minutes on the same file. The cli
@@ -807,7 +807,7 @@ the workspace in front of you, from one of two places:
   finds, for a self-hosted or WakaTime-compatible server. The cli itself is
   never downloaded: if it is not on `PATH`, or no key is configured anywhere,
   the editor says so once instead of tracking nothing quietly.
-* **The local store** (always on) is what keeps the chip worth showing with the
+- **The local store** (always on) is what keeps the chip worth showing with the
   integration off. Totals are kept per workspace and day under
   `configs/coding_time.tsv`, so reopening the editor later today continues
   today's number rather than restarting a session timer nobody reads. Time is
@@ -1235,8 +1235,9 @@ Built-in defaults include `explorer_width=25`, `minimap_width=15`,
 (the C++ declaration/definition checks), `terminal_height=10`,
 `terminal_float_width=85` and `terminal_float_height=75` (the floating
 terminal's box, a percentage of the active pane's text rows each),
-`debugger_height=12`, `status_clock=true`, and `status_coding_time=true`. The Extensions category (WakaTime) adds `wakatime=false`,
-`wakatime_api_key=` and `wakatime_api_url=`. The colour preview adds `colorizer=true`,
+`debugger_height=12`, `status_clock=true`, and `status_coding_time=true`. The
+Extensions category adds `wakatime=false`, `wakatime_api_key=` and
+`wakatime_api_url=`. The colour preview adds `colorizer=true`,
 `colorizer_mode=background`, `colorizer_hex=true`, `colorizer_hex_alpha=false`,
 `colorizer_hex_qml=false`, `colorizer_hex_no_hash=false`,
 `colorizer_hex_0x=false`, `colorizer_names=true`, `colorizer_tailwind=false`,
