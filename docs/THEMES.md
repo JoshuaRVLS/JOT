@@ -161,7 +161,12 @@ one explicitly in a theme overrides the fallback.
 `TelescopeSelection`, `TelescopePreviewNormal`, `TelescopeQuery`,
 `Terminal`, `TerminalTab`,
 `TerminalTabActive`, `TerminalTabFocused`, `TerminalTabClose`,
-`TerminalTabPlus`, `TerminalTabSeparator`.
+`TerminalTabPlus`, `TerminalTabSeparator`, `Winbar`, `WinbarBreadcrumb`,
+`WinbarSeparator`, `WinbarHover`.
+
+`Winbar` is the breadcrumb row's own band and the ink of its file and symbol
+crumbs, `WinbarBreadcrumb` the quieter labels above them, `WinbarSeparator` the
+chevron between crumbs, and `WinbarHover` the band under the pointer.
 
 `CursorLine` tints the row under the text cursor (`bg` only is enough) and
 `CursorLineNr` colors its line number; `CurSearch` is the highlight of the

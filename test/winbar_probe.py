@@ -39,6 +39,11 @@ from pty_screen import run_in_pty  # noqa: E402
 DOWN = b"\x1b[B"
 # The chevron a folder row wears (nf-fa-chevron_right, U+F054).
 CHEVRON = "\uf054"
+# The Winbar group's background and Normal's in jot-dark (the default scheme),
+# as the harness records a truecolour cell (1000 + rgb). The first bug here was
+# the whole group resolving to nothing, which left the row on the struct default
+# (palette 0, black) -- no band at all on a near-black theme.
+WINBAR_BG, PANE_BG = 1000 + 0x12101D, 1000 + 0x0E0C18
 
 SOURCE = """// winbar probe
 class Widget
@@ -151,6 +156,17 @@ def main() -> int:
             failures.append(f"the strip carries the breadcrumb's {part!r}")
     if "\u203a" not in crumbs:
         failures.append("the breadcrumb row has no crumb separator")
+    # The row's own band: every cell the crumbs sit on wears the theme's Winbar
+    # background, so the breadcrumb reads as chrome rather than as labels
+    # floating on the editor's own background.
+    first = len(crumbs) - len(crumbs.lstrip())
+    last = len(crumbs.rstrip())
+    unbanned = [c for c in range(first, last) if screen.bg[1][c] != WINBAR_BG]
+    print(f"winbar band: row 1 cols {first}..{last} at bg {WINBAR_BG}, "
+          f"pane bg {PANE_BG}, unbanded {len(unbanned)}")
+    if unbanned:
+        failures.append(f"the breadcrumb row is not banded at {unbanned[:5]} "
+                        f"(bg {[screen.bg[1][c] for c in unbanned[:5]]}, want {WINBAR_BG})")
     if "winbar probe" not in code:
         failures.append("the first code row is not below the breadcrumb "
                         f"(row 2: {code.strip()!r})")

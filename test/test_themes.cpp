@@ -231,6 +231,27 @@ TEST_CASE("jot-dark applies the yoru sumi scheme", "[jot][theme]")
   REQUIRE(rgb_of(t.bg_status) == 0x14111F);
 }
 
+TEST_CASE("The breadcrumb groups reach the Winbar slots", "[jot][theme]")
+{
+  // Every group name in a theme file is a string the reader has to translate,
+  // and a name no alias maps is not an error: the slot quietly keeps its struct
+  // default. That is what the four Winbar groups did -- the bundled themes
+  // named them, the slot chain matched only their lowercase spellings, and the
+  // breadcrumb row painted in the built-in black band, which on a near-black
+  // scheme is no band at all.
+  Editor &e = probe_editor();
+  REQUIRE(e.apply_theme_for_test("jot-dark"));
+  const Theme &t = e.theme_for_test();
+  REQUIRE(jot_ui::is_exact_color(t.bg_winbar));
+  REQUIRE(rgb_of(t.bg_winbar) == 0x12101D);
+  REQUIRE(rgb_of(t.fg_winbar) == 0xD7D3E3);
+  REQUIRE(rgb_of(t.fg_winbar_crumb) == 0x8F8BA8);
+  REQUIRE(rgb_of(t.bg_winbar_crumb) == 0x12101D);
+  REQUIRE(rgb_of(t.fg_winbar_separator) == 0x3A3558);
+  REQUIRE(rgb_of(t.fg_winbar_hover) == 0xEEEAf8);
+  REQUIRE(rgb_of(t.bg_winbar_hover) == 0x1C1929);
+}
+
 TEST_CASE("jot-light is the same inks as jam and matcha on cream paper", "[jot][theme]")
 {
   Editor &e = probe_editor();
