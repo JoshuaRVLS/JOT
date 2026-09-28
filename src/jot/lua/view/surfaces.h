@@ -363,6 +363,7 @@ struct HomeEntryView
 {
   std::string label;     // icon + text
   std::string secondary; // dimmed right-aligned path (may be empty)
+  std::string key;       // shortcut printed at the right edge (may be empty)
   int x = 0, y = 0, w = 0;
   bool section = false; // section title row
   bool selected = false;
@@ -374,7 +375,9 @@ struct HomeView
   int panel_x = 0, panel_y = 0, panel_w = 0, panel_h = 0;
   std::string wordmark; // "JOT"
   std::string tagline;  // "Developer workspace"
-  std::string context;  // "Last folder ..." / "No recent workspace yet"
+  std::string context;  // "Here <launch dir>" / "No recent workspace yet"
+  std::string filter;   // typed query; empty unless the rows are filtered
+  std::string hint;     // the key legend on the wordmark row
   // Section titles and item rows in layout order with absolute rects (mouse
   // hit-testing uses the same rects natively).
   std::vector<HomeEntryView> rows;

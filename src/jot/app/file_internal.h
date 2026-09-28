@@ -20,6 +20,7 @@ namespace file_internal
 inline constexpr int kMaxRecentFiles = 50;
 inline constexpr int kMaxRecentWorkspaces = 30;
 inline constexpr int kMaxClosedBufferHistory = 20;
+inline constexpr int kMaxHomePins = 12;
 
 // Path to the per-file fold-state map (defined in fold_state.cpp).
 std::string file_fold_states_path();

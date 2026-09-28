@@ -184,6 +184,14 @@ settles, so scrolling a long way does not grow the process.
 - Create, rename, and delete files and folders from the tree.
 - Recent files and workspace resume, plus a home menu for recent entries and
   quick actions.
+- The home screen opens projects, not just recents: it lists the folders that
+  look like projects around the launch directory (a repository or build marker
+  is enough) and the folder you are in, newest first, and prints the key that
+  opens each row at the right edge of that row. Type to filter the whole screen
+  on a row's name, its folder or the age it was last touched (`/` starts a
+  query with a letter that is also a shortcut, `Esc` takes it back), `Enter`
+  opens the top match, and `f` pins the selected folder or file to the top of
+  its list so it stays there even after the marker that found it is gone.
 - C++ assist: create matching header/source pairs, or generate missing source
   implementations from declarations.
 

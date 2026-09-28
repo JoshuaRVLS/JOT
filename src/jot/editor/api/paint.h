@@ -178,6 +178,10 @@ private:
   // treat the three prompts identically.
   void render_prompt_modal();
   void render_popup();
+  // The home screen's rows for the current query, plus the rects the mouse
+  // hit-tests. render_home_menu paints what this returns; the input handler
+  // rebuilds it when a key arrives before the frame that would have.
+  HomeView build_home_menu_model();
   void render_home_menu();
   // Cell-based settings menu (:settings / Ctrl+, in GUI mode): a quick-
   // pick style panel listing every config key with its value, narrowed by

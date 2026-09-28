@@ -108,7 +108,7 @@ void Editor::handle_lsp_code_action_results()
   }
   if (actions.empty())
   {
-    set_message("No code actions available");
+    set_message("No code action available");
     return;
   }
 

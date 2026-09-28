@@ -50,6 +50,7 @@ class HostRenderAPI;
 class HostIOAPI;
 class UIGui;
 struct SidePanelView; // defined in jot/lua/api.h (included by renderers)
+struct HomeView;      // the home screen's rows, same header as SidePanelView
 
 class Editor : private EditorState
 {

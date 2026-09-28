@@ -57,6 +57,10 @@ private:
   void load_recent_workspaces();
   void save_recent_files();
   void save_recent_workspaces();
+  void load_home_pins();
+  void save_home_pins();
+  void toggle_home_pin(const std::string &path);
+  bool home_pin_active(const std::string &path) const;
   void save_file_fold_state(FileBuffer &buf);
   void save_file_fold_states();
   void restore_file_fold_state(FileBuffer &buf);

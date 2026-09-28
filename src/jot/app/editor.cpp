@@ -483,6 +483,7 @@ void Editor::initialize_lua_runtime()
 
   load_recent_files();
   load_recent_workspaces();
+  load_home_pins();
 
   // Restore saved color scheme now that embedded runtime is ready.
   {
@@ -616,6 +617,7 @@ Editor::~Editor()
   save_file_fold_states();
   save_recent_files();
   save_recent_workspaces();
+  save_home_pins();
   stop_all_lsp_clients();
 
   if (lua_api)
@@ -717,6 +719,11 @@ void Editor::set_transient_message(const std::string &msg, int duration_ms, bool
 void Editor::set_home_menu_visible(bool visible)
 {
   show_home_menu = visible;
+  // The query belongs to the visit: a screen raised again starts on the lists,
+  // not on whatever was typed into it last time.
+  home_filter.clear();
+  home_filter_armed = false;
+  home_model_filter.clear();
   if (!show_home_menu)
   {
     home_menu_entries.clear();

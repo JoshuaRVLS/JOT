@@ -43,6 +43,17 @@ namespace
     fs::path p = root / "configs" / "recent_workspaces.txt";
     return p.string();
   }
+
+  std::string home_pins_path()
+  {
+    fs::path root = config_root_path();
+    if (root.empty())
+    {
+      return "";
+    }
+    fs::path p = root / "configs" / "home_pins.txt";
+    return p.string();
+  }
 } // namespace
 void Editor::track_recent_file(const std::string &path)
 {
@@ -216,6 +227,85 @@ void Editor::save_recent_workspaces()
   {
     file << entry << '\n';
   }
+}
+void Editor::load_home_pins()
+{
+  home_pinned.clear();
+  const std::string path = home_pins_path();
+  if (path.empty())
+  {
+    return;
+  }
+  std::ifstream file(path);
+  if (!file.is_open())
+  {
+    return;
+  }
+  std::string line;
+  std::set<std::string> seen;
+  while (std::getline(file, line))
+  {
+    // A pin outlives the path it points at: a folder that is gone right now
+    // may be a removable disk, and dropping the pin silently would lose it.
+    if (line.empty() || seen.find(line) != seen.end())
+    {
+      continue;
+    }
+    seen.insert(line);
+    home_pinned.push_back(line);
+    if ((int)home_pinned.size() >= kMaxHomePins)
+    {
+      break;
+    }
+  }
+}
+void Editor::save_home_pins()
+{
+  const std::string path = home_pins_path();
+  if (path.empty())
+  {
+    return;
+  }
+  std::error_code ec;
+  fs::path output_path(path);
+  fs::create_directories(output_path.parent_path(), ec);
+  std::ofstream file(path);
+  if (!file.is_open())
+  {
+    return;
+  }
+  for (const auto &entry : home_pinned)
+  {
+    file << entry << '\n';
+  }
+}
+bool Editor::home_pin_active(const std::string &path) const
+{
+  return std::find(home_pinned.begin(), home_pinned.end(), path) != home_pinned.end();
+}
+void Editor::toggle_home_pin(const std::string &path)
+{
+  if (path.empty())
+  {
+    return;
+  }
+  auto it = std::find(home_pinned.begin(), home_pinned.end(), path);
+  if (it != home_pinned.end())
+  {
+    home_pinned.erase(it);
+    set_message("Unpinned " + get_filename(path));
+  }
+  else
+  {
+    home_pinned.insert(home_pinned.begin(), path);
+    if ((int)home_pinned.size() > kMaxHomePins)
+    {
+      home_pinned.resize(kMaxHomePins);
+    }
+    set_message("Pinned " + get_filename(path));
+  }
+  save_home_pins();
+  needs_redraw = true;
 }
 void Editor::open_recent_file(const std::string &query)
 {

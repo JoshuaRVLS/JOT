@@ -66,6 +66,7 @@ add_executable(jot_tests
   test_discord_rpc.cpp
   test_discord_session.cpp
   test_home_menu.cpp
+  test_home_open.cpp
   test_home_surface.cpp
   test_lua_decorations.cpp
   test_lua_loader.cpp

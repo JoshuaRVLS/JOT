@@ -1,11 +1,16 @@
 #include "editor.h"
 #include "jot/file_icons.h"
 #include "jot/lua/api.h"
+#include "ui/text.h"
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <cstdlib>
 #include <filesystem>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace
@@ -21,7 +26,8 @@ namespace
     HOME_ACTION_OPEN_PATH_PROMPT = 7,
     HOME_ACTION_RESUME = 8,
     HOME_ACTION_CONTINUE_EDITOR = 9,
-    HOME_ACTION_QUIT = 10
+    HOME_ACTION_QUIT = 10,
+    HOME_ACTION_OPEN_PATH = 11
   };
 
   struct HomeMenuRenderItem
@@ -31,6 +37,19 @@ namespace
     int recent_workspace_index = -1;
     std::string label;
     std::string secondary;
+    std::string path; // what the row opens, empty for the command rows
+    char key = 0;     // the key that opens it while the screen is up
+  };
+
+  // One column of the home screen: the title, the rows in it, and how many of
+  // them the layout below has room for.
+  struct HomeSection
+  {
+    std::string title;
+    std::vector<HomeMenuRenderItem> items;
+    std::string empty_label;
+    int cap = 6;
+    int show = 0;
   };
 
   std::string icon_for_path(const std::string &path)
@@ -38,6 +57,296 @@ namespace
     // Shared per-extension glyph map (core/file_icons.h) so the home screen,
     // the file explorer and the status line agree on file icons.
     return std::string(jot_icons::file_type_icon(path).glyph) + " ";
+  }
+
+  long long home_now_ms()
+  {
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+  }
+
+  struct HomeProject
+  {
+    std::string path;
+    int score = 0;
+  };
+
+  struct BrowseEntry
+  {
+    std::string path;
+    std::string name;
+    bool dir = false;
+  };
+
+  // The two scans below are cached for a few seconds because the model is
+  // rebuilt on every frame, hover included. File scope (and not a function
+  // local) so a test can drop the cache after reshaping the tree on disk.
+  struct HomeScanCache
+  {
+    long long projects_at_ms = 0;
+    std::vector<HomeProject> projects;
+    long long browse_at_ms = 0;
+    std::string browse_key;
+    std::vector<BrowseEntry> browse_entries;
+
+    void clear()
+    {
+      projects_at_ms = 0;
+      projects.clear();
+      browse_at_ms = 0;
+      browse_key.clear();
+      browse_entries.clear();
+    }
+  };
+
+  HomeScanCache &scan_cache()
+  {
+    static HomeScanCache cache;
+    return cache;
+  }
+
+  // What makes a directory look like a project, strongest first: the scan stops
+  // at the first hit, so a repository costs a single stat.
+  const char *const kProjectMarkers[] = {".git",
+                                         "package.json",
+                                         "Cargo.toml",
+                                         "go.mod",
+                                         "pyproject.toml",
+                                         "CMakeLists.txt",
+                                         "composer.json",
+                                         "Gemfile",
+                                         "pom.xml",
+                                         "build.gradle",
+                                         "deno.json"};
+
+  bool project_marker_score(const fs::path &dir, int &score)
+  {
+    std::error_code ec;
+    for (int i = 0; i < (int)(sizeof(kProjectMarkers) / sizeof(kProjectMarkers[0])); i++)
+    {
+      if (fs::exists(dir / kProjectMarkers[i], ec) && !ec)
+      {
+        score = 100 - i;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  std::string user_home_path()
+  {
+    if (const char *home = std::getenv("HOME"); home && *home)
+    {
+      return home;
+    }
+#ifdef _WIN32
+    if (const char *profile = std::getenv("USERPROFILE"); profile && *profile)
+    {
+      return profile;
+    }
+#endif
+    return "";
+  }
+
+  // Where to look for projects: the launch folder, its parent (starting jot
+  // inside a subdirectory still finds the repo), and the usual dev folders.
+  std::vector<fs::path> project_roots()
+  {
+    std::vector<fs::path> roots;
+    std::error_code ec;
+    auto push = [&](const fs::path &p)
+    {
+      if (p.empty() || !fs::is_directory(p, ec) || ec)
+      {
+        return;
+      }
+      for (const auto &existing : roots)
+      {
+        if (existing == p)
+        {
+          return;
+        }
+      }
+      roots.push_back(p);
+    };
+
+    const fs::path cwd = fs::current_path(ec);
+    push(cwd);
+    push(cwd.parent_path());
+    const std::string home = user_home_path();
+    if (!home.empty())
+    {
+      for (const char *name :
+           {"Projects", "projects", "dev", "Dev", "src", "code", "repos", "work"})
+      {
+        push(fs::path(home) / name);
+      }
+    }
+    return roots;
+  }
+
+  const std::vector<HomeProject> &scan_projects()
+  {
+    HomeScanCache &cache = scan_cache();
+    std::vector<HomeProject> &found = cache.projects;
+    const long long now = home_now_ms();
+    if (cache.projects_at_ms != 0 && now - cache.projects_at_ms < 5000)
+    {
+      return found;
+    }
+    cache.projects_at_ms = now;
+    found.clear();
+
+    std::error_code ec;
+    for (const auto &root : project_roots())
+    {
+      int score = 0;
+      if (project_marker_score(root, score))
+      {
+        found.push_back({root.string(), score + 50});
+      }
+      int seen = 0;
+      for (const auto &entry : fs::directory_iterator(root, ec))
+      {
+        if (ec || ++seen > 200)
+        {
+          break;
+        }
+        const std::string name = entry.path().filename().string();
+        if (name.empty() || name[0] == '.' || name == "node_modules")
+        {
+          continue;
+        }
+        if (!entry.is_directory(ec) || ec)
+        {
+          continue;
+        }
+        if (project_marker_score(entry.path(), score))
+        {
+          found.push_back({entry.path().string(), score});
+        }
+      }
+    }
+
+    std::sort(found.begin(),
+              found.end(),
+              [](const HomeProject &a, const HomeProject &b)
+              {
+                if (a.score != b.score)
+                {
+                  return a.score > b.score;
+                }
+                return a.path < b.path;
+              });
+    // One row per directory: the same project is reachable from the launch
+    // folder and from its parent.
+    std::vector<HomeProject> unique;
+    std::unordered_set<std::string> seen_paths;
+    for (auto &project : found)
+    {
+      if (seen_paths.insert(project.path).second)
+      {
+        unique.push_back(std::move(project));
+      }
+    }
+    found = std::move(unique);
+    return found;
+  }
+
+  // Subdirectories first, then files, so the launch folder reads like a file
+  // manager's list and the arrow keys walk it predictably.
+  const std::vector<BrowseEntry> &browse_dir(const std::string &dir)
+  {
+    HomeScanCache &cache = scan_cache();
+    std::vector<BrowseEntry> &entries = cache.browse_entries;
+    const long long now = home_now_ms();
+    if (cache.browse_at_ms != 0 && cache.browse_key == dir && now - cache.browse_at_ms < 5000)
+    {
+      return entries;
+    }
+    cache.browse_at_ms = now;
+    cache.browse_key = dir;
+    entries.clear();
+
+    std::error_code ec;
+    std::vector<BrowseEntry> dirs, files;
+    int seen = 0;
+    for (const auto &entry : fs::directory_iterator(dir, ec))
+    {
+      if (ec || ++seen > 400)
+      {
+        break;
+      }
+      const std::string name = entry.path().filename().string();
+      if (name.empty() || name[0] == '.' || name == "node_modules")
+      {
+        continue;
+      }
+      const bool is_dir = entry.is_directory(ec) && !ec;
+      (is_dir ? dirs : files).push_back({entry.path().string(), name, is_dir});
+    }
+    auto by_name = [](const BrowseEntry &a, const BrowseEntry &b) { return a.name < b.name; };
+    std::sort(dirs.begin(), dirs.end(), by_name);
+    std::sort(files.begin(), files.end(), by_name);
+    entries = std::move(dirs);
+    entries.insert(entries.end(), files.begin(), files.end());
+    return entries;
+  }
+
+  // "2h ago" from a path's own timestamp: for two checkouts with the same name
+  // it is what tells which one was touched last.
+  std::string relative_age(const std::string &path)
+  {
+    std::error_code ec;
+    const fs::file_time_type stamp = fs::last_write_time(path, ec);
+    if (ec)
+    {
+      return "";
+    }
+    const long long secs =
+        std::chrono::duration_cast<std::chrono::seconds>(fs::file_time_type::clock::now() - stamp)
+            .count();
+    if (secs < 0)
+    {
+      return "";
+    }
+    if (secs < 60)
+    {
+      return "just now";
+    }
+    if (secs < 3600)
+    {
+      return std::to_string(secs / 60) + "m ago";
+    }
+    if (secs < 86400)
+    {
+      return std::to_string(secs / 3600) + "h ago";
+    }
+    if (secs < 30LL * 86400)
+    {
+      return std::to_string(secs / 86400) + "d ago";
+    }
+    return std::to_string(secs / (30LL * 86400)) + "mo ago";
+  }
+
+  std::string lowered_copy(const std::string &text)
+  {
+    std::string out = text;
+    std::transform(
+        out.begin(), out.end(), out.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+    return out;
+  }
+
+  // A filtered row matches on its label or on the path it would open.
+  bool
+  row_matches(const std::string &needle, const std::string &label, const std::string &secondary)
+  {
+    if (needle.empty())
+    {
+      return true;
+    }
+    return lowered_copy(label).find(needle) != std::string::npos
+           || lowered_copy(secondary).find(needle) != std::string::npos;
   }
 
   std::string shorten_tail(const std::string &text, int max_len)
@@ -109,13 +418,13 @@ namespace
   }
 } // namespace
 
-void Editor::render_home_menu()
+// Builds the screen's rows for the current query and hands them back for
+// painting. The rows Enter, a digit and a pin act on come from here too: a
+// terminal can deliver several keys in one read (a paste), so the input
+// handler rebuilds when the query it was built for is no longer the query on
+// the screen.
+HomeView Editor::build_home_menu_model()
 {
-  if (!show_home_menu)
-  {
-    return;
-  }
-
   const int screen_w = ui->get_render_width();
   const int screen_h = ui->get_height();
   const int usable_h = std::max(1, screen_h - status_height);
@@ -134,15 +443,13 @@ void Editor::render_home_menu()
   home_menu_panel_w = content_w;
   home_menu_panel_h = content_h;
 
-  std::string context = "No recent workspace yet";
-  if (!recent_workspaces.empty())
-  {
-    context = "Last folder  " + get_filename(recent_workspaces.front());
-  }
-  else if (!recent_files.empty())
-  {
-    context = "Last file  " + get_filename(recent_files.front());
-  }
+  // The context line names the launch folder, which is also what the "Here"
+  // section lists: this is the directory jot was started in.
+  std::error_code cwd_ec;
+  const fs::path launch_path = fs::current_path(cwd_ec);
+  const std::string launch = cwd_ec ? std::string() : launch_path.string();
+  const std::string context =
+      launch.empty() ? std::string("No recent workspace yet") : "Here  " + launch;
 
   const bool two_column = screen_w >= 88 && content_w >= 78;
   const int gap = two_column ? 4 : 0;
@@ -155,6 +462,46 @@ void Editor::render_home_menu()
 
   home_menu_entries.clear();
 
+  const std::string needle = lowered_copy(home_filter);
+  // The typed text matches a row's label, its dimmed tail or the path it opens,
+  // so "2h" finds the folder touched last and "src" the checkout.
+  auto keep = [&](const std::string &label, const std::string &secondary, const std::string &path)
+  {
+    if (row_matches(needle, label, secondary))
+    {
+      return true;
+    }
+    return !needle.empty() && !path.empty() && lowered_copy(path).find(needle) != std::string::npos;
+  };
+
+  // Pins are split here so a pinned folder shows up once, as a project, and not
+  // again through the recent list it is also in.
+  std::vector<std::string> pinned_dirs;
+  std::vector<std::string> pinned_files;
+  for (const auto &pin : home_pinned)
+  {
+    std::error_code pin_ec;
+    if (fs::is_directory(pin, pin_ec) && !pin_ec)
+    {
+      pinned_dirs.push_back(pin);
+    }
+    else if (fs::exists(pin, pin_ec) && !pin_ec)
+    {
+      pinned_files.push_back(pin);
+    }
+  }
+  auto pinned_dir = [&](const std::string &path)
+  { return std::find(pinned_dirs.begin(), pinned_dirs.end(), path) != pinned_dirs.end(); };
+  auto pinned_file = [&](const std::string &path)
+  { return std::find(pinned_files.begin(), pinned_files.end(), path) != pinned_files.end(); };
+  // Parent folder and age together: the tail is what survives the truncation,
+  // and the age is what tells two same-named checkouts apart.
+  auto join_meta = [&](const std::string &path)
+  {
+    const std::string age = relative_age(path);
+    return age.empty() ? display_parent(path) : display_parent(path) + "  " + age;
+  };
+
   std::vector<HomeMenuRenderItem> items;
   if (!recent_workspaces.empty() || !recent_files.empty())
   {
@@ -163,6 +510,7 @@ void Editor::render_home_menu()
     if (!recent_workspaces.empty())
     {
       resume.recent_workspace_index = 0;
+      resume.path = recent_workspaces.front();
       resume.label =
           workspace_icon() + std::string("Resume ") + get_filename(recent_workspaces.front());
       resume.secondary = recent_workspaces.front();
@@ -170,18 +518,196 @@ void Editor::render_home_menu()
     else
     {
       resume.recent_index = 0;
+      resume.path = recent_files.front();
       resume.label =
           icon_for_path(recent_files.front()) + " Resume " + get_filename(recent_files.front());
       resume.secondary = recent_files.front();
     }
     items.push_back(std::move(resume));
   }
-  items.push_back({HOME_ACTION_OPEN_PATH_PROMPT, -1, -1, "  Open Folder / File", "open "});
-  items.push_back({HOME_ACTION_OPEN_RECENT_PROMPT, -1, -1, "󰱼  Open Recent", "openrecent "});
-  items.push_back({HOME_ACTION_NEW_FILE, -1, -1, "  New File", ""});
-  items.push_back({HOME_ACTION_COMMAND_PALETTE, -1, -1, "  Command Palette", ""});
-  items.push_back({HOME_ACTION_THEME_CHOOSER, -1, -1, "󰔎  Theme", ""});
-  items.push_back({HOME_ACTION_CONTINUE_EDITOR, -1, -1, "󰋖  Continue Editing", ""});
+  items.push_back(
+      {HOME_ACTION_OPEN_PATH_PROMPT, -1, -1, "  Open Folder / File", "open ", "", 'o'});
+  items.push_back(
+      {HOME_ACTION_OPEN_RECENT_PROMPT, -1, -1, "󰱼  Open Recent", "openrecent ", "", 'r'});
+  items.push_back({HOME_ACTION_NEW_FILE, -1, -1, "  New File", "", "", 'n'});
+  items.push_back({HOME_ACTION_COMMAND_PALETTE, -1, -1, "  Command Palette", "", "", 'p'});
+  items.push_back({HOME_ACTION_THEME_CHOOSER, -1, -1, "󰔎  Theme", "", "", 't'});
+  items.push_back({HOME_ACTION_CONTINUE_EDITOR, -1, -1, "󰋖  Continue Editing", "", "", 'e'});
+
+  // Quit is a row now that the screen lists it, and a row is easier to find
+  // than the chord it also keeps.
+  items.push_back({HOME_ACTION_QUIT, -1, -1, "  Quit", "", "", 'q'});
+  items.erase(std::remove_if(items.begin(),
+                             items.end(),
+                             [&](const HomeMenuRenderItem &row)
+                             { return !keep(row.label, row.secondary, row.path); }),
+              items.end());
+
+  // ---- The lists: projects, this folder, then the recents ----
+  // Each keeps more candidates than it can show so a filter can still reach a
+  // row the layout would not have had room for.
+  const int kCandidateCap = 24;
+  std::vector<HomeSection> sections;
+
+  HomeSection projects;
+  projects.title = "Projects";
+  projects.empty_label = "  Nothing found nearby";
+  projects.cap = 6;
+  for (const auto &dir : pinned_dirs)
+  {
+    HomeMenuRenderItem row;
+    row.action = HOME_ACTION_OPEN_PATH;
+    row.path = dir;
+    row.label = "\u2605 " + get_filename(dir);
+    row.secondary = join_meta(dir);
+    if (keep(row.label, row.secondary, row.path))
+    {
+      projects.items.push_back(std::move(row));
+    }
+  }
+  for (const auto &project : scan_projects())
+  {
+    if (pinned_dir(project.path))
+    {
+      continue;
+    }
+    HomeMenuRenderItem row;
+    row.action = HOME_ACTION_OPEN_PATH;
+    row.path = project.path;
+    row.label = workspace_icon() + get_filename(project.path);
+    row.secondary = join_meta(project.path);
+    if (keep(row.label, row.secondary, row.path))
+    {
+      projects.items.push_back(std::move(row));
+    }
+    if ((int)projects.items.size() >= kCandidateCap)
+    {
+      break;
+    }
+  }
+  sections.push_back(std::move(projects));
+
+  HomeSection here;
+  here.title = launch.empty() ? "Here" : "Here  " + get_filename(launch);
+  here.empty_label = "  This folder is empty";
+  here.cap = 7;
+  if (!launch.empty())
+  {
+    for (const auto &entry : browse_dir(launch))
+    {
+      HomeMenuRenderItem row;
+      row.action = HOME_ACTION_OPEN_PATH;
+      row.path = entry.path;
+      row.label = (entry.dir ? workspace_icon() : icon_for_path(entry.path)) + entry.name;
+      row.secondary = relative_age(entry.path);
+      if (keep(row.label, row.secondary, row.path))
+      {
+        here.items.push_back(std::move(row));
+      }
+      if ((int)here.items.size() >= kCandidateCap)
+      {
+        break;
+      }
+    }
+  }
+  sections.push_back(std::move(here));
+
+  HomeSection folders;
+  folders.title = "Recent Folders";
+  folders.empty_label = "  No recent folders";
+  folders.cap = 5;
+  for (int i = 0; i < (int)recent_workspaces.size() && (int)folders.items.size() < kCandidateCap;
+       i++)
+  {
+    const std::string &path = recent_workspaces[i];
+    if (pinned_dir(path))
+    {
+      continue;
+    }
+    HomeMenuRenderItem row;
+    row.action = HOME_ACTION_OPEN_RECENT_WORKSPACE;
+    row.recent_workspace_index = i;
+    row.path = path;
+    row.label = workspace_icon() + get_filename(path);
+    row.secondary = join_meta(path);
+    if (keep(row.label, row.secondary, row.path))
+    {
+      folders.items.push_back(std::move(row));
+    }
+  }
+  sections.push_back(std::move(folders));
+
+  HomeSection files;
+  files.title = "Recent Files";
+  files.empty_label = "  No recent files";
+  files.cap = 5;
+  for (const auto &pin : pinned_files)
+  {
+    HomeMenuRenderItem row;
+    row.action = HOME_ACTION_OPEN_PATH;
+    row.path = pin;
+    row.label = "\u2605 " + get_filename(pin);
+    row.secondary = join_meta(pin);
+    if (keep(row.label, row.secondary, row.path))
+    {
+      files.items.push_back(std::move(row));
+    }
+  }
+  for (int i = 0; i < (int)recent_files.size() && (int)files.items.size() < kCandidateCap; i++)
+  {
+    const std::string &path = recent_files[i];
+    if (pinned_file(path))
+    {
+      continue;
+    }
+    HomeMenuRenderItem row;
+    row.action = HOME_ACTION_OPEN_RECENT;
+    row.recent_index = i;
+    row.path = path;
+    row.label = icon_for_path(path) + get_filename(path);
+    row.secondary = join_meta(path);
+    if (keep(row.label, row.secondary, row.path))
+    {
+      files.items.push_back(std::move(row));
+    }
+  }
+  sections.push_back(std::move(files));
+
+  // Room is handed out a section at a time, headers included, so a short
+  // terminal still shows every list instead of only the first one.
+  {
+    int alive = 0;
+    for (const auto &section : sections)
+    {
+      alive += section.items.empty() ? 0 : 1;
+    }
+    int remaining = std::max(0, row_limit - section_y);
+    for (auto &section : sections)
+    {
+      if (section.items.empty())
+      {
+        continue;
+      }
+      const int rows = std::min<int>({remaining - alive, (int)section.items.size(), section.cap});
+      section.show = std::max(0, rows);
+      remaining -= section.show + 1;
+      alive--;
+    }
+  }
+
+  // The key printed on a row is the key that opens it, handed out in layout
+  // order so a digit always means "the Nth row you can see".
+  char next_digit = '1';
+  for (auto &section : sections)
+  {
+    for (int i = 0; i < section.show; i++)
+    {
+      if (next_digit <= '9')
+      {
+        section.items[i].key = next_digit++;
+      }
+    }
+  }
 
   // Build the full home model first (rows + native hit rects), then hand it
   // to a Lua UI handler when one is registered; otherwise paint it natively.
@@ -195,6 +721,11 @@ void Editor::render_home_menu()
   view.wordmark = "JOT";
   view.tagline = "Developer workspace";
   view.context = context;
+  view.filter =
+      home_filter_armed || !home_filter.empty() ? "Filter  " + home_filter : std::string();
+  view.hint = home_filter.empty() && !home_filter_armed
+                  ? "/ filter  f pin  j/k move  Enter open  Esc close"
+                  : "Esc clear  Enter open  backspace edit";
 
   auto add_section = [&](int x, int y, const std::string &title, int width)
   {
@@ -227,9 +758,19 @@ void Editor::render_home_menu()
     {
       r.secondary = shorten_tail(item.secondary, width / 2);
     }
+    if (item.key != 0)
+    {
+      r.key = std::string(1, item.key);
+    }
     view.rows.push_back(std::move(r));
-    home_menu_entries.push_back(
-        {item.action, item.recent_index, item.recent_workspace_index, x, y, width});
+    home_menu_entries.push_back({item.action,
+                                 item.recent_index,
+                                 item.recent_workspace_index,
+                                 x,
+                                 y,
+                                 width,
+                                 item.path,
+                                 item.key});
     return true;
   };
 
@@ -244,59 +785,45 @@ void Editor::render_home_menu()
     }
   }
 
-  auto add_recent_list = [&](int x, int &y, int width, const std::string &title, bool workspaces)
+  int list_y = two_column ? section_y : action_y + 1;
+  for (const auto &section : sections)
   {
-    add_section(x, y, title, width);
-    y++;
-    const int max_show = workspaces ? std::min(7, (int)recent_workspaces.size())
-                                    : std::min(9, (int)recent_files.size());
-    if (max_show == 0)
+    if (section.items.empty())
     {
-      if (y < row_limit)
+      // An empty list still says so, unless a filter is what emptied it.
+      if (!needle.empty())
       {
-        HomeEntryView r;
-        r.section = false;
-        r.label = workspaces ? "No recent folders" : "No recent files";
-        r.x = x;
-        r.y = y;
-        r.w = width;
-        r.selected = false;
-        view.rows.push_back(std::move(r));
-        y++;
+        continue;
       }
-      return;
+      add_section(recent_x, list_y, section.title, recent_w);
+      list_y++;
+      if (list_y >= row_limit)
+      {
+        continue;
+      }
+      HomeEntryView r;
+      r.label = ellipsize_right(section.empty_label, recent_w);
+      r.x = recent_x;
+      r.y = list_y;
+      r.w = recent_w;
+      view.rows.push_back(std::move(r));
+      list_y++;
+      continue;
     }
-    for (int i = 0; i < max_show && y < row_limit; i++)
+    if (section.show == 0)
     {
-      HomeMenuRenderItem recent;
-      if (workspaces)
+      continue; // no room at all: a header on its own would say nothing
+    }
+    add_section(recent_x, list_y, section.title, recent_w);
+    list_y++;
+    for (int i = 0; i < section.show && list_y < row_limit; i++)
+    {
+      if (add_home_item(section.items[i], recent_x, list_y, recent_w))
       {
-        recent.action = HOME_ACTION_OPEN_RECENT_WORKSPACE;
-        recent.recent_workspace_index = i;
-        recent.label = workspace_icon() + get_filename(recent_workspaces[i]);
-        recent.secondary = display_parent(recent_workspaces[i]);
-      }
-      else
-      {
-        recent.action = HOME_ACTION_OPEN_RECENT;
-        recent.recent_index = i;
-        recent.label = icon_for_path(recent_files[i]) + get_filename(recent_files[i]);
-        recent.secondary = display_parent(recent_files[i]);
-      }
-      if (add_home_item(recent, x, y, width))
-      {
-        y++;
+        list_y++;
       }
     }
-  };
-
-  int recent_y = two_column ? section_y : action_y + 1;
-  add_recent_list(recent_x, recent_y, recent_w, "Recent Folders", true);
-  if (recent_y < row_limit)
-  {
-    recent_y++;
   }
-  add_recent_list(recent_x, recent_y, recent_w, "Recent Files", false);
 
   if (home_menu_entries.empty())
   {
@@ -306,7 +833,21 @@ void Editor::render_home_menu()
   {
     home_menu_selected = std::clamp(home_menu_selected, 0, (int)home_menu_entries.size() - 1);
   }
+  home_model_filter = home_filter;
+  return view;
+}
 
+void Editor::render_home_menu()
+{
+  if (!show_home_menu)
+  {
+    return;
+  }
+
+  const HomeView view = build_home_menu_model();
+  const int content_x = view.panel_x;
+  const int content_y = view.panel_y;
+  const int content_w = view.panel_w;
   if (lua_api && lua_api->has_lua_ui_handler("home_screen") && lua_api->emit_home(view))
   {
     return;
@@ -318,11 +859,18 @@ void Editor::render_home_menu()
   ui->draw_text(content_x, content_y, "JOT", theme.fg_keyword, theme.bg_default, true);
   ui->draw_text(
       content_x + 5, content_y, "Developer workspace", theme.fg_comment, theme.bg_default);
-  ui->draw_text(content_x,
-                content_y + 1,
-                ellipsize_right(context, std::max(0, content_w - 2)),
-                theme.fg_default,
-                theme.bg_default);
+  const std::string hint = view.hint;
+  const int hint_x = content_x + content_w - (int)hint.size() - 1;
+  if (hint_x > content_x + 26)
+  {
+    ui->draw_text(hint_x, content_y, hint, theme.fg_comment, theme.bg_default);
+  }
+  ui->draw_text(
+      content_x,
+      content_y + 1,
+      ellipsize_right(view.filter.empty() ? view.context : view.filter, std::max(0, content_w - 2)),
+      theme.fg_default,
+      theme.bg_default);
   for (const auto &row : view.rows)
   {
     if (row.section)
@@ -330,24 +878,74 @@ void Editor::render_home_menu()
       ui->draw_text(row.x, row.y, row.label, theme.fg_sidebar_directory, theme.bg_default, true);
       continue;
     }
-    bool selected = row.selected;
-    int fg = selected ? theme.fg_selection : theme.fg_default;
-    int bg = selected ? theme.bg_selection : theme.bg_default;
-    UIRect row_rect = {row.x, row.y, row.w, 1};
-    ui->fill_rect(row_rect, " ", fg, bg);
+    const bool selected = row.selected;
+    const int fg = selected ? theme.fg_selection : theme.fg_default;
+    const int bg = selected ? theme.bg_selection : theme.bg_default;
     std::string label = row.label;
+    // The band hugs the label rather than the whole row: the panel is much
+    // wider than the names it lists, and a bar run edge to edge reads as a rule
+    // across the screen instead of a highlight on the row.
+    if (selected)
+    {
+      UIRect band = {row.x + 1, row.y, ui_cell_count(label), 1};
+      ui->fill_rect(band, " ", fg, bg);
+    }
     ui->draw_text(row.x + 1, row.y, label, fg, bg, selected);
+    const int key_gap = row.key.empty() ? 0 : 2;
     if (!row.secondary.empty())
     {
       std::string secondary = row.secondary;
-      int sx = row.x + row.w - (int)secondary.size() - 1;
+      int sx = row.x + row.w - (int)secondary.size() - 1 - key_gap;
       if (sx > row.x + (int)label.size() + 2)
       {
-        int path_fg = selected ? theme.fg_selection : theme.fg_comment;
-        ui->draw_text(sx, row.y, secondary, path_fg, bg);
+        ui->draw_text(sx, row.y, secondary, theme.fg_comment, theme.bg_default);
       }
     }
+    if (!row.key.empty())
+    {
+      ui->draw_text(row.x + row.w - (int)row.key.size() - 1,
+                    row.y,
+                    row.key,
+                    theme.fg_comment,
+                    theme.bg_default);
+    }
   }
+}
+
+// --- home screen (test) ---
+// The rows the model just built, in the order a digit press walks them, plus
+// the state the keys read. A case pins what a key opens without driving the
+// paint (the painted digits are asserted separately in test_home_open.cpp).
+std::vector<std::string> Editor::home_row_paths_for_test() const
+{
+  std::vector<std::string> paths;
+  paths.reserve(home_menu_entries.size());
+  for (const HomeMenuEntry &entry : home_menu_entries)
+  {
+    paths.push_back(entry.path);
+  }
+  return paths;
+}
+
+std::vector<char> Editor::home_row_keys_for_test() const
+{
+  std::vector<char> keys;
+  keys.reserve(home_menu_entries.size());
+  for (const HomeMenuEntry &entry : home_menu_entries)
+  {
+    keys.push_back(entry.key);
+  }
+  return keys;
+}
+
+void Editor::home_input_for_test(int ch)
+{
+  handle_input(ch, false, false, false, ch);
+}
+
+void Editor::home_scan_cache_clear_for_test()
+{
+  scan_cache().clear();
 }
 
 bool Editor::handle_home_menu_input(int ch, bool is_ctrl, bool is_shift, bool is_alt)
@@ -359,13 +957,32 @@ bool Editor::handle_home_menu_input(int ch, bool is_ctrl, bool is_shift, bool is
     return false;
   }
 
+  // Leaving the screen always drops the query with it, so the next open starts
+  // on the real lists instead of on a filter the user cannot see.
+  auto dismiss_home = [&]()
+  {
+    show_home_menu = false;
+    home_filter.clear();
+    home_filter_armed = false;
+    home_model_filter.clear();
+  };
+
+  // Keys and frames are two clocks: a paste, or a hand faster than the frame,
+  // delivers several keys between two renders, and the rows Enter, a digit and
+  // a pin act on are the ones the render built. Rebuild here so those keys act
+  // on what is on the screen rather than on the list from before the query.
+  if (home_menu_panel_w > 0 && home_model_filter != home_filter)
+  {
+    build_home_menu_model();
+  }
+
   auto open_recent_by_index = [&](int idx) -> bool
   {
     if (idx < 0 || idx >= (int)recent_files.size())
     {
       return false;
     }
-    show_home_menu = false;
+    dismiss_home();
     open_recent_file(std::to_string(idx + 1));
     needs_redraw = true;
     return true;
@@ -386,7 +1003,7 @@ bool Editor::handle_home_menu_input(int ch, bool is_ctrl, bool is_shift, bool is
       needs_redraw = true;
       return true;
     }
-    show_home_menu = false;
+    dismiss_home();
     open_workspace(recent_workspaces[idx], true);
     needs_redraw = true;
     return true;
@@ -417,7 +1034,7 @@ bool Editor::handle_home_menu_input(int ch, bool is_ctrl, bool is_shift, bool is
     case HOME_ACTION_OPEN_RECENT_WORKSPACE:
       return open_workspace_by_index(entry.recent_workspace_index);
     case HOME_ACTION_NEW_FILE:
-      show_home_menu = false;
+      dismiss_home();
       if (!is_startup_pristine())
       {
         create_new_buffer();
@@ -426,7 +1043,7 @@ bool Editor::handle_home_menu_input(int ch, bool is_ctrl, bool is_shift, bool is
       needs_redraw = true;
       return true;
     case HOME_ACTION_OPEN_RECENT_PROMPT:
-      show_home_menu = false;
+      dismiss_home();
       show_command_palette = true;
       command_palette_query = "openrecent ";
       command_palette_results.clear();
@@ -437,7 +1054,7 @@ bool Editor::handle_home_menu_input(int ch, bool is_ctrl, bool is_shift, bool is
       needs_redraw = true;
       return true;
     case HOME_ACTION_OPEN_PATH_PROMPT:
-      show_home_menu = false;
+      dismiss_home();
       show_command_palette = true;
       command_palette_query = "open ";
       command_palette_results.clear();
@@ -448,20 +1065,47 @@ bool Editor::handle_home_menu_input(int ch, bool is_ctrl, bool is_shift, bool is
       needs_redraw = true;
       return true;
     case HOME_ACTION_COMMAND_PALETTE:
-      show_home_menu = false;
+      dismiss_home();
       toggle_command_palette();
       needs_redraw = true;
       return true;
     case HOME_ACTION_THEME_CHOOSER:
-      show_home_menu = false;
+      dismiss_home();
       open_theme_chooser();
       needs_redraw = true;
       return true;
     case HOME_ACTION_CONTINUE_EDITOR:
-      show_home_menu = false;
+      dismiss_home();
       set_message("Home hidden");
       needs_redraw = true;
       return true;
+    case HOME_ACTION_OPEN_PATH:
+    {
+      if (entry.path.empty())
+      {
+        return false;
+      }
+      std::error_code open_ec;
+      if (!std::filesystem::exists(entry.path, open_ec) || open_ec)
+      {
+        set_message("Missing: " + entry.path);
+        needs_redraw = true;
+        return true;
+      }
+      dismiss_home();
+      home_filter.clear();
+      home_filter_armed = false;
+      if (std::filesystem::is_directory(entry.path, open_ec) && !open_ec)
+      {
+        open_workspace(entry.path, true);
+      }
+      else
+      {
+        open_file(entry.path);
+      }
+      needs_redraw = true;
+      return true;
+    }
     case HOME_ACTION_QUIT:
       running = false;
       return true;
@@ -481,7 +1125,7 @@ bool Editor::handle_home_menu_input(int ch, bool is_ctrl, bool is_shift, bool is
         break;
       }
     }
-    show_home_menu = false;
+    dismiss_home();
     if (unsaved)
     {
       show_quit_prompt = true;
@@ -494,33 +1138,74 @@ bool Editor::handle_home_menu_input(int ch, bool is_ctrl, bool is_shift, bool is
     return true;
   }
 
+  const bool filtering = !home_filter.empty() || home_filter_armed;
+
   if (ch == 27)
   {
-    show_home_menu = false;
+    if (filtering)
+    {
+      // The first Esc takes back what was typed, the second closes the screen.
+      home_filter.clear();
+      home_filter_armed = false;
+      home_menu_selected = 0;
+      needs_redraw = true;
+      return true;
+    }
+    dismiss_home();
     set_message("Home hidden");
     needs_redraw = true;
     return true;
   }
 
-  if (ch >= '1' && ch <= '9')
+  if (is_ctrl || is_alt)
   {
-    int idx = ch - '1';
-    if (open_recent_by_index(idx) || open_workspace_by_index(idx))
+    // A chord is a shortcut, not filter text: hand it back to the dispatcher
+    // after dropping the screen, the way a printable key used to.
+    dismiss_home();
+    needs_redraw = true;
+    return false;
+  }
+
+  if (ch == 127 || ch == 8)
+  {
+    if (!home_filter.empty())
     {
+      home_filter.pop_back();
+      needs_redraw = true;
       return true;
+    }
+    if (home_filter_armed)
+    {
+      home_filter_armed = false;
+      needs_redraw = true;
+    }
+    return true;
+  }
+
+  // A digit opens the row that prints it, which is what makes the keys on the
+  // rows worth printing: they are the layout's order, not the list's.
+  if (!filtering && ch >= '1' && ch <= '9')
+  {
+    for (int i = 0; i < (int)home_menu_entries.size(); i++)
+    {
+      if (home_menu_entries[i].key == (char)ch)
+      {
+        home_menu_selected = i;
+        return execute_entry(home_menu_entries[i]);
+      }
     }
   }
 
   const int count = (int)home_menu_entries.size();
   if (count > 0)
   {
-    if (ch == 1008 || ch == 'k' || ch == 'K')
+    if (ch == 1008 || (!filtering && (ch == 'k' || ch == 'K')))
     {
       home_menu_selected = (home_menu_selected - 1 + count) % count;
       needs_redraw = true;
       return true;
     }
-    if (ch == 1009 || ch == 'j' || ch == 'J')
+    if (ch == 1009 || (!filtering && (ch == 'j' || ch == 'J')))
     {
       home_menu_selected = (home_menu_selected + 1) % count;
       needs_redraw = true;
@@ -544,6 +1229,46 @@ bool Editor::handle_home_menu_input(int ch, bool is_ctrl, bool is_shift, bool is
     }
   }
 
+  if (filtering)
+  {
+    // Once something is typed every printable key is part of the query, so a
+    // letter that is also a shortcut cannot cut the filter short.
+    if (ch >= 32 && ch < 127)
+    {
+      home_filter.push_back((char)ch);
+      home_menu_selected = 0;
+      needs_redraw = true;
+      return true;
+    }
+    return true;
+  }
+
+  if (ch == 'o' || ch == 'O')
+  {
+    HomeMenuEntry e = {HOME_ACTION_OPEN_PATH_PROMPT, -1, -1, 0, 0, 0};
+    return execute_entry(e);
+  }
+  if (ch == '/')
+  {
+    // Arms the filter without typing a character, for a query that starts with
+    // one of the shortcut letters.
+    home_filter_armed = true;
+    needs_redraw = true;
+    return true;
+  }
+  if (ch == 'f' || ch == 'F')
+  {
+    if (home_menu_selected >= 0 && home_menu_selected < count)
+    {
+      const std::string &path = home_menu_entries[home_menu_selected].path;
+      if (!path.empty())
+      {
+        toggle_home_pin(path);
+        return true;
+      }
+    }
+    return true;
+  }
   if (ch == 'n' || ch == 'N')
   {
     HomeMenuEntry e = {HOME_ACTION_NEW_FILE, -1, -1, 0, 0, 0};
@@ -589,10 +1314,12 @@ bool Editor::handle_home_menu_input(int ch, bool is_ctrl, bool is_shift, bool is
 
   if (ch >= 32 && ch < 127)
   {
-    // Any other printable key dismisses home and continues normal editing.
-    show_home_menu = false;
+    // Typing filters the screen instead of dismissing it: Enter then opens the
+    // top match, and Esc (or Continue Editing) is how you get back to editing.
+    home_filter.push_back((char)ch);
+    home_menu_selected = 0;
     needs_redraw = true;
-    return false;
+    return true;
   }
 
   return true;

@@ -766,6 +766,8 @@ bool LuaAPI::emit_home(const HomeView &view)
                        lua_set_str_field(L, t, "wordmark", view.wordmark);
                        lua_set_str_field(L, t, "tagline", view.tagline);
                        lua_set_str_field(L, t, "context", view.context);
+                       lua_set_str_field(L, t, "filter", view.filter);
+                       lua_set_str_field(L, t, "hint", view.hint);
                        lua_newtable(L);
                        const int arr = lua_gettop(L);
                        for (size_t i = 0; i < view.rows.size(); i++)
@@ -775,6 +777,7 @@ bool LuaAPI::emit_home(const HomeView &view)
                          const int ri = lua_gettop(L);
                          lua_set_str_field(L, ri, "label", r.label);
                          lua_set_str_field(L, ri, "secondary", r.secondary);
+                         lua_set_str_field(L, ri, "key", r.key);
                          lua_set_int_field(L, ri, "x", r.x);
                          lua_set_int_field(L, ri, "y", r.y);
                          lua_set_int_field(L, ri, "w", r.w);

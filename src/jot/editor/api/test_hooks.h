@@ -124,6 +124,29 @@ public:
   // One full frame-loop step (the per-frame blink/scheduling logic plus a
   // render), for tests that need to observe behaviour over time.
   void render_frame_for_test();
+  // --- home screen (test) ---
+  // The rows the model built for the last frame, in layout order: what a digit
+  // press walks, the key it prints, and the query the screen is filtered by.
+  std::vector<std::string> home_row_paths_for_test() const;
+  std::vector<char> home_row_keys_for_test() const;
+  // One key through the real dispatcher (the home handler runs first), so a
+  // case drives the filter and the row keys the way a terminal does.
+  void home_input_for_test(int ch);
+  bool home_visible_for_test() const
+  {
+    return show_home_menu;
+  }
+  int home_selected_for_test() const
+  {
+    return home_menu_selected;
+  }
+  const std::string &home_filter_for_test() const
+  {
+    return home_filter;
+  }
+  // The project and folder scans are cached for a few seconds (the model is
+  // rebuilt per frame); a case that reshapes the tree on disk drops them.
+  void home_scan_cache_clear_for_test();
   // --- smooth scrolling (test) ---
   // Requests an animation and steps it at explicit timestamps, so the easing
   // curve can be asserted on without a clock.

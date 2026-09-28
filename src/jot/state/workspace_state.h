@@ -60,6 +60,9 @@ struct WorkspaceState
   std::vector<ClosedBufferSnapshot> closed_buffer_history;
   std::vector<std::string> recent_files;
   std::vector<std::string> recent_workspaces;
+  // Home screen pins: kept at the top of their section and shown even when the
+  // project scan or the recent lists do not carry them any more.
+  std::vector<std::string> home_pinned;
   std::unordered_map<std::string, int> workspace_diagnostic_severity;
   std::map<char, GlobalMark> global_marks; // global marks ('A'-'Z'), cross-file
 

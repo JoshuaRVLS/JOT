@@ -92,6 +92,14 @@ struct SurfaceState
   int home_menu_panel_w = 0;
   int home_menu_panel_h = 0;
   std::vector<HomeMenuEntry> home_menu_entries;
+  // Typed filter on the home screen: the query itself, and whether typing was
+  // armed by `/` so that a letter which is also a shortcut filters instead of
+  // firing.
+  std::string home_filter;
+  bool home_filter_armed = false;
+  // The query the rows in home_menu_entries were built for, so input can tell
+  // when the list it would act on is a frame behind the one on screen.
+  std::string home_model_filter;
 
   // Cell-based settings menu (:settings, Ctrl+, in GUI mode): every config key
   // with its value, filtered by the search bar. Bools toggle, ints step and

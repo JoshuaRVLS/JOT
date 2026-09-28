@@ -55,6 +55,7 @@ local function row_sig(r)
     tostring(r.w or 0),
     r.label or "",
     r.secondary or "",
+    r.key or "",
   }, "\1")
 end
 
@@ -104,12 +105,16 @@ local function home_screen(p)
       span_at(#text, #str, fg, bg)
       text = text .. str
     end
-    local function fill_row(abs_x)
+    -- The selection band hugs the label rather than the whole row: the panel is
+    -- much wider than the names it lists, and a bar run edge to edge reads as a
+    -- rule across the screen instead of a highlight on the row.
+    local function select_label(abs_x, label)
       local rel = math.max(0, abs_x - panel_x)
-      span_at(0, 65535, sel_fg, sel_bg)
       if cell_len(text) < rel then
         text = text .. string.rep(" ", rel - cell_len(text))
       end
+      span_at(#text, #label, sel_fg, sel_bg)
+      text = text .. label
     end
 
     if y == panel_y then
@@ -117,32 +122,47 @@ local function home_screen(p)
       if p.tagline and p.tagline ~= "" then
         put(panel_x + (p.wordmark and cell_len(p.wordmark) or 0) + 1, p.tagline, comment, default_bg)
       end
+      -- Key legend pinned to the right edge of the wordmark row, only when it
+      -- still leaves the wordmark and tagline room.
+      if p.hint and p.hint ~= "" then
+        local hint_x = panel_x + panel_w - cell_len(p.hint) - 1
+        if hint_x > panel_x + 26 then
+          put(hint_x, p.hint, comment, default_bg)
+        end
+      end
     elseif y == panel_y + 1 then
-      if p.context and p.context ~= "" then
-        put(panel_x, trunc_cells(p.context, math.max(1, panel_w - 2)), default_fg, default_bg)
+      local line = p.filter ~= nil and p.filter ~= "" and p.filter or p.context
+      if line and line ~= "" then
+        put(panel_x, trunc_cells(line, math.max(1, panel_w - 2)), default_fg, default_bg)
       end
     else
       for _, r in ipairs(rows) do
         if r.y == y then
           local row_w = r.w or panel_w
+          local key_w = (r.key and r.key ~= "") and (cell_len(r.key) + 2) or 0
           if r.section then
             put(r.x, trunc_cells(r.label or "", math.max(1, panel_w)), dir, default_bg)
           elseif r.selected then
-            fill_row(r.x)
-            put(r.x + 1, r.label or "", sel_fg, sel_bg)
+            select_label(r.x + 1, r.label or "")
             if r.secondary and r.secondary ~= "" then
-              put(r.x + row_w - cell_len(r.secondary) - 1,
+              put(r.x + row_w - cell_len(r.secondary) - 1 - key_w,
                   trunc_cells(r.secondary, math.max(1, math.floor(row_w / 2))),
-                  sel_fg,
-                  sel_bg)
+                  comment,
+                  default_bg)
+            end
+            if r.key and r.key ~= "" then
+              put(r.x + row_w - cell_len(r.key) - 1, r.key, comment, default_bg)
             end
           else
             put(r.x + 1, r.label or "", default_fg, default_bg)
             if r.secondary and r.secondary ~= "" then
-              put(r.x + row_w - cell_len(r.secondary) - 1,
+              put(r.x + row_w - cell_len(r.secondary) - 1 - key_w,
                   trunc_cells(r.secondary, math.max(1, math.floor(row_w / 2))),
                   comment,
                   default_bg)
+            end
+            if r.key and r.key ~= "" then
+              put(r.x + row_w - cell_len(r.key) - 1, r.key, comment, default_bg)
             end
           end
         end
@@ -161,6 +181,8 @@ local function home_screen(p)
     wordmark = p.wordmark or "",
     tagline = p.tagline or "",
     context = p.context or "",
+    filter = p.filter or "",
+    hint = p.hint or "",
     fg = default_fg,
     bg = default_bg,
     comment = comment,

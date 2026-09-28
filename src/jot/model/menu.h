@@ -75,6 +75,10 @@ struct HomeMenuEntry
   int x;
   int y;
   int w;
+  // The path the row opens when it carries one (a project, a browse entry, a
+  // recent), and the key that opens it while the screen is up (0 for none).
+  std::string path;
+  char key = 0;
 };
 
 #endif
