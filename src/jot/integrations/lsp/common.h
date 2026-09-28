@@ -215,10 +215,9 @@ namespace lsp_internal
     std::error_code ec;
     std::istringstream paths(env);
     std::string dir;
-    // Windows splits PATH with ';' and its executables carry an extension (a
-    // .cmd launcher for anything npm installed). Reading it as a POSIX PATH
-    // split C:\... at the drive colon and then looked for a name that cannot
-    // exist there, so no Windows server on PATH was ever found.
+    // Windows splits PATH with ';' and its executables carry an extension, so
+    // reading it the POSIX way cut C:\... at the drive colon and looked for a
+    // name that cannot exist there: no server on PATH was ever found.
     while (std::getline(paths, dir, windows ? ';' : ':'))
     {
       if (dir.empty())
@@ -256,10 +255,9 @@ namespace lsp_internal
     return managed.empty() ? bin : managed;
   }
 
-  // What to actually spawn for a resolved command. A managed bin on Windows is
-  // often a launcher script (npm publishes <name>.cmd, packages can ship
-  // <name>.bat), and CreateProcess cannot run those: only cmd.exe can, so it is
-  // asked to. Binaries and everything on POSIX pass through untouched.
+  // What to spawn for a resolved command. A managed bin on Windows can be a
+  // launcher script (<name>.cmd from npm), which CreateProcess cannot run: only
+  // cmd.exe can, so it is asked to. Binaries and POSIX pass through untouched.
   inline std::vector<std::string> launcher_argv(const std::vector<std::string> &argv)
   {
     if (argv.empty() || shell_util::install_platform() != "win")

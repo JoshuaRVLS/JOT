@@ -94,21 +94,19 @@ function M.install_lines(entry, dirs, platform)
   return L
 end
 
--- Windows renderer. None of the POSIX tools the steps above use exist there
--- (no grep/sed/unzip), and there is no JSON reader either, so the release asset
--- is located with findstr and its URL is taken straight out of the release
--- metadata: browser_download_url already carries the tag, which leaves nothing
--- to reconstruct. The transfer is curl.exe and the unpacking is tar.exe, both
--- shipped with Windows 10 (1803 and 17063 respectively).
+-- Windows renderer. None of the tools above exist there (no grep/sed/unzip,
+-- no JSON reader), so the asset is found with findstr and its URL taken from the
+-- release metadata's browser_download_url, which already carries the tag. The
+-- transfer is curl.exe and the unpacking tar.exe, both part of Windows 10.
 function M.install_lines_win(entry, dirs)
   local win = dirs.win
   local spec = entry.asset and entry.asset["win"]
   if not spec then
     return nil
   end
-  -- tar.exe unpacks zip, tar and tar.gz alike, so every archive kind but a
-  -- bare .gz is covered. A bare .gz or a non-.exe single-file release has no
-  -- Windows path yet, and saying so beats installing something unrunnable.
+  -- tar.exe unpacks zip, tar and tar.gz alike. A bare .gz or a non-.exe
+  -- single-file release has no Windows path yet: saying so beats installing
+  -- something unrunnable.
   local archive = spec.archive
   if archive == "gz" then
     return nil
@@ -144,10 +142,9 @@ function M.install_lines_win(entry, dirs)
     return cmd .. " > " .. win.quote(out)
   end
 
-  -- The URL is the second whitespace-separated token on its JSON row (the value
-  -- is quoted and comma-terminated, hence the two strips). _jot_url stays
-  -- undefined until something is found, which is what makes `if not defined`
-  -- mean "nothing found yet" on every step below.
+  -- The URL is the second whitespace-separated token on its JSON row (quoted and
+  -- comma-terminated, hence the strips). _jot_url stays undefined until
+  -- something is found, which is what `if not defined` reads as "not yet".
   local function take(out)
     return {
       select(out, out == host_rows),

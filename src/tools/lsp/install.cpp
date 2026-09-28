@@ -58,10 +58,9 @@ namespace
     return home ? fs::path(home) / ".local" / "share" / "jot" / "lsp" : fs::path();
   }
 
-  // Directory the generated Windows batch files live in. It sits beside the
-  // install tree the rest of this module already owns, and falls back to the
-  // temp dir for an environment with no data root at all (no LOCALAPPDATA, no
-  // APPDATA, no USERPROFILE).
+  // Directory the generated Windows batch files live in, beside the install
+  // tree this module already owns. The temp dir is the fallback for an
+  // environment with no data root at all (no LOCALAPPDATA/APPDATA/USERPROFILE).
   fs::path script_dir()
   {
     const fs::path root = data_root();
@@ -176,9 +175,8 @@ namespace LspInstall
     std::vector<fs::path> candidates = {dir / bin_name};
     if (platform_tag() == "win")
     {
-      // A managed bin is never the bare POSIX name on Windows: clangd links as
-      // clangd.exe, npm publishes a node_modules/.bin launcher as <name>.cmd,
-      // and a package script can be <name>.bat. The extension is what the
+      // A managed bin is never the bare POSIX name on Windows: clangd comes as
+      // clangd.exe and npm publishes <name>.cmd. The extension is what the
       // spawner needs, so it is resolved here rather than guessed later.
       for (const char *ext : {".exe", ".cmd", ".bat"})
       {
@@ -238,13 +236,9 @@ namespace LspInstall
   {
     if (shell == ScriptShell::Cmd)
     {
-      // cmd.exe has no `set -e`, so an install script cannot be one command
-      // line and still fail loudly: a step in the middle could fail, the last
-      // one succeed, and the completion marker would lie. Handing the body to
-      // a batch file instead gives the script `exit /b`, which aborts it on the
-      // first failure; `cmd /c <file>` then returns that status, so the same
-      // &&/|| chain the POSIX wrapper uses decides the marker honestly. The
-      // batch is written to disk because cmd can only read one from a file.
+      // cmd.exe has no `set -e`, so a script cannot be one command line and
+      // still fail loudly. A batch file can `exit /b` on the first bad step,
+      // which `cmd /c <file>` reports, making the marker below honest.
       static unsigned long long counter = 0;
       counter++;
       const std::string stem = script_file_stem(server);
@@ -278,9 +272,8 @@ namespace LspInstall
              + shell_util::shell_quote(file.string()) + " && echo [jot:lsp] success " + server
              + " exit=0 || echo [jot:lsp] failed " + server + " exit=1";
     }
-    // POSIX: the body may carry its own `set -e` (fail-fast installs), so run
-    // it in a subshell: a failed step can then never swallow the completion
-    // marker.
+    // The body may carry its own `set -e` (fail-fast installs): run it in a
+    // subshell so a failed step can never swallow the completion marker.
     const std::string script = "printf '[jot:lsp] start " + server + "\\n'; ( "
                                + body + " ); rc=$?; if [ \"$rc\" -eq 0 ]; then "
                                  "printf '[jot:lsp] success "

@@ -35,9 +35,8 @@ function M.install_lines(entry, dirs)
 end
 
 -- Windows renderer. The interpreter is `python` there, not `python3`, and
--- --target puts the console scripts in <dir>\bin as .exe launchers rather than
--- the sh scripts the POSIX side wraps: there is nothing to wrap on Windows, the
--- launcher is already the runnable file, so it is published as is.
+-- --target writes the console scripts into <dir>\bin as .exe launchers: there is
+-- nothing to wrap, so the launcher is published as is.
 function M.install_lines_win(entry, dirs)
   local win = dirs.win
   local spec = entry.pkg

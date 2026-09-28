@@ -119,9 +119,8 @@ namespace shell_util
 #endif
   }
 
-  // The installers' platform tag ("linux" | "mac" | "win"). Overridable so a
-  // probe or a unit test on any host can drive another platform's install path
-  // (the Windows installer renders cmd.exe scripts instead of POSIX ones).
+  // The installers' platform tag ("linux" | "mac" | "win"), overridable so a
+  // probe on any host can drive another platform's install path.
   inline std::string install_platform()
   {
     if (const char *env = std::getenv("JOT_INSTALL_PLATFORM"); env && *env)

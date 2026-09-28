@@ -86,10 +86,9 @@ namespace
     return value && *value ? std::string(value) : std::string();
   }
 
-  // Install root for a source build. The same chain the POSIX script walks in
-  // its own shell, resolved here instead because every path in a cmd command
-  // line is expanded before the line runs: a prefix set mid-line would be read
-  // stale, so it has to be a literal by the time the script is built.
+  // Install root for a source build: the same chain the POSIX script walks in
+  // its own shell, resolved here because a cmd command line expands every path
+  // before it runs, so the prefix has to be a literal in the generated script.
   std::string windows_install_prefix(const std::string &override_prefix)
   {
     if (!override_prefix.empty())
@@ -137,12 +136,10 @@ namespace
     return value.empty() ? std::string(fallback) : value;
   }
 
-  // Windows source build. The POSIX script cannot run there -- no sh, no
-  // mktemp, no uname, no find, no git-bash assumption -- so the same steps are
-  // rendered as cmd.exe lines instead. Each line is expanded when it runs, so
-  // variables are usable across lines, and the completion marker is decided by
-  // the parser DLL being on disk rather than by a chain of exit codes: that is
-  // the one signal cmd cannot get wrong.
+  // Windows source build: the same steps rendered as cmd.exe lines, because the
+  // POSIX script cannot run there (no sh, mktemp, uname or find). Success is
+  // decided by the parser DLL being on disk, the one signal cmd cannot get
+  // wrong.
   std::string source_build_command_win(const TreeSitterInstallMetadata &entry,
                                        const std::string &prefix_in)
   {
@@ -162,10 +159,8 @@ namespace
     const std::string scanner_c = win_join(src, "scanner.c");
     const std::string scanner_cc = win_join(src, "scanner.cc");
 
-    // Static runtimes: the release ships a single self-contained exe with no
-    // DLLs, so a parser DLL must not be the thing that reintroduces a
-    // libstdc++/libgcc dependency. A grammar whose scanner is C is built with
-    // the C driver, which has no C++ runtime to bring along at all.
+    // Static runtimes: the release ships no DLLs, so a parser DLL must not be
+    // what reintroduces a libstdc++/libgcc dependency.
     const std::string cxx_flags = " -shared -o " + win_quote(libfile)
                                   + " -Wl,--export-all-symbols -static-libgcc"
                                     " -static-libstdc++ -I"
@@ -173,9 +168,8 @@ namespace
 
     std::ostringstream cmd;
     auto line = [&cmd](const std::string &text) { cmd << text << "\n"; };
-    // All markers are printed on their own short line: the command is echoed
-    // into the integrated terminal it runs in, and a wrapped row must never
-    // start with a marker the poll loop would believe.
+    // Markers get their own short lines: the command is echoed into the
+    // terminal it runs in, and a wrapped row must never start with a marker.
     line("echo [jot:treesitter] start " + entry.name);
     line("if not exist " + win_quote(prefix) + " mkdir " + win_quote(prefix));
     line("echo [jot:treesitter] prefix " + prefix);
@@ -185,8 +179,8 @@ namespace
     line("echo [jot:treesitter] clone " + entry.name);
     line("git clone --depth 1 " + win_quote(entry.url) + " " + win_quote(work));
     line("echo [jot:treesitter] build " + entry.name);
-    // -x forces the language per source: parser.c is C99 with designated
-    // initializers, which the C++ front end would reject.
+    // -x forces the language per source: parser.c is C99, which the C++ front
+    // end would reject.
     line("if exist " + win_quote(scanner_cc) + " " + cxx + cxx_flags + " -x c " + win_quote(parser)
          + " -x c++ " + win_quote(scanner_cc));
     line("if not exist " + win_quote(scanner_cc) + " if exist " + win_quote(scanner_c) + " " + cc

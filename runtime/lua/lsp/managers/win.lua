@@ -1,20 +1,11 @@
 -- cmd.exe primitives for the Windows install renderers.
 --
--- Windows has no /bin/sh: the POSIX manager scripts cannot run there at all.
--- Every manager that supports Windows therefore renders a second script out of
--- these helpers, and the host writes it to a batch file and runs it with
--- `cmd /c <file>` (see LspInstall::wrap_script). Being a batch file is what
--- makes fail-fast possible: a step that fails aborts the whole script with
--- `exit /b 1`, `cmd /c` reports that status, and the host's success marker
--- cannot lie about a half-finished install.
---
--- Only what Windows itself provides is used: curl.exe (Windows 10 1803+) and
--- tar.exe (17063+, a bsdtar that unpacks zip as well as tar) plus the package
--- manager the entry already names (npm, python). Nothing is downloaded to get
--- the downloader, and no POSIX tool (ln, unzip, chmod, find) is assumed.
---
--- NOTE: these lines end up in a batch file, so `for` variables are spelled
--- with two percents (%%f), and every non-zero step is followed by `|| exit /b 1`.
+-- Windows has no /bin/sh, so a POSIX manager script cannot run there at all:
+-- every manager that supports Windows renders a second script out of these,
+-- which the host writes to a batch file and runs with `cmd /c <file>`. Only
+-- what Windows itself carries is used (curl.exe, tar.exe, and the package
+-- manager the entry names), and only batch lines, so `for` variables are
+-- spelled with two percents and every step is followed by `|| exit /b 1`.
 
 local M = {}
 
@@ -54,17 +45,9 @@ function M.ensure_dirs(dirs)
 end
 
 -- Publishes the first file matching one of `patterns` under `dir` as
--- `<bin_dir>\name<its own extension>`, and fails the script when none matched.
--- Patterns are tried in order, so a caller can put the runnable extension first
--- (.cmd before the extensionless sh script npm writes beside it). The search is
--- recursive because an archive keeps its own directory level
--- (clangd_22.1.8\bin\clangd.exe).
---
--- The extension is kept because the editor resolves a managed bin by looking
--- for exactly <name>, <name>.exe, <name>.cmd and <name>.bat: a copy without one
--- would never be found. The final existence check is what makes the guard real
--- -- a `for` loop over no matches simply does nothing, and would otherwise let
--- the install report success for a binary that is not there.
+-- `<bin_dir>\name<its own extension>`: the extension is what the editor
+-- resolves a managed bin by, and a `for` loop over no matches does nothing, so
+-- the existence check at the end is what fails the script on a missing binary.
 function M.publish(dir, patterns, name)
   local lines = {}
   local dest = M.quote(name .. "%%~xf")

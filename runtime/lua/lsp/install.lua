@@ -148,7 +148,7 @@ end
 
 -- The package dir, bin dir and download dir for one id. The separator follows
 -- the platform being rendered, not the host: a Windows script has to speak
--- cmd.exe path syntax even when it is generated for a packaged build.
+-- cmd.exe path syntax wherever it was generated.
 local function package_dirs(id, sep)
   local dir = ROOT .. sep .. id
   return { root = ROOT, dir = dir, bin_dir = ROOT .. sep .. "bin",
@@ -184,15 +184,12 @@ local function build_install_script(entry)
 end
 
 -- Windows script. The steps come from each manager's install_lines_win and the
--- host runs them as a cmd.exe batch file (LspInstall::wrap_script), because
--- there is no POSIX shell, no `set -e`, no ln, no unzip and no find on Windows.
--- Inside a batch a failed step aborts the whole script with `exit /b`, which is
--- what keeps the receipt below and the host's success marker honest.
+-- host runs them as a batch file (LspInstall::wrap_script): there is no POSIX
+-- shell on Windows, and inside a batch a failed step can abort with `exit /b`,
+-- which is what keeps the receipt below and the success marker honest.
 --
--- The catalog's win_cmd / win_remove_cmd are superseded by these renderers: a
--- global `npm install -g` puts a launcher on PATH that the editor cannot
--- resolve as a managed bin, while the renderer installs into the package dir
--- and publishes a real path. win_cmd stays in the registry for packagers.
+-- A catalog win_cmd installs globally instead (a launcher on PATH that is not a
+-- managed bin), so the renderers supersede it; the field stays for packagers.
 local function build_install_script_win(entry)
   local dirs = package_dirs(entry.id, "\\")
   dirs.win = win

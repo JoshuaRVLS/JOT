@@ -1,12 +1,8 @@
 // The spawn half of a Windows LSP install: what to exec, and how to find a
-// server that was installed outside the managed dir.
-//
-// Both are Windows-only mistakes that look fine on POSIX. A managed bin there
-// can be a .cmd launcher (anything npm installed publishes one), and
-// CreateProcess cannot start a launcher script: only cmd.exe can. And a Windows
-// PATH is ';'-separated with drive-letter entries and executable extensions,
-// so reading it the POSIX way both cut C:\... in half and looked for a name
-// that never exists.
+// server installed outside the managed dir. Both are mistakes that look fine on
+// POSIX: a managed bin there can be a .cmd launcher (anything npm installed
+// publishes one), which CreateProcess cannot start, and a Windows PATH is
+// ';'-separated with drive-letter entries and executable extensions.
 #include "jot/integrations/lsp/common.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -73,8 +69,7 @@ TEST_CASE("LSP spawn routes Windows launcher scripts through cmd.exe", "[lsp]")
   REQUIRE(wrapped[2] == launcher[0]);
   REQUIRE(wrapped[3] == "--stdio");
 
-  // Extensions are case-insensitive on Windows, and a .bat is the same kind of
-  // script as a .cmd.
+  // Extensions are case-insensitive there, and a .bat is the same kind of script.
   const std::vector<std::string> bat = {"C:/x/thing.BAT"};
   const std::vector<std::string> bat_wrapped = lsp_internal::launcher_argv(bat);
   REQUIRE(bat_wrapped.size() == 3);
@@ -91,16 +86,14 @@ TEST_CASE("LSP PATH lookup follows the platform separator and extensions", "[lsp
   fs::remove_all(root, ec);
   fs::create_directories(root / "one", ec);
   fs::create_directories(root / "two", ec);
-  // Nothing is installed in the managed dir, so every answer below comes from
-  // PATH.
+  // Nothing is installed in the managed dir: every answer below is from PATH.
   fs::create_directories(root / "data", ec);
   setenv("XDG_DATA_HOME", (root / "data").string().c_str(), 1);
 
   setenv("JOT_INSTALL_PLATFORM", "win", 1);
   write_file(root / "two" / "eslint-lsp.cmd");
-  // ';'-separated, as Windows writes it. A ':' split chopped the first entry
-  // into a bare drive letter and a fragment, and then looked for a name with no
-  // extension, so a server installed by npm was invisible.
+  // ';'-separated, as Windows writes it: a ':' split chopped the first entry
+  // and looked for a name with no extension, hiding npm's launcher.
   setenv("PATH", ((root / "one").string() + ";" + (root / "two").string()).c_str(), 1);
   REQUIRE(lsp_internal::lsp_bin_available("eslint-lsp"));
   REQUIRE_FALSE(lsp_internal::lsp_bin_available("no-such-tool"));
@@ -110,8 +103,7 @@ TEST_CASE("LSP PATH lookup follows the platform separator and extensions", "[lsp
   write_file(root / "one" / "pylsp");
   setenv("PATH", ((root / "one").string() + ":" + (root / "two").string()).c_str(), 1);
   REQUIRE(lsp_internal::lsp_bin_available("pylsp"));
-  // The extension candidates are a Windows thing: a .cmd is not a POSIX
-  // executable and must not be picked up.
+  // The extension candidates are a Windows thing: a .cmd must not be picked up.
   REQUIRE_FALSE(lsp_internal::lsp_bin_available("eslint-lsp"));
 
   fs::remove_all(root, ec);
