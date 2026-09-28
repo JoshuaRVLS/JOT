@@ -404,7 +404,10 @@ Install helpers also cover Rust, Go, Lua, and Bash.
   the two mistakes a compiler only reports at link time show up while editing:
   a function declared in a header with no implementation anywhere becomes a
   warning, and a signature implemented more than once becomes an error (the
-  linker's `multiple definition of f`).
+  linker's `multiple definition of f`). A folder of standalone programs is
+  exempt from the repeated-body error: when every source file holds its own
+  `main`, the files are compiled one at a time and no two of them share a link,
+  so the helpers they repeat are not the linker's error to report.
 - Runs on the worker thread when a workspace is opened and after every save, or
   on demand with `:cppcheck` -- which also focuses the Problems list, announces
   what it counted, and lands the caret on the next finding. `:cppcheck next` and

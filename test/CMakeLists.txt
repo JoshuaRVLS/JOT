@@ -123,6 +123,7 @@ if(JOT_TREESITTER_ENABLED)
 endif()
 target_compile_definitions(jot_tests PRIVATE
   JOT_LUA_SOURCE_DIR="${PROJECT_SOURCE_DIR}/runtime/lua"
+  JOT_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
   JOT_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}/test"
 )
 

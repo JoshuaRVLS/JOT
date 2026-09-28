@@ -13,8 +13,10 @@
 // unit, and a `static` (or anonymous-namespace) body is private to its own. A
 // body in a header that is *not* inline is reported separately -- it is the same
 // multiple-definition error one translation unit away. A file-scope `main` is
-// the one name left out of the cross-file check: a folder of standalone programs
-// has one entry point per translation unit and they are compiled one by one.
+// left out of the cross-file check: a folder of standalone programs has one
+// entry point per translation unit and they are compiled one by one. When
+// *every* source file in the workspace holds its own entry point the whole
+// cross-file check goes quiet, since no two of those files can share a link.
 #include "cpp_definitions.h"
 #include "tools/string_util.h"
 
@@ -114,8 +116,9 @@ namespace CppDefinitions
     // one per translation unit on purpose: a folder of standalone programs
     // (competitive programming, samples, one-off probes) is compiled file by
     // file, and the duplicates the linker would see never meet. A `main` in a
-    // namespace or class is an ordinary function and keeps the rule, and two
-    // bodies in one file are still the redefinition the same-file rule catches.
+    // namespace or class is an ordinary function and keeps the rule. When every
+    // source file holds one, analyze() turns the whole cross-file check off
+    // rather than exempting the entry points alone.
     bool is_program_entry(const FunctionRecord &record)
     {
       return record.name == "main" && record.scope.empty();
@@ -323,20 +326,57 @@ namespace CppDefinitions
         }
       }
 
+      // A collection of standalone programs -- every source file that parsed to
+      // anything carries its own file-scope `main` -- is compiled one file at a
+      // time, so no two of those files are ever in one link. That is the only
+      // thing the cross-file check assumes, so it stays off here: a helper
+      // repeated across a folder of competitive-programming solutions, samples
+      // or probes is not the linker's multiple definition. A workspace where
+      // even one source file has no entry point keeps the check, since that
+      // file can be linked with any of the programs; the same-file rule is
+      // unaffected either way, since two bodies in one file really are a
+      // redefinition.
+      std::set<std::string> source_files;
+      std::set<std::string> program_files;
+      for (const FunctionRecord &record : records)
+      {
+        if (record.is_header)
+        {
+          continue;
+        }
+        source_files.insert(record.file);
+        if (record.definition && is_program_entry(record))
+        {
+          program_files.insert(record.file);
+        }
+      }
+      bool standalone_programs = !source_files.empty();
+      for (const std::string &file : source_files)
+      {
+        if (program_files.count(file) == 0)
+        {
+          standalone_programs = false;
+          break;
+        }
+      }
+
       // Across files only a strong body repeats: an `inline`, `constexpr` or
       // template body and a class-body definition may each appear once per
       // translation unit, and a `static` body is one copy per unit. The
       // comparison happens within one platform, so the Windows and POSIX
       // implementations of one function are alternatives rather than duplicates.
       std::map<std::string, std::vector<const FunctionRecord *>> strong_by_platform;
-      for (const FunctionRecord *record : comparable)
+      if (!standalone_programs)
       {
-        if (record->inline_function || record->template_function || record->internal_linkage
-            || is_program_entry(*record))
+        for (const FunctionRecord *record : comparable)
         {
-          continue;
+          if (record->inline_function || record->template_function || record->internal_linkage
+              || is_program_entry(*record))
+          {
+            continue;
+          }
+          strong_by_platform[platform_tag(record->file)].push_back(record);
         }
-        strong_by_platform[platform_tag(record->file)].push_back(record);
       }
       for (const auto &platform_entry : strong_by_platform)
       {

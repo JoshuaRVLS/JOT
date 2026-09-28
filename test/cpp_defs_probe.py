@@ -17,10 +17,11 @@ bodies (`twice`), plus one implemented declaration that must stay quiet:
   * `implemented` -- declared in the header and defined in the source -- has no
     row at all: the false positive that would make the checker unusable,
   * `:cppcheck` re-runs the scan on demand and summarizes it in the status line,
-  * a workspace of standalone programs (one `main()` per file, the shape a
-    competitive-programming folder has) reports the repeated body it holds and
-    nothing about the entry points, which are one per translation unit on
-    purpose.
+  * a workspace that is a folder of standalone programs (one `main()` per file,
+    the shape a competitive-programming folder has) reports nothing at all: the
+    files are compiled one at a time and never share a link, so a helper they
+    repeat is not a duplicate, and `:cppcheck`'s clean summary proves the scan
+    still ran over every one of them.
 
 Usage: test/cpp_defs_probe.py [path-to-jot] [--dump]
 Exit codes: 0 pass, 1 fail, 2 skipped (no binary).
@@ -60,17 +61,22 @@ int twice() { return 2; }
 OTHER = """int twice() { return 3; }
 """
 
-# Standalone programs: each file is its own entry point.
-STANDALONE_MAIN_ONE = """int main() { return 0; }
+# Standalone programs: each file is its own entry point. Two of them repeat a
+# helper, which is fine when no two files ever meet in one link.
+STANDALONE_ONE = """int main() { return 0; }
 """
 
-STANDALONE_MAIN_TWO = """int main() { return 1; }
+STANDALONE_TWO = """int main() { return 1; }
 """
 
 STANDALONE_TWICE_A = """int twice() { return 1; }
+
+int main() { return twice(); }
 """
 
 STANDALONE_TWICE_B = """int twice() { return 2; }
+
+int main() { return twice(); }
 """
 
 
@@ -88,14 +94,15 @@ def write_workspace(root: str) -> None:
 def write_standalone_workspace(root: str) -> None:
     """A folder of programs that share no translation unit.
 
-    The two `twice()` bodies are the positive control: the scan has to report
-    that pair, so a pass cannot come from the scan never having run.
+    Every file carries its own `main`, and the two `twice()` bodies the folder
+    repeats are what the cross-file rule would report if the folder were not
+    recognized as a set of standalone programs.
     """
     shutil.rmtree(root, ignore_errors=True)
     os.makedirs(root, exist_ok=True)
     files = {
-        "first.cpp": STANDALONE_MAIN_ONE,
-        "second.cpp": STANDALONE_MAIN_TWO,
+        "first.cpp": STANDALONE_ONE,
+        "second.cpp": STANDALONE_TWO,
         "twice_a.cpp": STANDALONE_TWICE_A,
         "twice_b.cpp": STANDALONE_TWICE_B,
     }
@@ -225,28 +232,35 @@ def main() -> int:
     if "shapes.h" not in status or "3:5" not in status:
         failures.append(f":cppcheck next did not walk to the header's finding: {status.strip()!r}")
 
-    # Scene 4: standalone programs. Each `main()` is that file's own entry
-    # point, so the two are not a multiple-definition error -- but the `twice()`
-    # pair next to them still is, which keeps the scene honest about the scan
-    # having run.
+    # Scene 4: a folder of standalone programs. Every file holds its own entry
+    # point, so nothing in one can meet another at link time and the repeated
+    # `twice()` is not the linker's multiple definition. `:cppcheck` is what
+    # keeps the scene honest: its summary proves the scan ran over all four
+    # files, so a quiet panel cannot come from a scan that never happened.
     root = "/tmp/jot_cpp_defs_probe_mains"
     write_standalone_workspace(root)
-    screen = run_in_pty(binary, [root], PROBLEMS, settle=4.5, after=4.0,
-                        cols=140, rows=34, cfg="/tmp/jot_cpp_defs_probe_cfg_mains",
-                        cwd="/tmp", phases=[(0.5, b"")])
+    screen = run_in_pty(binary, [root], PALETTE, settle=5.0, after=0.5, cols=150,
+                        rows=34, cfg="/tmp/jot_cpp_defs_probe_cfg_mains", cwd="/tmp",
+                        phases=[(0.6, b"cppcheck"), (0.6, ENTER), (0.6, b"")])
     if dump:
         print(screen.text())
         print("-" * 70)
     text = screen.text()
 
+    # The toast wraps at the box width, so the summary is matched in its pieces:
+    # the clean verdict and the four files the walk covered.
+    if "no missing or repeated" not in text:
+        failures.append("the standalone workspace's scan did not report a clean run")
+    if "implementations across 4 files" not in text:
+        failures.append("the standalone workspace's scan did not cover all four programs")
+    if "No problems" not in text:
+        failures.append("the standalone workspace left a finding in the Problems list")
+    if '"twice()" is defined more than once' in text:
+        failures.append("a helper repeated by two standalone programs was called a duplicate")
     if '"main()" is defined more than once' in text:
         failures.append("two standalone programs were called a duplicate definition")
     if 'No definition found for "main()"' in text:
         failures.append("a standalone program's entry point was reported as missing")
-    if '"twice()" is defined more than once' not in text:
-        failures.append("the repeated body beside the standalone programs is not reported")
-    if "1 finding in 1 file" not in text:
-        failures.append("the tally does not count the standalone workspace's finding")
 
     if failures:
         for failure in failures:

@@ -228,6 +228,34 @@ TEST_CASE("C++ definitions: a file-scope main is each program's own entry point"
   REQUIRE(helpers.size() == 1);
   REQUIRE(helpers[0].severity == kError);
 
+  // When *every* file in the workspace carries its own entry point, the files
+  // are compiled one at a time and no two of them ever share a link, so a
+  // repeated helper is not reported either (the shape a competitive-programming
+  // folder has: one `solution.c` per problem, each with its own `print_all`).
+  const std::vector<Issue> programs =
+      check({{"bubble.cpp", "int main() { return 0; }\nint print_all() { return 1; }\n"},
+             {"selection.cpp", "int main() { return 0; }\nint print_all() { return 2; }\n"}});
+  REQUIRE(programs.empty());
+
+  // One file without an entry point and the check is back: that file can be
+  // linked with either program, so a helper it shares with one of them is the
+  // linker's error again.
+  const std::vector<Issue> mixed =
+      check({{"bubble.cpp", "int main() { return 0; }\nint print_all() { return 1; }\n"},
+             {"helper.cpp", "int print_all() { return 2; }\n"}});
+  REQUIRE(mixed.size() == 1);
+  REQUIRE(mixed[0].severity == kError);
+
+  // Turning the cross-file check off does not turn the same-file rule off: two
+  // bodies in one program file are a redefinition however the folder builds.
+  const std::vector<Issue> repeated_in_one =
+      check({{"bubble.cpp",
+              "int main() { return 0; }\nint print_all() { return 1; }\n"
+              "int print_all() { return 2; }\n"}});
+  REQUIRE(repeated_in_one.size() == 1);
+  REQUIRE(repeated_in_one[0].severity == kError);
+  REQUIRE(repeated_in_one[0].message.find("more than once in this file") != std::string::npos);
+
   // A `main` under a namespace is an ordinary function: the rule still applies.
   const std::vector<Issue> namespaced =
       check({{"a.cpp", "namespace app { int main() { return 1; } }\n"},
@@ -595,4 +623,24 @@ TEST_CASE("C++ definitions: next and previous walk the findings", "[jot]")
   REQUIRE(at() == "widget.hpp:3:5");
   REQUIRE(e.cpp_definitions_jump_for_test(-1));
   REQUIRE(at() == "widget.cpp:3:5");
+}
+
+// The scan runs over this project's own sources on every open and save, so a
+// repeated body the checker finds here is one the owner sees while editing. The
+// tree has none: the helper written once per layer (the same right-hand
+// truncation in the home screen and in the frame) sits in an anonymous namespace
+// in each, which is the linker's business and not this rule's.
+TEST_CASE("C++ definitions: the project's own sources define each body once", "[jot]")
+{
+  const CppDefinitions::ScanResult result = CppDefinitions::scan_workspace(JOT_SOURCE_DIR);
+  std::vector<CppDefinitions::Issue> duplicates;
+  for (const CppDefinitions::Issue &issue : result.issues)
+  {
+    if (issue.message.find("defined more than once") != std::string::npos)
+    {
+      duplicates.push_back(issue);
+    }
+  }
+  INFO(describe(duplicates));
+  REQUIRE(duplicates.empty());
 }
