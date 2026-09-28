@@ -30,17 +30,27 @@ COLS, ROWS = 100, 24
 # reaches either index (the default theme's other bands are 3, 4, 6, 8), so a
 # background of 11 or 13 is the occurrence highlight and nothing else.
 PLAIN_BG, STRONG_BG = 11, 13
+# What the selected cells wear while the highlight follows a selection: the
+# theme's Visual band, which the probe theme leaves at its own default (6).
+SELECT_BG = 6
 
+# The last line repeats the first statement word for word: it is what the span
+# scene marks part of, and the reason that scene can tell the selection driving
+# the highlight from the caret's own word driving it.
 SOURCE = """int alpha = 1;
 int beta = alpha + 1;
 int gamma = alpha * beta;
+int alpha = 1;
 """
 
 # Where each identifier sits: (line index, char offset, length). `alpha` is the
-# word to put the caret on; `beta` is the second scene, and it is also the
-# identifier that must stay unlit while the caret is on `alpha`.
-ALPHA = ((0, 4, 5), (1, 11, 5), (2, 12, 5))
+# word to point at; `beta` is the second scene, and it is also the identifier
+# that must stay unlit while the caret is on `alpha`.
+ALPHA = ((0, 4, 5), (1, 11, 5), (2, 12, 5), (3, 4, 5))
 BETA = ((1, 4, 4), (2, 20, 4))
+# The text the span scene marks on the first line, `alpha = ` (the trailing cell
+# is the `1`, which the drag's end puts the caret on instead).
+SPAN = ((0, 4, 8), (3, 4, 8))
 
 # Only the two occurrence bands are set. `fg` -1 is the theme spelling for
 # "leave the token's own colour alone", the same way the git slots name no bg:
@@ -69,6 +79,15 @@ def click(col: int, row: int) -> bytes:
     return press + release
 
 
+def drag(src, dst) -> bytes:
+    """A left press at `src`, a held motion to `dst`, and the release there."""
+    x1, y1 = src[0] + 1, src[1] + 1
+    x2, y2 = dst[0] + 1, dst[1] + 1
+    return (b"\x1b[<0;%d;%dM" % (x1, y1)
+            + b"\x1b[<32;%d;%dM" % (x2, y2)
+            + b"\x1b[<0;%d;%dm" % (x2, y2))
+
+
 def run_scene(binary: str, cfg: str, keys: bytes, dump: bool):
     """One run of the editor on the probe file, over a pty."""
     path = os.path.join(cfg, "words.txt")
@@ -87,12 +106,20 @@ def cell_for(screen, line_index: int, offset: int):
 
     The screen row carries the gutter and, to its left, whatever chrome the
     layout put there, so the line is located by its own text rather than by an
-    assumed left edge.
+    assumed left edge. A line the file repeats word for word (its last one is
+    its first one again) is told apart by its order: the nth line carrying the
+    text is the nth such line of the file.
     """
-    needle = SOURCE.splitlines()[line_index]
+    lines_in_file = SOURCE.splitlines()
+    needle = lines_in_file[line_index]
+    wanted = lines_in_file[: line_index + 1].count(needle)
+    seen = 0
     for row, line in enumerate(screen.text().split("\n")):
         at = line.find(needle)
-        if at >= 0:
+        if at < 0:
+            continue
+        seen += 1
+        if seen == wanted:
             return at + offset, row
     return None
 
@@ -135,26 +162,53 @@ def main() -> int:
     # sidebar and gutter decide the code area's left edge, so nothing can be
     # assumed; every scene below reads its own screen for the cells.
     screen = run_scene(binary, root, b"", dump)
-    if any(cell_for(screen, line, offset) is None
-           for line, offset, _length in ALPHA + BETA):
+    spans = ALPHA + BETA + SPAN
+    if any(cell_for(screen, line, offset) is None for line, offset, _length in spans):
         print("word highlight probe: FAIL - the probe file is not on screen")
         return 1
 
-    # label: (occurrence the caret clicks, {occurrence: band it must wear}). A
-    # None band means the cells must carry neither of the two.
+    def point(line: int, col: int):
+        """A press and release at one character of the file."""
+        return click(*cell_for(screen, line, col))
+
+    def double(line: int, col: int):
+        """Two presses in one write, which the editor reads as a double click."""
+        return point(line, col) * 2
+
+    def mark(line: int, start: int, end: int):
+        """A drag from one character to another: a range selection."""
+        return drag(cell_for(screen, line, start), cell_for(screen, line, end))
+
+    # label: (keys, {occurrence: band it must wear}). A None band means the cells
+    # must carry neither of the two.
     scenes = (
-        ("alpha", ALPHA[0],
+        ("alpha", point(0, 4),
          {ALPHA[0]: STRONG_BG, ALPHA[1]: PLAIN_BG, ALPHA[2]: PLAIN_BG,
           BETA[0]: None, BETA[1]: None}),
-        ("beta", BETA[0],
+        ("beta", point(1, 4),
          {BETA[0]: STRONG_BG, BETA[1]: PLAIN_BG,
           ALPHA[0]: None, ALPHA[1]: None, ALPHA[2]: None}),
+        # A double click selects the word, and the selection's own text drives
+        # the highlight from there: the cells the selection covers are its own
+        # band, and the other uses of the word light up around it.
+        ("selected", double(1, 11),
+         {ALPHA[1]: SELECT_BG, ALPHA[0]: PLAIN_BG, ALPHA[2]: PLAIN_BG, ALPHA[3]: PLAIN_BG,
+          BETA[0]: None, BETA[1]: None}),
+        # A drag marks `alpha = ` and stops on the `1`, so the caret's own word
+        # (`1`) is not the text the highlight is following. The fourth line
+        # repeats the statement word for word, so only a highlight reading the
+        # marked text lights it: the caret's word would light the two `1` cells
+        # instead, and those must stay plain.
+        ("span", mark(0, 4, 12),
+         {SPAN[0]: SELECT_BG, SPAN[1]: PLAIN_BG,
+          (0, 12, 1): None, (3, 12, 1): None,
+          BETA[0]: None, BETA[1]: None}),
     )
 
     failures = []
-    for name, caret, expected in scenes:
-        screen = run_scene(binary, root, click(*cell_for(screen, caret[0], caret[1])), dump)
-        print(f"word highlight {name:<6} caret on {label(caret)}")
+    for name, keys, expected in scenes:
+        screen = run_scene(binary, root, keys, dump)
+        print(f"word highlight {name:<8}")
         for occurrence, want in expected.items():
             cells = word_cells(screen, occurrence)
             if cells is None:

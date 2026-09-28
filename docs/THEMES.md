@@ -177,8 +177,8 @@ caret and its partner while the pair is in view (`fg` colors the bracket
 glyphs, `bg` the band behind both cells), and each bundled theme keeps it on
 the same soft surface as its hover bands. `WordHighlight` and
 `WordHighlightStrong` are the occurrence highlight: every other place the
-identifier under the caret shows in the viewport wears the plain band and the
-caret's own word the strong one. Both are bands only, so a theme names `bg` and
+identifier under the caret (or the text a selection marks) shows in the viewport
+wears the plain band, and the caret's own word the strong one. Both are bands only, so a theme names `bg` and
 leaves `fg` at `-1` to keep the token's own colour, the same spelling the git
 slots use for the half they do not set. `DiagnosticError` and
 `DiagnosticWarn` colour the squiggle, the line number and the inline message of

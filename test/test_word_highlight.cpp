@@ -173,22 +173,55 @@ TEST_CASE("Word highlight: the setting turns it off", "[jot]")
   REQUIRE_FALSE(tinted(e, 1, 11, 5));
 }
 
-TEST_CASE("Word highlight: a selection steps aside", "[jot]")
+TEST_CASE("Word highlight: a selection's own text drives it", "[jot]")
 {
   seed_config_home();
   Editor e;
-  load_lines(e, {"int alpha = 1;", "int beta = alpha + 1;"}, "selection");
+  load_lines(e, {"int alpha = 1;", "int beta = alpha + 1;", "int gamma = alpha * 2;"}, "selection");
   e.apply_resize_for_test(100, 30);
 
-  // The other occurrence lights while the caret is bare...
+  // Bare caret: its own word wears the strong band.
   e.scroll_cursor_to_for_test(0, 4);
   repaint(e);
-  REQUIRE(wears(e, 1, 11, 5, false));
+  REQUIRE(wears(e, 0, 4, 5, true));
 
-  // ...and goes quiet once a selection covers the word the caret is answering
-  // for: which text is the user's answer while a selection is up, not ours.
+  // Selecting that word hands the highlight to the selection: the other two
+  // occurrences light on the plain band, and the selected cells stay the
+  // selection's own paint rather than anything the highlight asks for.
   REQUIRE(e.select_word_at_cursor());
   repaint(e);
-  REQUIRE_FALSE(tinted(e, 0, 4, 5));
-  REQUIRE_FALSE(tinted(e, 1, 11, 5));
+  REQUIRE(wears(e, 1, 11, 5, false));
+  REQUIRE(wears(e, 2, 12, 5, false));
+  REQUIRE_FALSE(wears(e, 1, 11, 5, true));
+  REQUIRE(cell_at(e, 0, 4)->bg == e.theme_for_test().bg_selection);
+
+  // Clearing it hands the highlight back to the caret's word, which the caret is
+  // still on: it sits one cell past the word the selection marked.
+  e.buffer_for_test().selection = {{0, 0}, {0, 0}, false};
+  repaint(e);
+  REQUIRE(wears(e, 0, 4, 5, true));
+  REQUIRE(wears(e, 1, 11, 5, false));
+}
+
+TEST_CASE("Word highlight: a selection matches the text it marks, not a word", "[jot]")
+{
+  seed_config_home();
+  Editor e;
+  load_lines(e, {"int alpha = 1;", "int alpha_beta = 2;"}, "partial");
+  e.apply_resize_for_test(100, 30);
+
+  // `alpha` is a whole word on the first row and only a prefix of `alpha_beta`
+  // on the second. A range the user marked is matched as the text it is, so the
+  // prefix being renamed shows the identifiers that carry it.
+  e.buffer_for_test().selection = {{4, 0}, {9, 0}, true};
+  repaint(e);
+  REQUIRE(wears(e, 1, 4, 5, false));
+
+  // The caret's word is held to the whole-word rule, so the same needle from the
+  // caret leaves `alpha_beta` alone.
+  e.buffer_for_test().selection = {{0, 0}, {0, 0}, false};
+  e.scroll_cursor_to_for_test(0, 4);
+  repaint(e);
+  REQUIRE(wears(e, 0, 4, 5, true));
+  REQUIRE_FALSE(tinted(e, 1, 4, 5));
 }

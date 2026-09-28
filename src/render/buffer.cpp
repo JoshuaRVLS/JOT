@@ -96,21 +96,59 @@ namespace
     return after >= (int)line.size() || !is_word_byte(line[(size_t)after]);
   }
 
-  // Whether a caret in the buffer holds selected text. A selection is the
-  // user's own answer to "which text", so the occurrence highlight steps aside
-  // while one is up; an empty one, which a click leaves behind, is not one.
-  bool buffer_has_selection(const FileBuffer &buf)
+  // What the occurrence highlight follows this frame: the text to look for,
+  // whether an occurrence has to be a whole word to count, and the span that
+  // wears the strong band (-1 when a selection answers instead, since the
+  // selection paints its own span and there is no caret word to single out).
+  struct WordHighlightNeedle
   {
-    auto holds_text = [](const Selection &sel)
-    { return sel.active && (sel.start.y != sel.end.y || sel.start.x != sel.end.x); };
-    if (holds_text(buf.selection))
-      return true;
-    for (const auto &caret : buf.extra_carets)
+    std::string text;
+    bool whole_word = true;
+    int strong_line = -1;
+    int strong_col = -1;
+  };
+
+  // The selection's own text answers first, the caret's word otherwise. A
+  // selection is the user's answer to "which text", and it matches literally:
+  // marking part of an identifier (a prefix being renamed, say) means the other
+  // places that carry it, so no word boundary applies. One row only -- text that
+  // spans rows is not something a single row can match, so that falls back to
+  // the caret. An empty selection (which a click leaves behind) is not one, and
+  // neither is a run of whitespace, which is everywhere.
+  WordHighlightNeedle word_highlight_needle(const FileBuffer &buf)
+  {
+    WordHighlightNeedle needle;
+    const Selection &sel = buf.selection;
+    if (sel.active && sel.start.y == sel.end.y && sel.start.x != sel.end.x)
     {
-      if (holds_text(caret))
-        return true;
+      const int y = std::clamp(sel.start.y, 0, (int)buf.line_count() - 1);
+      const std::string &line = buf.line(y);
+      const int a = std::clamp(std::min(sel.start.x, sel.end.x), 0, (int)line.size());
+      const int b = std::clamp(std::max(sel.start.x, sel.end.x), 0, (int)line.size());
+      if (b > a)
+      {
+        needle.text = line.substr((size_t)a, (size_t)(b - a));
+        needle.whole_word = false;
+        if (needle.text.find_first_not_of(" \t") == std::string::npos)
+        {
+          needle.text.clear();
+        }
+        return needle;
+      }
     }
-    return false;
+    if (buf.cursor.y < 0 || buf.cursor.y >= (int)buf.line_count())
+      return needle;
+    const std::string &line = buf.line(buf.cursor.y);
+    int start = 0;
+    int end = 0;
+    word_span_at(line, buf.cursor.x, start, end);
+    if (end > start)
+    {
+      needle.text = line.substr((size_t)start, (size_t)(end - start));
+      needle.strong_line = buf.cursor.y;
+      needle.strong_col = start;
+    }
+    return needle;
   }
 
 } // namespace
@@ -138,28 +176,11 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
                             || cursor_style_raw == "steadyblock";
   const bool inlay_hints_enabled = config.get_bool("lsp_inlay_hints", true);
   const bool inlay_type_hints_enabled = config.get_bool("lsp_inlay_type_hints", true);
-  // The occurrence highlight, resolved once for the frame: the identifier under
-  // the caret, and where on its line it sits. The row walk below only looks for
-  // that word. Only the focused pane paints it, and only while the caret is on
-  // a word and nothing is selected.
+  // The occurrence highlight, resolved once for the frame. The row walk below
+  // only looks for this needle, and only the focused pane paints it.
   const bool word_highlight_on = config.get_bool("word_highlight", true);
-  std::string word_highlight_word;
-  int word_highlight_caret_col = -1;
-  int word_highlight_caret_line = -1;
-  if (word_highlight_on && pane.active && !buffer_has_selection(buf) && buf.cursor.y >= 0
-      && buf.cursor.y < (int)buf.line_count())
-  {
-    const std::string &caret_line = buf.line(buf.cursor.y);
-    int start = 0;
-    int end = 0;
-    word_span_at(caret_line, buf.cursor.x, start, end);
-    if (end > start)
-    {
-      word_highlight_word = caret_line.substr((size_t)start, (size_t)(end - start));
-      word_highlight_caret_col = start;
-      word_highlight_caret_line = buf.cursor.y;
-    }
-  }
+  WordHighlightNeedle word_needle =
+      word_highlight_on && pane.active ? word_highlight_needle(buf) : WordHighlightNeedle{};
 
   UIRect pane_rect = {x, y, w, h};
   ui->fill_rect(pane_rect, " ", theme.fg_default, theme.bg_default);
@@ -772,17 +793,17 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
         }
         size_t next_search_hit = 0;
 
-        // This row's occurrences of the word under the caret, bounded to the
-        // window the row paints: the search is per row per frame, and a
-        // minified single line must not be walked end to end for it.
-        if (!word_highlight_word.empty())
+        // This row's occurrences of that needle, bounded to the window the row
+        // paints: the search is per row per frame, and a minified single line
+        // must not be walked end to end for it.
+        if (!word_needle.text.empty())
         {
-          const int needle_len = (int)word_highlight_word.size();
+          const int needle_len = (int)word_needle.text.size();
           for (int at = clamped_scroll_x; at + needle_len <= render_limit; at++)
           {
-            if (line.compare((size_t)at, (size_t)needle_len, word_highlight_word) != 0)
+            if (line.compare((size_t)at, (size_t)needle_len, word_needle.text) != 0)
               continue;
-            if (whole_word_at(line, at, needle_len))
+            if (!word_needle.whole_word || whole_word_at(line, at, needle_len))
               word_hits.push_back({at, needle_len});
           }
         }
@@ -899,11 +920,11 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
               }
             }
 
-            // Occurrence highlight: the identifier under the caret is tinted
-            // everywhere it shows, over syntax and brackets but under selection
-            // and search hits. A row wearing a severity band keeps it: that
-            // band is the row's own signal and has to stay edge to edge, so the
-            // tint steps aside there instead of punching holes in it.
+            // Occurrence highlight: the text it follows is tinted everywhere it
+            // shows, over syntax and brackets but under selection and search
+            // hits. A row wearing a severity band keeps it: that band is the
+            // row's own signal and has to stay edge to edge, so the tint steps
+            // aside there instead of punching holes in it.
             if (!word_hits.empty() && !row_has_band)
             {
               while (next_word_hit < word_hits.size()
@@ -915,8 +936,8 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
                   && char_idx >= word_hits[next_word_hit].col
                   && char_idx < word_hits[next_word_hit].col + word_hits[next_word_hit].len)
               {
-                const bool caret_word = line_idx == word_highlight_caret_line
-                                        && word_hits[next_word_hit].col == word_highlight_caret_col;
+                const bool caret_word = line_idx == word_needle.strong_line
+                                        && word_hits[next_word_hit].col == word_needle.strong_col;
                 bg = caret_word ? theme.bg_word_highlight_strong : theme.bg_word_highlight;
                 const int hl_fg =
                     caret_word ? theme.fg_word_highlight_strong : theme.fg_word_highlight;

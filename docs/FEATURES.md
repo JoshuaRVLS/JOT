@@ -117,9 +117,12 @@ settles, so scrolling a long way does not grow the process.
   `WordHighlight` and `WordHighlightStrong` theme groups. Only whole words
   count, so the `int` inside `printf` is not a use of `int`; a caret parked one
   cell past a word still answers for that word, the same rule the word motions
-  use. The highlight steps aside while a selection is up and on a row that
-  carries a diagnostic band, which stays edge to edge rather than having a word
-  clipped out of it; `word_highlight=false` turns it off.
+  use. A selection is the answer while one is up: the text it marks is what the
+  other occurrences are found from, matched as the text it is (so a prefix being
+  renamed lights the identifiers that carry it) rather than as a whole word. The
+  highlight also leaves a row that carries a diagnostic band alone, which stays
+  edge to edge rather than having a word clipped out of it, and
+  `word_highlight=false` turns it off.
 - Smart indent on Enter. A bracket left open on the line lines the new line up
   under the argument after it, so a wrapped call stays aligned:
   `res = call(arg,` continues at `arg`'s column. In the C family a control
