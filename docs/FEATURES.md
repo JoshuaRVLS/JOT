@@ -321,8 +321,9 @@ deliberately does not, so a preview never depends on a file you cannot see.
   completed is dropped rather than written at a guessed column. A function
   completion is written as an empty call: accepting `add` inserts `add()` with
   the caret between the parentheses, so the parameters are yours to type instead
-  of the server's argument placeholders. A declaration-shaped snippet (a body
-  after the parens, anything that is not a call) keeps its text.
+  of the server's argument placeholders (whether the call arrives as a snippet
+  or as plain text). A declaration-shaped item (a body after the parens,
+  anything that is not a call) keeps its text.
 - Hover on demand or
   on mouse hover; go-to-definition with a return stack (`:lspback`), from the
   keyboard or from `Ctrl+click`; LSP

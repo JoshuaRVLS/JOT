@@ -79,6 +79,22 @@ TEST_CASE("Accepting a function completion leaves the parameters for the user", 
   REQUIRE(e.buffer_for_test().cursor.x == 6);
 }
 
+TEST_CASE("A plain-text function completion drops its argument text too", "[jot][lsp]")
+{
+  seed_config_home();
+  Editor e;
+  e.set_home_menu_visible(false);
+  open_with_caret(e, "int main() {\n  ad\n}\n", 1, 4);
+
+  // No snippet format: the server sent the call as literal text, and the
+  // arguments are still the user's to type.
+  REQUIRE(e.seed_lsp_completion_for_test({call_item("add", "add(int left, int right)", 3)}));
+  accept(e);
+
+  REQUIRE(e.buffer_for_test().line(1) == "  add()");
+  REQUIRE(e.buffer_for_test().cursor.x == 6);
+}
+
 TEST_CASE("A declaration-shaped snippet is not mistaken for a call", "[jot][lsp]")
 {
   seed_config_home();

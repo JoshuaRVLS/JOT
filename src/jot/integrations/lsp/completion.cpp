@@ -279,22 +279,19 @@ namespace
 
   // A function completion should write the call, not the arguments: clangd
   // answers with `foo(${1:int a}, ${2:int b})`, and expanding that types out
-  // parameter names the user never wrote and does not want. When a snippet
-  // insert text is a bare call -- a callee followed by one argument list that
-  // ends the text -- the arguments are dropped and the caret lands inside the
-  // empty parens, so the parameters are the user's to type. A declaration-shaped
-  // snippet (`function foo() {}`, or anything after the closing paren) is left
-  // alone, as is a function-like item that is not a call at all, and plain-text
-  // items keep the literal text a server chose to send.
+  // parameter names the user never wrote and does not want. A server that sends
+  // the same call as plain text is no different, so the rule is about the text,
+  // not the format. When the insert text is a bare call -- a callee followed by
+  // one argument list that ends the text -- the arguments are dropped and the
+  // caret lands inside the empty parens, so the parameters are the user's to
+  // type. A declaration-shaped item (`function foo() {}`, or anything after the
+  // closing paren) is left alone, as is a function-like item that is not a call
+  // at all.
   //
   // `item.kind` is the LSP CompletionItemKind: 2 Method, 3 Function, 4
   // Constructor.
   bool strip_call_arguments(const LSPCompletionItem &item, std::string &text, int &cursor_offset)
   {
-    if (item.insert_text_format != 2)
-    {
-      return false;
-    }
     const int kind = item.kind;
     if (kind != 2 && kind != 3 && kind != 4)
     {
@@ -385,12 +382,12 @@ namespace
       return "";
     }
     std::string text = item.insert_text.empty() ? item.label : item.insert_text;
+    // The preview is what accepting writes, so a call whose arguments are
+    // dropped previews empty parens too.
+    int ignored = -1;
+    strip_call_arguments(item, text, ignored);
     if (item.insert_text_format == 2) // snippet: preview the expanded plain text
     {
-      // The preview is what accepting writes, so a call whose arguments are
-      // dropped previews empty parens too.
-      int ignored = -1;
-      strip_call_arguments(item, text, ignored);
       text = expand_lsp_snippet(text).text;
     }
     // The same test the list uses, on the text accepting would insert: what is
@@ -806,8 +803,8 @@ bool Editor::apply_selected_lsp_completion()
     text.erase(marker_pos, 1);
   }
 
-  // A call completion goes in without the server's argument placeholders, so
-  // there are no tabstops left for the snippet engine to expand.
+  // A call completion goes in without the server's argument placeholders, which
+  // also leaves a snippet item with no tabstops for the engine to expand.
   const bool stripped_call = strip_call_arguments(item, text, cursor_offset);
 
   // Keep the raw snippet text (tabstops and all) for the bundled snippet

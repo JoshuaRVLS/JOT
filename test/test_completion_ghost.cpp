@@ -166,7 +166,7 @@ TEST_CASE("Completion ghost: the prefix match ignores case", "[jot]")
   open_with_caret(e, "int main() {\n  PRI\n}\n", 1, 5);
 
   REQUIRE(e.seed_lsp_completion_for_test({item("printf", "printf(format)")}));
-  REQUIRE(e.lsp_completion_ghost_for_test() == "ntf(format)");
+  REQUIRE(e.lsp_completion_ghost_for_test() == "ntf()");
 }
 
 TEST_CASE("Completion ghost: nothing is painted inside an auto-closed call", "[jot]")
@@ -219,14 +219,14 @@ TEST_CASE("Completion ghost: it is painted where the caret owns the row", "[jot]
   open_with_caret(e, "int main() {\n  pri\n}\n", 1, 5);
 
   REQUIRE(e.seed_lsp_completion_for_test({item("printf", "printf(format)")}));
-  REQUIRE(e.lsp_completion_ghost_for_test() == "ntf(format)");
+  REQUIRE(e.lsp_completion_ghost_for_test() == "ntf()");
 
   e.age_lsp_completion_typing_for_test(1000);
   e.request_redraw_for_test();
   e.render_for_test();
   const std::vector<std::string> painted = italic_rows(e.ui_for_test());
   REQUIRE(painted.size() == 1);
-  REQUIRE(painted.front() == "ntf(format)");
+  REQUIRE(painted.front() == "ntf()");
 }
 
 TEST_CASE("Completion ghost: only the pane that owns the popup previews", "[jot]")
@@ -237,7 +237,7 @@ TEST_CASE("Completion ghost: only the pane that owns the popup previews", "[jot]
   open_with_caret(e, "int main() {\n  pri\n}\n", 1, 5);
 
   REQUIRE(e.seed_lsp_completion_for_test({item("printf", "printf(format)")}));
-  REQUIRE(e.lsp_completion_ghost_for_test() == "ntf(format)");
+  REQUIRE(e.lsp_completion_ghost_for_test() == "ntf()");
 
   // The split shows the same file with its own view, and its caret sits on the
   // same row. The popup -- and so the preview -- belongs to the focused pane
@@ -249,7 +249,7 @@ TEST_CASE("Completion ghost: only the pane that owns the popup previews", "[jot]
   e.render_for_test();
   const std::vector<std::string> painted = italic_rows(e.ui_for_test());
   REQUIRE(painted.size() == 1);
-  REQUIRE(painted.front() == "ntf(format)");
+  REQUIRE(painted.front() == "ntf()");
 }
 
 TEST_CASE("Completion ghost: the preview waits for the typing to pause", "[jot]")
@@ -263,7 +263,7 @@ TEST_CASE("Completion ghost: the preview waits for the typing to pause", "[jot]"
   e.config_set_for_test("lsp_completion_ghost_delay_ms", "2000");
 
   REQUIRE(e.seed_lsp_completion_for_test({item("printf", "printf(format)")}));
-  REQUIRE(e.lsp_completion_ghost_for_test() == "ntf(format)");
+  REQUIRE(e.lsp_completion_ghost_for_test() == "ntf()");
   REQUIRE(e.lsp_completion_preview_withheld_for_test());
 
   // Typing: the word just changed, so the frame paints the row without it.
@@ -289,7 +289,7 @@ TEST_CASE("Completion ghost: the preview waits for the typing to pause", "[jot]"
   e.render_frame_for_test();
   const std::vector<std::string> painted = italic_rows(e.ui_for_test());
   REQUIRE(painted.size() == 1);
-  REQUIRE(painted.front() == "ntf(format)");
+  REQUIRE(painted.front() == "ntf()");
 }
 
 TEST_CASE("Completion ghost: the delay can be switched off", "[jot]")
@@ -307,7 +307,7 @@ TEST_CASE("Completion ghost: the delay can be switched off", "[jot]")
   e.render_for_test();
   const std::vector<std::string> painted = italic_rows(e.ui_for_test());
   REQUIRE(painted.size() == 1);
-  REQUIRE(painted.front() == "ntf(format)");
+  REQUIRE(painted.front() == "ntf()");
 }
 
 TEST_CASE("Completion list: only the words the typed word leads into are listed", "[jot]")
