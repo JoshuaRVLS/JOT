@@ -718,6 +718,15 @@ bool Editor::completion_rank_enabled()
   return config.get_bool("lsp_completion_learn", true);
 }
 
+int64_t Editor::completion_half_life_seconds()
+{
+  const int days = config.get_int("lsp_completion_learn_half_life_days",
+                                  (int)(CompletionRank::kDefaultHalfLifeSeconds / 86400));
+  // A negative half-life would run a count backwards; 0 is the setting that
+  // never forgets, so anything less is read as off rather than as a rate.
+  return days > 0 ? (int64_t)days * 86400 : 0;
+}
+
 void Editor::load_completion_usage()
 {
   if (completion_usage_loaded)
@@ -731,7 +740,14 @@ void Editor::load_completion_usage()
   {
     return;
   }
+  completion_usage.set_half_life(completion_half_life_seconds());
   CompletionRank::load_usage(CompletionRank::usage_file_path(), completion_usage);
+  // Faded here, once, rather than on every row: what a habit is worth has to be
+  // settled before the list is ranked, and the read is where the session begins.
+  // The file is only written back if something is accepted, and a count left
+  // undecayed on disk reads the same next time -- the age is measured from the
+  // stamp, so nothing is lost by not writing it.
+  completion_usage.decay(CompletionRank::now_seconds());
 }
 
 void Editor::save_completion_usage()
@@ -765,7 +781,9 @@ void Editor::record_completion_use(const std::string &name)
     return;
   }
   load_completion_usage();
-  completion_usage.record(lsp_internal::detect_lsp_language(get_buffer().filepath), name);
+  completion_usage.record(lsp_internal::detect_lsp_language(get_buffer().filepath),
+                          name,
+                          CompletionRank::now_seconds());
   completion_usage_dirty = true;
 }
 

@@ -4,13 +4,19 @@
 The list a server answers with is filtered by the typed word and then ranked. The
 ranking puts the learned table (features/completion_rank.h) ahead of the length of
 the label, so a name the user reaches for often comes first even when a shorter
-one is offered beside it.
+one is offered beside it, and it fades with age so a habit from last month stops
+leading the one reached for today.
 
-Two scenes against a real clangd, on the same workspace and the same typed
-prefix, differing in one thing only: whether the config home holds a usage table
-that counts `quicksilver`. Without it the shorter label leads; with it the habit
-does. The two names are declared in a header the probe never opens, so the labels
-on screen can only be the popup's rows.
+Three scenes against a real clangd, on the same workspace and the same typed
+prefix, differing in the usage table the config home holds:
+
+  * no table at all: the shorter label leads, which is the baseline.
+  * a table counting `quicksilver` today: the habit leads.
+  * a table counting `quicksilver` a month ago against two uses of `quick_scan`
+    today: the fresh name leads again, because a count halves every two weeks.
+
+The two names are declared in a header the probe never opens, so the labels on
+screen can only be the popup's rows.
 
 Usage: test/completion_rank_probe.py [path-to-jot] [--dump]
 Exit codes: 0 pass, 1 fail, 2 skipped (no binary or no clangd).
@@ -20,6 +26,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pty_screen import run_in_pty  # noqa: E402
@@ -28,6 +35,7 @@ COLS, ROWS = 120, 34
 WORK = "/tmp/jot_completion_rank_probe"
 CFG_PLAIN = "/tmp/jot_completion_rank_probe_cfg_plain"
 CFG_HABIT = "/tmp/jot_completion_rank_probe_cfg_habit"
+CFG_AGED = "/tmp/jot_completion_rank_probe_cfg_aged"
 PROBE = os.path.join(WORK, "probe.cpp")
 
 # The two candidates share the typed prefix. `quick_scan` is a character shorter,
@@ -150,6 +158,26 @@ def main() -> int:
         failures.append("the popup never listed both candidates to re-rank")
     elif order[0] != FAMILIAR:
         failures.append("the accepted name did not lead over the shorter one")
+
+    # Scene 3: the same table with both counts stamped. The month-old habit has
+    # halved twice against a fortnight of half-life, so it is worth less than the
+    # two uses from today and the fresh name leads again. With the previous scene
+    # beside it, this is the pair that says the ranking is dated and not just
+    # counting.
+    now = int(time.time())
+    seed_config(CFG_AGED, "cpp\t%s\t5\t%d\ncpp\t%s\t2\t%d\n"
+                % (FAMILIAR, now - 28 * 86400, SHORTER, now))
+    aged = popup_capture(binary, CFG_AGED)
+    if dump:
+        print("--- with an aged habit ---")
+        print(aged)
+        print("-" * 70)
+    order = listed_order(aged)
+    print("aged habit:      %s" % (order or "(popup never listed both)"))
+    if len(order) < 2:
+        failures.append("the popup never listed both candidates to age")
+    elif order[0] != SHORTER:
+        failures.append("a month-old habit still led the name used today")
 
     if failures:
         print("completion rank probe: FAIL")

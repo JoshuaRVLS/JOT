@@ -207,6 +207,10 @@ void Config::load_defaults()
   // holds (features/completion_rank.h). Off means the plain order, and nothing is
   // read from or written to the config home.
   settings["lsp_completion_learn"] = "true";
+  // How fast an accepted name fades: its count halves every half-life, so a habit
+  // from last month stops outranking what the user is reaching for now. 0 keeps
+  // every count forever (the old behaviour).
+  settings["lsp_completion_learn_half_life_days"] = "14";
   settings["lsp_inlay_hints"] = "true";
   settings["lsp_inlay_type_hints"] = "true";
   settings["decorations_inline_diagnostics"] = "true";

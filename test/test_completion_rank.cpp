@@ -8,6 +8,8 @@
 #include "editor.h"
 #include "features/completion_rank.h"
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -21,6 +23,11 @@ using namespace CompletionRank;
 
 namespace
 {
+  // A fixed point on the clock, so a case can age a count by weeks without
+  // waiting: the engine takes the time it is given.
+  constexpr std::int64_t kNow = 1750000000;
+  constexpr std::int64_t kHalfLife = 7 * 24 * 60 * 60;
+
   std::string seed_config_home()
   {
     char home[] = "/tmp/jot_completion_rank_XXXXXX";
@@ -82,9 +89,9 @@ TEST_CASE("Completion rank: the learned table round-trips through its file forma
           "[jot][completion-rank]")
 {
   Usage usage;
-  usage.record("cpp", "std::string");
-  usage.record("Cpp", "std::String"); // folded: one language, one name
-  usage.record("python", "len");
+  usage.record("cpp", "std::string", kNow);
+  usage.record("Cpp", "std::String", kNow); // folded: one language, one name
+  usage.record("python", "len", kNow);
   REQUIRE(usage.count("cpp", "std::string") == 2);
   REQUIRE(usage.count("python", "len") == 1);
   REQUIRE(usage.count("cpp", "len") == 0); // the language is part of the key
@@ -95,13 +102,30 @@ TEST_CASE("Completion rank: the learned table round-trips through its file forma
   REQUIRE(parsed.count("python", "len") == 1);
   REQUIRE(parsed.serialize() == usage.serialize());
 
+  // The count is written with the moment it was last brought up to date, and a
+  // decayed count keeps its fraction in the file.
+  Usage decayed;
+  decayed.set_half_life(kHalfLife);
+  for (int i = 0; i < 5; i++)
+  {
+    decayed.record("cpp", "aging", kNow);
+  }
+  decayed.decay(kNow + kHalfLife);
+  const Usage reread = Usage::parse(decayed.serialize());
+  REQUIRE(reread.count("cpp", "aging") == 2.5);
+  REQUIRE(reread.serialize() == decayed.serialize());
+
   // A line the parser cannot read is dropped whole: the rest of the table, and
-  // the file it came from, survive a hand edit or a truncated write.
-  const Usage ragged = Usage::parse("cpp\tgood\t3\nnonsense\ncpp\tzero\t0\ncpp\tbad\tx\n\n");
+  // the file it came from, survive a hand edit or a truncated write. A line with
+  // no stamp is the older format, read as an undated count rather than as one to
+  // throw away.
+  const Usage ragged = Usage::parse(
+      "cpp\tgood\t3\nnonsense\ncpp\tzero\t0\ncpp\tbad\tx\n\ncpp\taged\t4\t1700000000\n");
   REQUIRE(ragged.count("cpp", "good") == 3);
   REQUIRE(ragged.count("cpp", "zero") == 0);
   REQUIRE(ragged.count("cpp", "bad") == 0);
-  REQUIRE(ragged.entries() == 1);
+  REQUIRE(ragged.count("cpp", "aged") == 4);
+  REQUIRE(ragged.entries() == 2);
 }
 
 TEST_CASE("Completion rank: a habit is worth points and a long habit stops paying",
@@ -115,11 +139,15 @@ TEST_CASE("Completion rank: a habit is worth points and a long habit stops payin
   // one habit from burying every other row.
   REQUIRE(usage_points_for_count(11) == 300);
   REQUIRE(usage_points_for_count(500) == 300);
+  // A faded count is worth its fraction, rounded down: 1.25 uses is 37 points,
+  // and fading can never pay back more than it took.
+  REQUIRE(usage_points_for_count(0.5) == 15);
+  REQUIRE(usage_points_for_count(1.25) == 37);
 
   Usage usage;
   for (int i = 0; i < 5; i++)
   {
-    usage.record("cpp", "quicksilver");
+    usage.record("cpp", "quicksilver", kNow);
   }
   REQUIRE(usage.points("cpp", "quicksilver") == 150);
   REQUIRE(usage.points("cpp", "never_seen") == 0);
@@ -170,7 +198,7 @@ TEST_CASE("Completion rank: relevance adds the habit to the file's own words",
   Usage usage;
   for (int i = 0; i < 5; i++)
   {
-    usage.record("cpp", "total_count");
+    usage.record("cpp", "total_count", kNow);
   }
   Context context;
   context.rebuild({"int total_count = 0;", "  ret"}, 1);
@@ -192,12 +220,128 @@ TEST_CASE("Completion rank: the table lives under the config home",
   REQUIRE(usage_file_path() == usage_file_in(home));
 
   Usage usage;
-  usage.record("cpp", "std::string");
-  usage.record("cpp", "std::string");
+  usage.record("cpp", "std::string", kNow);
+  usage.record("cpp", "std::string", kNow);
   REQUIRE(save_usage(usage_file_path(), usage));
+  // The file holds counts and stamps, never the rate they fade at: a table told
+  // to forget slowly is not quietly reset to the default by the read.
   Usage loaded;
+  loaded.set_half_life(0);
   REQUIRE(load_usage(usage_file_path(), loaded));
   REQUIRE(loaded.count("cpp", "std::string") == 2);
+  REQUIRE(loaded.half_life_seconds() == 0);
+
+  // A file that is not there is an empty table too, and still not a new rate.
+  Usage absent;
+  absent.set_half_life(kHalfLife);
+  REQUIRE_FALSE(load_usage(usage_file_in(home) + ".missing", absent));
+  REQUIRE(absent.empty());
+  REQUIRE(absent.half_life_seconds() == kHalfLife);
+}
+
+TEST_CASE("Completion rank: a count halves for every half life that passes",
+          "[jot][completion-rank]")
+{
+  Usage usage;
+  usage.set_half_life(kHalfLife);
+  REQUIRE(usage.half_life_seconds() == kHalfLife);
+  for (int i = 0; i < 8; i++)
+  {
+    usage.record("cpp", "name", kNow);
+  }
+  REQUIRE(usage.count("cpp", "name") == 8.0);
+
+  // Read twice in the same second: nothing has passed, nothing fades.
+  usage.decay(kNow);
+  REQUIRE(usage.count("cpp", "name") == 8.0);
+
+  usage.decay(kNow + kHalfLife);
+  REQUIRE(usage.count("cpp", "name") == 4.0);
+  usage.decay(kNow + 3 * kHalfLife);
+  REQUIRE(usage.count("cpp", "name") == 1.0);
+
+  // The language is part of the key, and a name nothing was recorded for is not
+  // invented by the decay.
+  REQUIRE(usage.points("cpp", "name") == 30);
+  REQUIRE(usage.points("cpp", "never_seen") == 0);
+}
+
+TEST_CASE("Completion rank: a run of decays adds up to the decay of the whole age",
+          "[jot][completion-rank]")
+{
+  // The count keeps its fraction and the stamp moves with it, so being read once a
+  // session does not round the same remainder away again and again: a fortnight
+  // spent in fourteen pieces has to leave what a fortnight left in one.
+  Usage stepped;
+  Usage whole;
+  stepped.set_half_life(kHalfLife);
+  whole.set_half_life(kHalfLife);
+  for (int i = 0; i < 8; i++)
+  {
+    stepped.record("cpp", "name", kNow);
+    whole.record("cpp", "name", kNow);
+  }
+  for (int slice = 1; slice <= 14; slice++)
+  {
+    stepped.decay(kNow + kHalfLife * slice / 14);
+  }
+  whole.decay(kNow + kHalfLife);
+  REQUIRE(std::fabs(stepped.count("cpp", "name") - whole.count("cpp", "name")) < 0.01);
+  REQUIRE(std::fabs(stepped.count("cpp", "name") - 4.0) < 0.01);
+}
+
+TEST_CASE("Completion rank: a name worn below half a use is forgotten", "[jot][completion-rank]")
+{
+  Usage usage;
+  usage.set_half_life(kHalfLife);
+  usage.record("cpp", "rare", kNow);
+  // Half a use is still a use; less than that is a name that has stopped being
+  // one the user reaches for, so it is dropped and the file stops growing.
+  usage.decay(kNow + kHalfLife);
+  REQUIRE(std::fabs(usage.count("cpp", "rare") - 0.5) < 0.001);
+  REQUIRE(usage.entries() == 1);
+  usage.decay(kNow + kHalfLife + kHalfLife / 2);
+  REQUIRE(usage.count("cpp", "rare") == 0.0);
+  REQUIRE(usage.entries() == 0);
+}
+
+TEST_CASE("Completion rank: a use counts from the moment it happens", "[jot][completion-rank]")
+{
+  Usage usage;
+  usage.set_half_life(kHalfLife);
+  usage.record("cpp", "name", kNow);
+  // The use a fortnight later is worth a whole one, and only what was earned
+  // before the gap fades by it.
+  usage.record("cpp", "name", kNow + kHalfLife);
+  REQUIRE(usage.count("cpp", "name") == 1.5);
+  REQUIRE(usage.points("cpp", "name") == 45);
+}
+
+TEST_CASE("Completion rank: a half-life of zero never forgets", "[jot][completion-rank]")
+{
+  Usage usage;
+  usage.set_half_life(0);
+  for (int i = 0; i < 3; i++)
+  {
+    usage.record("cpp", "name", kNow);
+  }
+  usage.decay(kNow + 100 * kHalfLife);
+  REQUIRE(usage.count("cpp", "name") == 3.0);
+  REQUIRE(usage.points("cpp", "name") == 90);
+}
+
+TEST_CASE("Completion rank: an undated count is kept and dated", "[jot][completion-rank]")
+{
+  // A table written before the counts carried a moment: its age is unknown, so the
+  // first read dates it and keeps what the user earned, and it fades from there.
+  Usage usage = Usage::parse("cpp\tlegacy\t4\n");
+  usage.set_half_life(kHalfLife);
+  REQUIRE(usage.count("cpp", "legacy") == 4.0);
+  usage.decay(kNow + 5 * kHalfLife);
+  REQUIRE(usage.count("cpp", "legacy") == 4.0);
+  usage.decay(kNow + 6 * kHalfLife);
+  REQUIRE(std::fabs(usage.count("cpp", "legacy") - 2.0) < 0.001);
+  REQUIRE(usage.serialize().find("legacy\t2\t") != std::string::npos);
 }
 
 TEST_CASE("Completion rank: the accepted name outranks a stranger on the next list",
@@ -303,6 +447,44 @@ TEST_CASE("Completion rank: a decorated label is still the same name",
   }
   const std::string written = read_file(usage_file_in(home));
   REQUIRE(written.find("cpp\tquicksilver\t6") != std::string::npos);
+}
+
+TEST_CASE("Completion rank: a stale habit loses to a fresh one", "[jot][completion-rank]")
+{
+  const std::string home = seed_config_home();
+  const std::int64_t now = now_seconds();
+  // Five uses of `quicksilver` a month ago against two of `quick_scan` today. The
+  // old count is four times the new one, so without fading it wins.
+  write_usage_file(home,
+                   "cpp\tquicksilver\t5\t" + std::to_string(now - 28 * 86400)
+                       + "\ncpp\tquick_scan\t2\t" + std::to_string(now) + "\n");
+
+  const std::vector<LSPCompletionItem> items = {function_item("quick_scan"),
+                                                function_item("quicksilver")};
+
+  {
+    Editor e;
+    e.set_home_menu_visible(false);
+    open_with_caret(e, "int main() {\n  qui\n}\n", 1, 5);
+    REQUIRE(e.seed_lsp_completion_for_test(items));
+    // Two half-lives of two weeks: the month-old habit is worn down to 1.25 uses
+    // and the two from today lead.
+    REQUIRE(e.lsp_completion_labels_for_test()[0] == "quick_scan");
+  }
+  // Nothing was accepted, so the table on disk is left as it is: that ranking was
+  // a read of it, not a write over it.
+  REQUIRE(read_file(usage_file_in(home)).find("quicksilver\t5\t") != std::string::npos);
+
+  {
+    Editor e;
+    e.set_home_menu_visible(false);
+    e.config_set_for_test("lsp_completion_learn_half_life_days", "0");
+    open_with_caret(e, "int main() {\n  qui\n}\n", 1, 5);
+    REQUIRE(e.seed_lsp_completion_for_test(items));
+    // The same table with fading off puts the old habit back on top, which is
+    // what says the flip above came from the decay rather than from the file.
+    REQUIRE(e.lsp_completion_labels_for_test()[0] == "quicksilver");
+  }
 }
 
 TEST_CASE("Completion rank: accepting a row writes the table on shutdown",

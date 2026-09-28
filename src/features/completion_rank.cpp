@@ -5,9 +5,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <system_error>
 
@@ -55,6 +58,55 @@ namespace
   constexpr int kScanHalfWindow = 2000;
   constexpr std::size_t kMaxWords = 2000;
   constexpr std::size_t kMinWordLength = 2;
+  // A name worn down below half a use has stopped being a habit, so it is
+  // dropped rather than carried at a fraction that can only keep shrinking: half
+  // a use is 15 points against the 90 a word of the file itself is worth.
+  constexpr double kForgottenBelow = 0.5;
+  // Enough decimal places to keep a decayed count from rounding itself away over
+  // a run of sessions, and few enough to read.
+  constexpr int kCountDecimals = 3;
+
+  // A count written the way it reads: a whole number as an integer, a decayed one
+  // with its fraction. Two saves of the same table have to come out byte-identical
+  // for the file to be usable by hand, so the formatting is fixed, not `%g`.
+  std::string format_count(double count)
+  {
+    const double whole = std::floor(count);
+    if (std::fabs(count - whole) < 0.0005)
+    {
+      return std::to_string((long long)whole);
+    }
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(kCountDecimals) << count;
+    std::string text = out.str();
+    while (!text.empty() && text.back() == '0')
+    {
+      text.pop_back();
+    }
+    if (!text.empty() && text.back() == '.')
+    {
+      text.pop_back();
+    }
+    return text;
+  }
+
+  // One count, brought up to `now`: halved for each half-life since it was last
+  // brought up to date. The multiplier is fractional, so the remainders of a run
+  // of decays add up to the decay of the whole age instead of being rounded away
+  // one session at a time.
+  double decayed_count(double count,
+                       std::int64_t stamp,
+                       std::int64_t now_seconds,
+                       std::int64_t half_life_seconds)
+  {
+    if (count <= 0.0 || half_life_seconds <= 0 || stamp <= 0 || now_seconds <= stamp)
+    {
+      return count;
+    }
+    const double halves = (double)(now_seconds - stamp) / (double)half_life_seconds;
+    const double decayed = count * std::pow(2.0, -halves);
+    return decayed < kForgottenBelow ? 0.0 : decayed;
+  }
 
   fs::path config_home()
   {
@@ -87,7 +139,17 @@ namespace
 
 namespace CompletionRank
 {
-  void Usage::record(const std::string &language, const std::string &name)
+  void Usage::set_half_life(std::int64_t half_life_seconds)
+  {
+    half_life_seconds_ = half_life_seconds;
+  }
+
+  std::int64_t Usage::half_life_seconds() const
+  {
+    return half_life_seconds_;
+  }
+
+  void Usage::record(const std::string &language, const std::string &name, std::int64_t now_seconds)
   {
     const std::string lang = fold(language);
     const std::string key = fold(name);
@@ -105,29 +167,56 @@ namespace CompletionRank
       auto smallest = table.begin();
       for (auto candidate = table.begin(); candidate != table.end(); ++candidate)
       {
-        if (candidate->second < smallest->second)
+        if (candidate->second.count < smallest->second.count)
         {
           smallest = candidate;
         }
       }
-      if (smallest->second > 1)
+      if (smallest->second.count > 1.0)
       {
         return;
       }
       table.erase(smallest);
     }
-    table[key] += 1;
+    // The count is brought up to date before the use is added, so what was earned
+    // before the gap fades by the gap and the use itself does not.
+    Entry &entry = table[key];
+    entry.count = decayed_count(entry.count, entry.stamp, now_seconds, half_life_seconds_) + 1.0;
+    entry.stamp = now_seconds;
   }
 
-  int Usage::count(const std::string &language, const std::string &name) const
+  double Usage::count(const std::string &language, const std::string &name) const
   {
     auto table = counts_.find(fold(language));
     if (table == counts_.end())
     {
-      return 0;
+      return 0.0;
     }
     auto it = table->second.find(fold(name));
-    return it == table->second.end() ? 0 : it->second;
+    return it == table->second.end() ? 0.0 : it->second.count;
+  }
+
+  void Usage::decay(std::int64_t now_seconds)
+  {
+    for (auto &table : counts_)
+    {
+      for (auto it = table.second.begin(); it != table.second.end();)
+      {
+        Entry &entry = it->second;
+        entry.count = decayed_count(entry.count, entry.stamp, now_seconds, half_life_seconds_);
+        // An entry the file never dated is stamped now: from here on its age is
+        // known, and the count it already carries is kept.
+        entry.stamp = entry.count <= 0.0 ? 0 : now_seconds;
+        if (entry.count <= 0.0)
+        {
+          it = table.second.erase(it);
+        }
+        else
+        {
+          ++it;
+        }
+      }
+    }
   }
 
   int Usage::points(const std::string &language, const std::string &name) const
@@ -162,11 +251,12 @@ namespace CompletionRank
     {
       for (const auto &entry : table.second)
       {
-        if (entry.second <= 0)
+        if (entry.second.count <= 0.0)
         {
           continue;
         }
-        out << table.first << '\t' << entry.first << '\t' << entry.second << '\n';
+        out << table.first << '\t' << entry.first << '\t' << format_count(entry.second.count)
+            << '\t' << entry.second.stamp << '\n';
       }
     }
     return out.str();
@@ -195,18 +285,36 @@ namespace CompletionRank
       }
       const std::string language = line.substr(0, first);
       const std::string name = line.substr(first + 1, second - first - 1);
-      const std::string count_text = line.substr(second + 1);
+      const std::string rest = line.substr(second + 1);
+      // The stamp is the newer half of the format: a line without one is a count
+      // from before it existed, and reads as undated rather than as malformed.
+      const std::size_t third = rest.find('\t');
+      const std::string count_text = third == std::string::npos ? rest : rest.substr(0, third);
+      const std::string stamp_text = third == std::string::npos ? "" : rest.substr(third + 1);
       if (language.empty() || name.empty() || count_text.empty())
       {
         continue;
       }
       char *end = nullptr;
-      const long count = std::strtol(count_text.c_str(), &end, 10);
-      if (end == count_text.c_str() || *end != '\0' || count <= 0)
+      const double count = std::strtod(count_text.c_str(), &end);
+      if (end == count_text.c_str() || *end != '\0' || !(count > 0.0) || !std::isfinite(count))
       {
         continue;
       }
-      usage.counts_[fold(language)][fold(name)] = (int)std::min<long>(count, 1000000L);
+      std::int64_t stamp = 0;
+      if (!stamp_text.empty())
+      {
+        char *stamp_end = nullptr;
+        const long long parsed_stamp = std::strtoll(stamp_text.c_str(), &stamp_end, 10);
+        if (stamp_end != stamp_text.c_str() && *stamp_end == '\0' && parsed_stamp > 0)
+        {
+          stamp = (std::int64_t)parsed_stamp;
+        }
+      }
+      Entry entry;
+      entry.count = std::min(count, 1000000.0);
+      entry.stamp = stamp;
+      usage.counts_[fold(language)][fold(name)] = entry;
     }
     return usage;
   }
@@ -282,13 +390,14 @@ namespace CompletionRank
     return usage.points(language, name) + context.points(name);
   }
 
-  int usage_points_for_count(int count)
+  int usage_points_for_count(double count)
   {
-    if (count <= 0)
+    if (!(count > 0.0))
     {
       return 0;
     }
-    return kPointsPerUse * std::min(count, kUsesThatCount);
+    // Rounded down: a faded count must never be worth more than it was.
+    return (int)std::floor((double)kPointsPerUse * std::min(count, (double)kUsesThatCount));
   }
 
   int locality_points_for_gap(int gap_lines)
@@ -299,6 +408,11 @@ namespace CompletionRank
     }
     const int nearer = std::max(0, kLocalPointsRange - kPointsPerLineAway * gap_lines);
     return kLocalPoints + nearer;
+  }
+
+  std::int64_t now_seconds()
+  {
+    return (std::int64_t)std::time(nullptr);
   }
 
   std::string usage_file_path()
@@ -313,7 +427,12 @@ namespace CompletionRank
 
   bool load_usage(const std::string &path, Usage &out)
   {
+    // The file holds counts and their stamps, never the rate they fade at: that
+    // is a setting, so a load keeps whatever the caller put there rather than
+    // resetting it to the default.
+    const std::int64_t half_life = out.half_life_seconds();
     out.clear();
+    out.set_half_life(half_life);
     if (path.empty())
     {
       return false;
@@ -325,7 +444,9 @@ namespace CompletionRank
     }
     std::ostringstream text;
     text << file.rdbuf();
-    out = Usage::parse(text.str());
+    Usage parsed = Usage::parse(text.str());
+    parsed.set_half_life(half_life);
+    out = std::move(parsed);
     return true;
   }
 

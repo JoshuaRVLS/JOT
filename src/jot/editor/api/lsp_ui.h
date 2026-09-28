@@ -107,6 +107,9 @@ private:
   // holds (`lsp_completion_learn`). Off is the plain order, and nothing touches
   // the learned table below.
   bool completion_rank_enabled();
+  // How fast a learned habit fades (`lsp_completion_learn_half_life_days`, 0 to
+  // never forget), in seconds.
+  int64_t completion_half_life_seconds();
   // The learned table, read from the config home once per editor and written back
   // on shutdown. A missing file is an empty table, not an error.
   void load_completion_usage();
