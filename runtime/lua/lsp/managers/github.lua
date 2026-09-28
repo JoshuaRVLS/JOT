@@ -104,16 +104,21 @@ function M.install_lines_win(entry, dirs)
   if not spec then
     return nil
   end
-  -- tar.exe unpacks zip, tar and tar.gz alike. A bare .gz or a non-.exe
-  -- single-file release has no Windows path yet: saying so beats installing
-  -- something unrunnable.
+  -- tar.exe unpacks zip, tar and tar.gz alike, and a .vsix is a zip whatever the
+  -- catalog calls it; a zst or an extensionless single file has no path yet.
   local archive = spec.archive
   if archive == "gz" then
     return nil
   end
-  if archive ~= "zip" and archive ~= "tar.gz" and archive ~= "tar"
-    and not spec.match:find("%.exe") then
-    return nil
+  local match_lower = spec.match:lower()
+  if archive == "none" then
+    if match_lower:find("%.zip") or match_lower:find("%.vsix")
+      or match_lower:find("%.tar%.gz") or match_lower:find("%.tgz") then
+      archive = "zip"
+    elseif not (match_lower:find("%.exe") or match_lower:find("%.jar")
+      or match_lower:find("%.phar")) then
+      return nil
+    end
   end
   local repo = entry.repo
   local version = entry.version or ""
@@ -179,14 +184,38 @@ function M.install_lines_win(entry, dirs)
   if archive == "zip" or archive == "tar.gz" or archive == "tar" then
     lines[#lines + 1] = win.extract(asset, dirs.dir)
   else
+    -- A single file keeps the asset's own extension, which is what a literal run
+    -- hint names (phpactor.phar); a template hint is rewritten to the bin name,
+    -- exactly as the POSIX renderer renames its download.
     local primary = (entry.bin and entry.bin[1]) or "app"
-    lines[#lines + 1] = "copy /Y " .. win.quote(asset) .. " "
-      .. win.quote(dirs.dir .. "\\" .. primary .. ".exe") .. " >NUL"
+    local runs = entry.runs or {}
+    local spec_bin = runs[primary]
+    local target = primary
+    local keep_ext = true
+    if spec_bin and spec_bin.hint and spec_bin.hint ~= "" then
+      if spec_bin.hint:find("{", 1, true) then
+        runs[primary] = { kind = spec_bin.kind, hint = primary }
+        entry.runs = runs
+        keep_ext = false
+      else
+        -- The hint already carries the extension the release uses.
+        target = spec_bin.hint:match("([^/\\]+)$") or primary
+        keep_ext = false
+      end
+    end
+    if keep_ext then
+      lines[#lines + 1] = "for %%A in (\"%_jot_url%\") do set \"_jot_ext=%%~xA\""
+      lines[#lines + 1] = "copy /Y " .. win.quote(asset) .. " "
+        .. win.quote(dirs.dir .. "\\" .. target) .. "%_jot_ext% >NUL"
+    else
+      lines[#lines + 1] = "copy /Y " .. win.quote(asset) .. " "
+        .. win.quote(dirs.dir .. "\\" .. target) .. " >NUL"
+    end
   end
   lines[#lines + 1] = win.remove(asset)
 
-  for _, b in ipairs(entry.bin or {}) do
-    for _, l in ipairs(win.publish(dirs.dir, { b .. ".exe", b .. ".cmd", b .. ".bat", b },
+  for _, b in ipairs(win.native_bins(entry)) do
+    for _, l in ipairs(win.publish(dirs.dir, win.bin_patterns(entry, b),
                                    dirs.bin_dir .. "\\" .. b)) do
       lines[#lines + 1] = l
     end

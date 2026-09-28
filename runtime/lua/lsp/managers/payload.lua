@@ -53,7 +53,7 @@ function M.install_lines_win(entry, dirs)
     return nil
   end
   local lines = {}
-  for _, b in ipairs(entry.bin or {}) do
+  for _, b in ipairs(win.native_bins(entry)) do
     for _, l in ipairs(win.publish(payload, { b .. ".exe", b .. ".cmd", b .. ".bat", b },
                                    dirs.bin_dir .. "\\" .. b)) do
       lines[#lines + 1] = l

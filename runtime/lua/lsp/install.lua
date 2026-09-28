@@ -183,6 +183,31 @@ local function build_install_script(entry)
   return table.concat(script, "\n") .. "\n"
 end
 
+-- Windows counterpart of link_lines: a bin the catalog routes through an
+-- interpreter (a .js, .jar or .phar) becomes a launcher for that interpreter,
+-- while native executables are published by the manager that produced them.
+local function win_link_lines(entry, dirs)
+  local out = {}
+  local runs = entry.runs or {}
+  for _, b in ipairs(entry.bin or {}) do
+    local spec = runs[b]
+    local command = spec and win.interpreter(spec.kind)
+    if command then
+      local hint = (spec.hint and spec.hint ~= "") and spec.hint or b
+      local pattern = hint:match("([^/\\]+)$") or b
+      local exact = hint:find("[/\\]") and hint or nil
+      for _, l in ipairs(win.find(dirs.dir, { pattern }, exact)) do
+        out[#out + 1] = l
+      end
+      for _, l in ipairs(win.launcher(dirs.bin_dir .. "\\" .. b .. ".cmd",
+                                      { command .. " \"%_jot_found%\" %%*" })) do
+        out[#out + 1] = l
+      end
+    end
+  end
+  return out
+end
+
 -- Windows script. The steps come from each manager's install_lines_win and the
 -- host runs them as a batch file (LspInstall::wrap_script): there is no POSIX
 -- shell on Windows, and inside a batch a failed step can abort with `exit /b`,
@@ -209,6 +234,9 @@ local function build_install_script_win(entry)
     script[#script + 1] = l
   end
   for _, l in ipairs(lines) do
+    script[#script + 1] = l
+  end
+  for _, l in ipairs(win_link_lines(entry, dirs)) do
     script[#script + 1] = l
   end
   -- Written last, so it can only exist once every step ran. Leading

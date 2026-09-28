@@ -35,4 +35,33 @@ function M.install_lines(entry, dirs)
   return { cmd }
 end
 
+-- Windows renderer. The same `cargo install`, and the same <dir>\bin: cargo
+-- builds a .exe there, which is the whole difference.
+function M.install_lines_win(entry, dirs)
+  local win = dirs.win
+  local extras = entry.extras or {}
+  local features = extras.features
+  local git = extras.repository_url
+  local cmd = "cargo install --root " .. win.quote(dirs.dir) .. " --locked"
+  if git and git ~= "" then
+    cmd = cmd .. " --git " .. win.quote(git)
+  else
+    if entry.version and entry.version ~= "" then
+      cmd = cmd .. " --version " .. win.quote(entry.version)
+    end
+    if features and features ~= "" then
+      cmd = cmd .. " --features " .. win.quote(features)
+    end
+    cmd = cmd .. " " .. win.quote(entry.pkg)
+  end
+  local lines = { win.fail(cmd) }
+  for _, b in ipairs(win.native_bins(entry)) do
+    for _, l in ipairs(win.publish(dirs.dir .. "\\bin", { b .. ".exe", b },
+                                   dirs.bin_dir .. "\\" .. b)) do
+      lines[#lines + 1] = l
+    end
+  end
+  return lines
+end
+
 return M

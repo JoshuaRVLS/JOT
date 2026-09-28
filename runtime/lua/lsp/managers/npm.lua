@@ -48,8 +48,8 @@ function M.install_lines_win(entry, dirs)
   for _, extra in ipairs(entry.extra_pkgs or {}) do
     line = line .. " " .. win.quote(extra)
   end
-  local lines = { win.fail(line) }
-  for _, b in ipairs(entry.bin or {}) do
+  local lines = { win.fail(win.run(line)) }
+  for _, b in ipairs(win.native_bins(entry)) do
     for _, l in ipairs(win.publish(dirs.dir .. "\\node_modules\\.bin",
                                    { b .. ".cmd", b .. ".exe", b .. ".bat" },
                                    dirs.bin_dir .. "\\" .. b)) do

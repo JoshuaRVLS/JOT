@@ -26,4 +26,23 @@ function M.install_lines(entry, dirs)
   return { cmd }
 end
 
+-- Windows renderer. `dotnet tool` is the same command there; the apphost it
+-- writes next to the package metadata is a .exe carrying the bin's name.
+function M.install_lines_win(entry, dirs)
+  local win = dirs.win
+  local cmd = "dotnet tool update --tool-path " .. win.quote(dirs.dir)
+  if entry.version and entry.version ~= "" then
+    cmd = cmd .. " --version " .. win.quote(entry.version)
+  end
+  cmd = cmd .. " " .. win.quote(entry.pkg)
+  local lines = { win.fail(cmd) }
+  for _, b in ipairs(win.native_bins(entry)) do
+    for _, l in ipairs(win.publish(dirs.dir, { b .. ".exe", b },
+                                   dirs.bin_dir .. "\\" .. b)) do
+      lines[#lines + 1] = l
+    end
+  end
+  return lines
+end
+
 return M

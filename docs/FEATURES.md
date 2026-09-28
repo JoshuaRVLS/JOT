@@ -357,13 +357,20 @@ deliberately does not, so a preview never depends on a file you cannot see.
 - Status, start/stop/restart, a manager, and install/remove helpers for 100+
   servers (`:lspinstall <server>`, `:lspremove <server>`).
 - **Windows installs use the catalog too**: there is no POSIX shell there, so
-  each supporting manager renders a second script out of cmd.exe steps, built
-  on `curl.exe` and `tar.exe` (both shipped with Windows 10) and run as a batch
-  file so a failed step aborts the install instead of reporting success. Servers
-  land in `%LOCALAPPDATA%/jot/lsp/bin`. A managed bin that is a `.cmd` launcher,
-  which is what npm publishes, is spawned through `cmd /c`, the only way Windows
-  runs one. Managers without a Windows renderer say so instead of generating a
-  script that cannot run there.
+  every manager family in the catalog renders a second script out of cmd.exe
+  steps - `github`, `payload`, `npm`, `pypi`, `golang`, `cargo`, `nuget`, `gem`,
+  `opam`, `composer`, `luarocks`, `openvsx` and `generic` - built on `curl.exe`
+  and `tar.exe` (both shipped with Windows 10) and run as a batch file so a
+  failed step aborts the install instead of reporting success. Servers land in
+  `%LOCALAPPDATA%/jot/lsp/bin`. A managed bin that is a `.cmd` launcher, which is
+  what npm publishes, is spawned through `cmd /c`, the only way Windows runs
+  one; the package managers themselves, which are often batch shims there, are
+  invoked so the install does not stop at the first one. A server that is a
+  script rather than a program (a `.jar`, a `.js` inside a `.vsix`, a `.phar`)
+  gets a generated launcher that starts its interpreter on the file the catalog
+  names, the same thing the POSIX side does with its wrappers. A package with no
+  Windows source at all says so instead of generating a script that cannot run
+  there.
 - **Bundled servers**: a release package vendors clangd under
   `share/jot/payload/clangd`, so C/C++ support needs no system package and no
   network. Opening a C/C++ buffer installs it on the spot (once per binary per

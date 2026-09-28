@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -266,15 +267,93 @@ TEST_CASE("LSP install plan renders cmd.exe steps on Windows", "[lsp]")
   REQUIRE(script.find("XDG_DATA_HOME") == std::string::npos);
   REQUIRE(script.find("/bin/sh") == std::string::npos);
 
-  // A manager with no Windows renderer says so, instead of generating a POSIX
-  // script that cmd.exe could never run.
+  // A package with no Windows source at all still says so, instead of
+  // generating a POSIX script that cmd.exe could never run.
   std::string id2, script2, message2;
-  REQUIRE(e.lsp_install_plan_for_test("crlfmt", &id2, &script2, &message2));
-  REQUIRE(id2 == "crlfmt");
+  REQUIRE(e.lsp_install_plan_for_test("swiftlint", &id2, &script2, &message2));
+  REQUIRE(id2 == "swiftlint");
   REQUIRE(script2.empty());
   REQUIRE(message2.find("has no Windows installer yet") != std::string::npos);
 
   unsetenv("JOT_INSTALL_PLATFORM");
+  unsetenv("JOT_LSP_PAYLOAD_DIR");
+  fs::remove_all(data);
+}
+
+TEST_CASE("LSP install plan renders every manager family on Windows", "[lsp]")
+{
+  seed_config_home();
+  const std::string data = seed_data_home();
+  // No payload in sight: every id here has to come from its own manager.
+  setenv("JOT_LSP_PAYLOAD_DIR", "/nonexistent/jot-payload", 1);
+  setenv("JOT_INSTALL_PLATFORM", "win", 1);
+  Editor e;
+
+  struct Family
+  {
+    const char *id;
+    std::vector<std::string> markers;
+  }; // One id per manager family with its Windows-only steps: the manager's own
+     // command, the shape of what it produces there, and the publish primitives.
+  const std::vector<Family> families = {
+      {"asm-lsp",
+       {"cargo install --root",
+        "--locked",
+        "asm-lsp.exe"}}, // The package managers below are batch shims on Windows, and a batch
+                         // started from a batch without `call` never hands control back.
+      {"alex", {"call npm install --prefix", "alex@11.0.1", "alex.cmd"}},
+      {"crlfmt",
+       {"set \"GOBIN=", "go install \"github.com/cockroachdb/crlfmt@v0.5.0\"", "crlfmt.exe"}},
+      // The catalog's "v1.27.1#cmd/dlv" suffix is a subpath of the module, not
+      // part of the version: go rejects the inline form.
+      {"delve", {"go install \"github.com/go-delve/delve/cmd/dlv@v1.27.1\""}},
+      {"csharpier", {"dotnet tool update --tool-path", "--version \"1.2.6\"", "csharpier.exe"}},
+      {"erb-lint",
+       {"call gem install --no-user-install",
+        "set \"GEM_HOME=",
+        "erblint.bat",
+        "call \"%_jot_found%\" %%*"}},
+      {"ocaml-lsp", {"call opam install --yes --no-depext", "opam exec -- ocamllsp %%*"}},
+      {"pint", {"call composer require --working-dir=", "composer.json", "pint.bat"}},
+      {"luacheck", {"call luarocks install --tree", "luacheck.bat"}},
+      {"gradle-language-server",
+       {"open-vsx.org/api/vscjava/vscode-gradle", "tar -xf", "java -jar \"%_jot_found%\" %%*"}},
+      {"haxe-language-server", {"tar -xf", "for /r", "node \"%_jot_found%\" %%*"}},
+      {"kotlin-lsp", {"kotlin-server-262.9593.0.win.zip", "intellij-server.exe"}},
+      {"jdtls", {"lombok.jar", "python \"%_jot_found%\" %%*"}},
+      {"phpactor", {"copy /Y", "phpactor.phar", "php \"%_jot_found%\" %%*"}},
+  };
+
+  for (const auto &family : families)
+  {
+    std::string id, script, message;
+    REQUIRE(e.lsp_install_plan_for_test(family.id, &id, &script, &message));
+    REQUIRE(id == family.id);
+    REQUIRE(message.find("install started") != std::string::npos);
+    for (const auto &marker : family.markers)
+    {
+      INFO(family.id << " marker: " << marker);
+      REQUIRE(script.find(marker) != std::string::npos);
+    }
+    // Nothing POSIX may reach this path: none of it runs on Windows, and
+    // shipping it is how these installs failed there.
+    INFO(family.id << " script: " << script.substr(0, 300));
+    REQUIRE(script.find("ln -sfn") == std::string::npos);
+    REQUIRE(script.find("chmod") == std::string::npos);
+    REQUIRE(script.find("unzip") == std::string::npos);
+    REQUIRE(script.find("/bin/sh") == std::string::npos);
+    REQUIRE(script.find("XDG_DATA_HOME") == std::string::npos);
+    // The receipt is written last, so a step that failed can never leave one.
+    REQUIRE(script.find(std::string("echo name=") + family.id) != std::string::npos);
+  }
+
+  // The same subpath handling on the POSIX renderer, which shares the target.
+  unsetenv("JOT_INSTALL_PLATFORM");
+  std::string id, script, message;
+  REQUIRE(e.lsp_install_plan_for_test("delve", &id, &script, &message));
+  REQUIRE(script.find("github.com/go-delve/delve/cmd/dlv@v1.27.1") != std::string::npos);
+  REQUIRE(script.find("#cmd") == std::string::npos);
+
   unsetenv("JOT_LSP_PAYLOAD_DIR");
   fs::remove_all(data);
 }

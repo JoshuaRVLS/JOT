@@ -50,8 +50,10 @@ function M.install_lines_win(entry, dirs)
   local line = "python -m pip install --quiet --disable-pip-version-check --target "
     .. win.quote(dirs.dir) .. " " .. win.quote(spec)
   local lines = { win.fail(line) }
-  for _, b in ipairs(entry.bin or {}) do
-    for _, l in ipairs(win.publish(dirs.dir .. "\\bin", { b .. ".exe", b },
+  -- Searched from the package dir, because a venv layout does not have to put
+  -- the console scripts under <dir>\bin.
+  for _, b in ipairs(win.native_bins(entry)) do
+    for _, l in ipairs(win.publish(dirs.dir, { b .. ".exe", b .. ".cmd", b },
                                    dirs.bin_dir .. "\\" .. b)) do
       lines[#lines + 1] = l
     end

@@ -60,4 +60,51 @@ function M.install_lines(entry, dirs, platform)
   return L
 end
 
+-- Windows renderer. The catalog carries a per-platform download list, so the
+-- files come from `dl.win`, transferred and unpacked by curl.exe and tar.exe.
+function M.install_lines_win(entry, dirs)
+  local win = dirs.win
+  local spec = (entry.dl or {})["win"]
+  if not spec then
+    return nil
+  end
+  local lines = {}
+  -- Sorted so the plan is stable: an install script that reorders itself is
+  -- hard to tell apart from one that changed.
+  local names = {}
+  for name in pairs(spec.files or {}) do
+    names[#names + 1] = name
+  end
+  table.sort(names)
+  for _, name in ipairs(names) do
+    local kind = archive_kind(name)
+    if kind == "" then
+      lines[#lines + 1] = win.curl(spec.files[name], dirs.dir .. "\\" .. name)
+    else
+      local archive = dirs.dl_dir .. "\\" .. name
+      lines[#lines + 1] = win.curl(spec.files[name], archive)
+      lines[#lines + 1] = win.extract(archive, dirs.dir)
+      lines[#lines + 1] = win.remove(archive)
+    end
+  end
+  -- Same as the POSIX side: the catalog names the binary inside the archive
+  -- for this platform, and the run hint is its basename.
+  local runs = entry.runs or {}
+  if spec.bin ~= "" then
+    for _, b in ipairs(win.native_bins(entry)) do
+      if not runs[b] then
+        runs[b] = { kind = "", hint = spec.bin:match("([^/\\]+)$") or b }
+      end
+    end
+    entry.runs = runs
+  end
+  for _, b in ipairs(win.native_bins(entry)) do
+    for _, l in ipairs(win.publish(dirs.dir, win.bin_patterns(entry, b),
+                                   dirs.bin_dir .. "\\" .. b)) do
+      lines[#lines + 1] = l
+    end
+  end
+  return lines
+end
+
 return M
