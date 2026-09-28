@@ -261,6 +261,40 @@ TEST_CASE("LSP initialize advertises labelDetailsSupport", "[lsp]")
   REQUIRE(value.type == lsp_detail::JsonValue::Object);
 }
 
+// The active parameter of signature help is spelled two ways: the result-level
+// `activeParameter` (the older one clangd sends) and a per-signature
+// `activeParameter`. Reading only the per-signature field left clangd's calls
+// with nothing to highlight, so both spellings are pinned here.
+TEST_CASE("LSP signature help reads the active parameter both ways", "[lsp]")
+{
+  // clangd's shape: the parameter is on the result, the signature has none.
+  const std::string clangd = "{\"activeSignature\":0,\"activeParameter\":1,\"signatures\":[{"
+                             "\"label\":\"add(int left, int right)\","
+                             "\"parameters\":[{\"label\":[4,12]},{\"label\":[14,23]}]}]}";
+  size_t pos = 0;
+  lsp_detail::JsonValue value;
+  REQUIRE(lsp_detail::parse_json_value(clangd, pos, value));
+  const LSPSignatureHelpResult parsed = lsp_detail::signature_help_from_result(value);
+  REQUIRE(parsed.signatures.size() == 1);
+  REQUIRE(parsed.active_parameter == 1);
+  REQUIRE(parsed.signatures[0].active_parameter == -1);
+  REQUIRE(parsed.signatures[0].parameters.size() == 2);
+  REQUIRE(parsed.signatures[0].parameters[1].label_start == 14);
+  REQUIRE(parsed.signatures[0].parameters[1].label_end == 23);
+
+  // A server that only sets the per-signature field still parses, and the
+  // result-level one stays unset so the renderer falls back to it.
+  const std::string per_signature =
+      "{\"signatures\":[{\"label\":\"f(int a)\",\"activeParameter\":0,"
+      "\"parameters\":[{\"label\":\"int a\"}]}]}";
+  pos = 0;
+  REQUIRE(lsp_detail::parse_json_value(per_signature, pos, value));
+  const LSPSignatureHelpResult parsed2 = lsp_detail::signature_help_from_result(value);
+  REQUIRE(parsed2.active_parameter == -1);
+  REQUIRE(parsed2.signatures.size() == 1);
+  REQUIRE(parsed2.signatures[0].active_parameter == 0);
+}
+
 TEST_CASE("LSP initialize advertises window.workDoneProgress", "[lsp]")
 {
   // Servers gate $/progress on this capability: without it they check once and

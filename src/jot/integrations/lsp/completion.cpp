@@ -277,6 +277,65 @@ namespace
     return expansion;
   }
 
+  // A function completion should write the call, not the arguments: clangd
+  // answers with `foo(${1:int a}, ${2:int b})`, and expanding that types out
+  // parameter names the user never wrote and does not want. When a snippet
+  // insert text is a bare call -- a callee followed by one argument list that
+  // ends the text -- the arguments are dropped and the caret lands inside the
+  // empty parens, so the parameters are the user's to type. A declaration-shaped
+  // snippet (`function foo() {}`, or anything after the closing paren) is left
+  // alone, as is a function-like item that is not a call at all, and plain-text
+  // items keep the literal text a server chose to send.
+  //
+  // `item.kind` is the LSP CompletionItemKind: 2 Method, 3 Function, 4
+  // Constructor.
+  bool strip_call_arguments(const LSPCompletionItem &item, std::string &text, int &cursor_offset)
+  {
+    if (item.insert_text_format != 2)
+    {
+      return false;
+    }
+    const int kind = item.kind;
+    if (kind != 2 && kind != 3 && kind != 4)
+    {
+      return false;
+    }
+    const size_t open = text.find('(');
+    if (open == std::string::npos || open == 0)
+    {
+      return false;
+    }
+    for (size_t i = 0; i < open; i++)
+    {
+      const unsigned char c = (unsigned char)text[i];
+      const bool callee_char = std::isalnum(c) || c == '_' || c == ':' || c == '.' || c == '>'
+                               || c == '-' || c == '~' || c == '!';
+      if (!callee_char)
+      {
+        return false; // the text before '(' is not a callee
+      }
+    }
+    const size_t close = text.rfind(')');
+    if (close == std::string::npos || close < open)
+    {
+      return false;
+    }
+    for (size_t i = close + 1; i < text.size(); i++)
+    {
+      if (text[i] != ' ' && text[i] != '\t')
+      {
+        return false; // a body or a trailing `;`: not the call itself
+      }
+    }
+    if (close == open + 1)
+    {
+      return false; // the argument list is already empty
+    }
+    text = text.substr(0, open + 1) + ")";
+    cursor_offset = (int)open + 1;
+    return true;
+  }
+
   size_t utf8_char_count(const std::string &s)
   {
     size_t n = 0;
@@ -328,6 +387,10 @@ namespace
     std::string text = item.insert_text.empty() ? item.label : item.insert_text;
     if (item.insert_text_format == 2) // snippet: preview the expanded plain text
     {
+      // The preview is what accepting writes, so a call whose arguments are
+      // dropped previews empty parens too.
+      int ignored = -1;
+      strip_call_arguments(item, text, ignored);
       text = expand_lsp_snippet(text).text;
     }
     // The same test the list uses, on the text accepting would insert: what is
@@ -743,11 +806,15 @@ bool Editor::apply_selected_lsp_completion()
     text.erase(marker_pos, 1);
   }
 
+  // A call completion goes in without the server's argument placeholders, so
+  // there are no tabstops left for the snippet engine to expand.
+  const bool stripped_call = strip_call_arguments(item, text, cursor_offset);
+
   // Keep the raw snippet text (tabstops and all) for the bundled snippet
   // engine, which expands it with real placeholders; `text` is the flattened
   // fallback used when no engine handler is registered.
   const std::string raw_snippet_text = text;
-  if (item.insert_text_format == 2)
+  if (item.insert_text_format == 2 && !stripped_call)
   {
     SnippetExpansion expansion = expand_lsp_snippet(text);
     text = std::move(expansion.text);
@@ -803,7 +870,7 @@ bool Editor::apply_selected_lsp_completion()
   // snippet engine when it registered a handler: it owns tabstops, choices,
   // mirrors and nested snippets, which a plain-text expansion cannot express.
   // 1-based line/column, end-exclusive, matching jot.buffer.apply_edit.
-  if (item.insert_text_format == 2 && lua_api
+  if (!stripped_call && item.insert_text_format == 2 && lua_api
       && lua_api->run_lsp_snippet_handler(
           raw_snippet_text, buf.cursor.y + 1, start + 1, buf.cursor.y + 1, end + 1))
   {

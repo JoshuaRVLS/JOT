@@ -429,6 +429,7 @@ namespace lsp_detail
       return parsed;
     }
     parsed.active_signature = json_int_or_default(json_object_get(result, "activeSignature"), 0);
+    parsed.active_parameter = json_int_or_default(json_object_get(result, "activeParameter"), -1);
     for (const auto &sig : signatures->array_value)
     {
       if (sig.type != JsonValue::Object)

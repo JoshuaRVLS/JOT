@@ -52,14 +52,22 @@ void Editor::render_lsp_signature()
                                  (int)lsp_signature_result.signatures.size() - 1);
   const LSPSignature &sig = lsp_signature_result.signatures[(size_t)sig_idx];
 
+  // Which parameter the caret is filling. clangd sends the older result-level
+  // `activeParameter` and no per-signature one, so reading only the latter left
+  // every call unhighlighted; the result-level value wins when it is there.
+  int active_param = lsp_signature_result.active_parameter;
+  if (active_param < 0)
+  {
+    active_param = sig.active_parameter;
+  }
+
   // Pick the parameter documentation when the signature has none of its own.
   std::string doc = sig.documentation;
   int hl_start = -1;
   int hl_len = -1;
-  if (sig.active_parameter >= 0
-      && sig.active_parameter < (int)sig.parameters.size())
+  if (active_param >= 0 && active_param < (int)sig.parameters.size())
   {
-    const LSPSignatureParameter &param = sig.parameters[(size_t)sig.active_parameter];
+    const LSPSignatureParameter &param = sig.parameters[(size_t)active_param];
     if (doc.empty())
     {
       doc = param.documentation;
@@ -116,7 +124,7 @@ void Editor::render_lsp_signature()
     doc_rows++;
   }
   const int signature_total = (int)lsp_signature_result.signatures.size();
-  bool wants_footer = signature_total > 1 || sig.active_parameter >= 0;
+  bool wants_footer = signature_total > 1 || active_param >= 0;
   if (wants_footer)
   {
     SignatureLineView footer_line;
@@ -128,8 +136,7 @@ void Editor::render_lsp_signature()
     }
     else
     {
-      footer_line.text = "parameter "
-                         + std::to_string(std::max(0, sig.active_parameter) + 1) + "/"
+      footer_line.text = "parameter " + std::to_string(std::max(0, active_param) + 1) + "/"
                          + std::to_string((int)sig.parameters.size());
     }
     lines.push_back(std::move(footer_line));

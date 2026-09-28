@@ -96,10 +96,13 @@ TEST_CASE("Completion ghost: the preview is the insert text minus what is typed"
   e.set_home_menu_visible(false);
   open_with_caret(e, "int main() {\n  pri\n}\n", 1, 5);
 
+  // The snippet's argument placeholder is dropped on accept, so the preview is
+  // the empty call too -- an inline preview of text that would not be written is
+  // the one thing it must not be.
   REQUIRE(e.seed_lsp_completion_for_test(
       {item("printf", "printf(${1:const char *format, ...})", 2)}));
   REQUIRE(e.lsp_completion_prefix_for_test() == "pri");
-  REQUIRE(e.lsp_completion_ghost_for_test() == "ntf(const char *format, ...)");
+  REQUIRE(e.lsp_completion_ghost_for_test() == "ntf()");
 }
 
 TEST_CASE("Completion ghost: what accepting would insert is what is previewed", "[jot]")
@@ -179,7 +182,7 @@ TEST_CASE("Completion ghost: nothing is painted inside an auto-closed call", "[j
   // There is a preview to show -- the suppression is the paint rule, not the
   // match rule -- so this case fails if either half regresses.
   REQUIRE(e.lsp_completion_prefix_for_test() == "p");
-  REQUIRE(e.lsp_completion_ghost_for_test() == "rintf(format)");
+  REQUIRE(e.lsp_completion_ghost_for_test() == "rintf()");
 
   // Past the typing pause, so the clock is not what is being asserted here.
   e.age_lsp_completion_typing_for_test(1000);

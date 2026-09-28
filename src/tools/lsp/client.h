@@ -98,6 +98,9 @@ struct LSPSignatureHelpResult
   int origin_character = 0;
   std::vector<LSPSignature> signatures;
   int active_signature = 0;
+  // The older top-level spelling of the active parameter (clangd sends this
+  // one). Per the spec it supersedes a signature's own `activeParameter`.
+  int active_parameter = -1;
 };
 
 // One textDocument/inlayHint item. character is a byte offset into the line

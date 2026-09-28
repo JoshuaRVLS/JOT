@@ -318,7 +318,11 @@ deliberately does not, so a preview never depends on a file you cannot see.
   clangd's `#include`). The edits are positions in the document the request saw,
   so they are remapped across the insert - an edit below the caret follows the
   lines the insert added, and one that would land inside the text being
-  completed is dropped rather than written at a guessed column.
+  completed is dropped rather than written at a guessed column. A function
+  completion is written as an empty call: accepting `add` inserts `add()` with
+  the caret between the parentheses, so the parameters are yours to type instead
+  of the server's argument placeholders. A declaration-shaped snippet (a body
+  after the parens, anything that is not a call) keeps its text.
 - Hover on demand or
   on mouse hover; go-to-definition with a return stack (`:lspback`), from the
   keyboard or from `Ctrl+click`; LSP
@@ -353,7 +357,11 @@ deliberately does not, so a preview never depends on a file you cannot see.
   `completionItem/resolve`, so servers that only fill those lazily show a plain
   name - and a server with no profile still gets a correctly coloured row, just
   with less split out.
-- Signature help popup, plus clangd-style inlay hints on already-written
+- Signature help popup, with the parameter the caret is filling highlighted on
+  the label and a footer counting the overloads or the position in the
+  parameter list. Both spellings of the active parameter are read, since clangd
+  reports it on the result rather than on the signature. Plus clangd-style inlay
+  hints on already-written
   code: parameter names (`a: 1, b: 2`) before arguments and type hints after
   variable declarations (`auto x = 5` shows `x: int`), both as dimmed
   virtual text that shifts the line right as in VS Code. Hints refresh after
