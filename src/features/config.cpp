@@ -112,10 +112,26 @@ void Config::load_defaults()
   settings["show_line_numbers"] = "true";
   settings["relative_line_numbers"] = "false";
   // Statusline time chips (features/status_clock.cpp): the local wall clock and
-  // how long this session has been running. Both are optional segments, so a
-  // narrow bar drops them before the diagnostics and git chips.
+  // how long was coded today, in the workspace in front of the user. Both are
+  // optional segments, so a narrow bar drops them before the diagnostics and git
+  // chips. The coding chip is fed by the local store (features/coding_time.h)
+  // and reports WakaTime's own total for today once that integration below is
+  // on and has answered; the key keeps its historical name, and its label says
+  // what it now shows.
   settings["status_clock"] = "true";
-  settings["status_session_time"] = "true";
+  settings["status_coding_time"] = "true";
+  // WakaTime (features/wakatime.h): the Extensions category's one integration so
+  // far. Off by default, because it starts talking to an account and to
+  // wakatime-cli. On, the editor sends heartbeats on saves and file changes and
+  // the coding chip above reports the cli's total for today instead of the local
+  // store's. The key is a setting rather than an environment variable so it is
+  // visible and editable in :settings; left empty, wakatime-cli reads api_key
+  // out of ~/.wakatime.cfg itself, so an existing WakaTime setup needs no key
+  // here at all. wakatime_api_url points at a self-hosted or WakaTime-compatible
+  // server. The cli itself is never downloaded: a missing one is reported.
+  settings["wakatime"] = "false";
+  settings["wakatime_api_key"] = "";
+  settings["wakatime_api_url"] = "";
   settings["word_wrap"] = "false";
   // Block by default: a bar reads as a thin sliver at the cell sizes a HiDPI
   // display or a large font produce. The resolvers below fall back to the same

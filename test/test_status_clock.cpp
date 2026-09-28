@@ -1,6 +1,6 @@
-// The statusline's two time chips: the local clock and how long this session
-// has been running (features/status_clock.cpp, the segments in
-// src/render/status_line.cpp).
+// The statusline's two time chips: the local clock and how long was coded today
+// (features/status_clock.cpp for the formatters, features/coding_time.h for the
+// number the second chip shows, and the segments in src/render/status_line.cpp).
 //
 // Three things are pinned here. The formatters, because they are pure and the
 // unit boundaries are exactly where a label would read wrong ("59m" becoming
@@ -8,8 +8,8 @@
 // chips are on the bar and the two config keys take them back off. And the
 // repaint gate, which is the part that cannot be seen in a screenshot: these
 // are the only labels on the bar that move with no input at all, so the frame
-// loop -- and not a timer of its own -- has to notice them move. Rewinding the
-// session clock through the test hook is what stands in for having waited.
+// loop -- and not a timer of its own -- has to notice them move. Planting a
+// total on the local store is what stands in for having waited.
 #include "editor.h"
 #include "features/status_clock.h"
 #include "ui/ui.h"
@@ -128,20 +128,20 @@ TEST_CASE("Status clock: both chips are painted at the right end of the bar", "[
   Editor e;
   e.set_home_menu_visible(false);
   e.apply_resize_for_test(120, 30);
-  e.set_session_start_ms_for_test(now_ms() - 61000);
+  e.set_coding_time_ms_for_test(61000);
   e.render_for_test();
 
   const std::string row = status_row(e);
   // The clock is read from the wall clock, so the expected label is the same
-  // formatter the painter used; the duration comes from the session clock,
-  // which the hook moved into the "1m" bucket.
+  // formatter the painter used; the coding chip comes from the local store,
+  // which the hook put in the "1m" bucket.
   REQUIRE(row.find(status_clock::format_clock(std::time(nullptr))) != std::string::npos);
   REQUIRE(row.find(" 1m ") != std::string::npos);
   REQUIRE(row.find(kClockGlyph) != std::string::npos);
   REQUIRE(row.find(kTimerGlyph) != std::string::npos);
 
-  // An hour in, and the label follows the same session clock.
-  e.set_session_start_ms_for_test(now_ms() - 3725000);
+  // An hour in, and the label follows the same local total.
+  e.set_coding_time_ms_for_test(3725000);
   e.request_redraw_for_test();
   e.render_for_test();
   REQUIRE(status_row(e).find(" 1h 02m ") != std::string::npos);
@@ -153,10 +153,10 @@ TEST_CASE("Status clock: the config keys take the chips back off", "[jot][status
   Editor e;
   e.set_home_menu_visible(false);
   e.apply_resize_for_test(120, 30);
-  e.set_session_start_ms_for_test(now_ms() - 61000);
+  e.set_coding_time_ms_for_test(61000);
 
   e.config_set_for_test("status_clock", "false");
-  e.config_set_for_test("status_session_time", "false");
+  e.config_set_for_test("status_coding_time", "false");
   e.render_for_test();
   const std::string without = whole_screen(e);
   REQUIRE(without.find(kClockGlyph) == std::string::npos);
@@ -166,7 +166,7 @@ TEST_CASE("Status clock: the config keys take the chips back off", "[jot][status
   // render() is a no-op unless a frame is wanted, exactly as in the running
   // editor, so switching a setting back on has to ask for one.
   e.config_set_for_test("status_clock", "true");
-  e.config_set_for_test("status_session_time", "true");
+  e.config_set_for_test("status_coding_time", "true");
   e.request_redraw_for_test();
   e.render_for_test();
   const std::string with = whole_screen(e);
@@ -184,26 +184,27 @@ TEST_CASE("Status clock: a moved label buys the frame that shows it", "[jot][sta
 
   // With both chips off there is nothing to keep fresh, so a frame asks for no
   // more frames: this is the branch that would otherwise repaint an idle editor
-  // once a second forever.
+  // once a second forever. The local total is still being advanced -- that is
+  // what the store is for -- but a label nobody is showing buys no frame.
   e.config_set_for_test("status_clock", "false");
-  e.config_set_for_test("status_session_time", "false");
-  e.set_session_start_ms_for_test(now_ms() - 61000);
+  e.config_set_for_test("status_coding_time", "false");
+  e.set_coding_time_ms_for_test(61000);
   e.clear_needs_redraw_for_test();
   e.render_frame_for_test();
   REQUIRE_FALSE(e.needs_redraw_for_test());
 
-  // On, and with the session clock moved on since the label that was last up:
-  // the frame that notices the move paints the new label itself. That is what
-  // keeps the chips current with nothing typed, and it is why the ask sits
-  // before the paint rather than after it (main_loop.cpp). The elapsed label
-  // goes from the seconds it read at the frame above to the moved-over minute,
-  // so the move is certain -- as is the paint, which is asserted on the row
-  // rather than on a pending redraw: there is nothing left pending.
+  // On, and with the local total moved on since the label that was last up: the
+  // frame that notices the move paints the new label itself. That is what keeps
+  // the chips current with nothing typed, and it is why the ask sits before the
+  // paint rather than after it (main_loop.cpp). The label goes from the seconds
+  // it read at the frame above to the moved-over minute, so the move is certain
+  // -- as is the paint, which is asserted on the row rather than on a pending
+  // redraw: there is nothing left pending.
   e.config_set_for_test("status_clock", "true");
-  e.config_set_for_test("status_session_time", "true");
+  e.config_set_for_test("status_coding_time", "true");
   e.render_frame_for_test();
   e.clear_needs_redraw_for_test();
-  e.set_session_start_ms_for_test(now_ms() - 121000);
+  e.set_coding_time_ms_for_test(121000);
   e.render_frame_for_test();
   REQUIRE(status_row(e).find(" 2m ") != std::string::npos);
 }

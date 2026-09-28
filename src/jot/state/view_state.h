@@ -1,8 +1,10 @@
 #ifndef JOT_STATE_VIEW_STATE_H
 #define JOT_STATE_VIEW_STATE_H
 
+#include "features/coding_time.h"       // coding_time::Counter, Totals
 #include "features/color_codes.h"       // jot_color::SpanCache
 #include "features/color_definitions.h" // jot_color::Definitions
+#include "features/wakatime.h"          // jot_wakatime::Options (api/coding_time.h)
 #include "jot/model/theme.h"            // Theme
 #include <cstdint>
 #include <string>
@@ -55,19 +57,49 @@ struct ViewState
   long long blink_suspend_until_ms;
   bool blink_visible = false;
 
-  // When this session started (steady clock, ms), for the statusline's
-  // elapsed-time segment, and the two time labels the last frame asked to
-  // paint. The frame loop compares freshly formatted labels against those two
-  // strings, so the instant a wall-clock minute or a second of session time
-  // rolls over is what buys the next repaint -- no timer of its own, and no
-  // repaint while the text would come out identical. `status_time_checked_ms`
-  // is the reading those labels were last computed at: neither can move twice
-  // within one second, so the comparison is only worth doing once per second
-  // (the frame loop runs at render_fps, not once a second).
-  long long session_start_ms;
+  // The two time labels the last frame asked to paint: the local wall clock and
+  // the coding-time chip. The frame loop compares freshly formatted labels
+  // against those two strings, so the instant a wall-clock minute or a second of
+  // credited coding time rolls over is what buys the next repaint -- no timer of
+  // its own, and no repaint while the text would come out identical.
+  // `status_time_checked_ms` is the reading those labels were last computed at:
+  // neither can move twice within one second, so the comparison is only worth
+  // doing once per second (the frame loop runs at render_fps, not once a
+  // second).
   long long status_time_checked_ms = 0;
   std::string status_clock_label;
-  std::string status_session_label;
+  // (`status_coding_text` rather than `..._label` so it cannot be mistaken for
+  // the Editor::status_coding_label() that formats the label it holds.)
+  std::string status_coding_text;
+
+  // The local coding-time store (features/coding_time.h): every workspace and
+  // day it knows about, the running counter for the workspace in front of the
+  // user, and the key that counter belongs to (which changes at midnight, and
+  // when the workspace does). `coding_time_dirty` is set when the total has
+  // moved but is not on disk yet.
+  coding_time::Totals coding_time_totals;
+  coding_time::Counter coding_time;
+  std::string coding_time_key;
+  bool coding_time_dirty = false;
+  long long coding_time_flushed_ms = 0;
+
+  // WakaTime coding time (features/wakatime.h): the setting in force, the cli's
+  // answer for today's total and when it was last asked for one, the heartbeat
+  // rule's two memories (the file it last sent and when), and the one-time
+  // checks that keep the editor from spawning a cli it does not have. An empty
+  // `wakatime_today_text` is what makes the chip fall back to the local total,
+  // which is also all it shows until the first answer arrives.
+  bool wakatime_enabled = false;
+  bool wakatime_probed = false;    // the PATH / api-key check has run
+  bool wakatime_cli_ready = false; // it passed, so spawning is worth it
+  // The wakatime_api_key the check above ran against, so typing a key in
+  // :settings re-runs it instead of waiting for a restart.
+  std::string wakatime_probe_key;
+  bool wakatime_today_running = false;
+  long long wakatime_today_checked_ms = 0;
+  std::string wakatime_today_text;
+  long long wakatime_last_sent_ms = 0;
+  std::string wakatime_last_entity;
 
   // Auto-save: the setting, the interval, and when the last one ran.
   bool auto_save_enabled = false;

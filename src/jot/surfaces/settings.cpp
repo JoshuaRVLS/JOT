@@ -182,7 +182,10 @@ const KnownSetting kKnownSettings[] = {
     {"winbar", "Breadcrumbs: auto / on / off", SettingsEntry::Type::String},
     {"snippet_tab_key", "Snippets: expand/jump key", SettingsEntry::Type::String},
     {"status_clock", "Statusline: local time", SettingsEntry::Type::Bool},
-    {"status_session_time", "Statusline: session time", SettingsEntry::Type::Bool},
+    {"status_coding_time", "Statusline: coding time", SettingsEntry::Type::Bool},
+    {"wakatime", "Extension: WakaTime tracking", SettingsEntry::Type::Bool},
+    {"wakatime_api_key", "Extension: WakaTime API key", SettingsEntry::Type::String},
+    {"wakatime_api_url", "Extension: WakaTime API url", SettingsEntry::Type::String},
     {"tab_size", "Tab size", SettingsEntry::Type::Int},
     {"terminal_float_height", "Floating terminal height (%)", SettingsEntry::Type::Int},
     {"terminal_float_width", "Floating terminal width (%)", SettingsEntry::Type::Int},
@@ -305,7 +308,7 @@ const char *const kAppearanceKeys[] = {
     "color_scheme",          "cursor_blink_ms",       "cursor_style",       "gui_font_family",
     "gui_font_size",         "highlight_cursor_line", "minimap_width",      "rainbow_brackets",
     "relative_line_numbers", "render_margin",         "show_indent_guides", "show_line_numbers",
-    "show_minimap",          "smooth_scroll",         "status_clock",       "status_session_time",
+    "show_minimap",          "smooth_scroll",         "status_clock",       "status_coding_time",
     "tabline",               "tabline_auto_hide",     "tabline_insert",     "truecolor",
     "winbar",                "word_highlight",     "zen_content_width",
 };
@@ -324,6 +327,11 @@ const char *const kMarkdownPreviewFamilies[] = {"markdown_preview_"};
 const char *const kHtmlPreviewFamilies[] = {"html_preview_"};
 const char *const kSnippetFamilies[] = {"snippet_"};
 const char *const kDiscordFamilies[] = {"discord_"};
+// The Extensions category: integrations that bring their own keys. WakaTime is
+// the one so far, and its switch and credentials are what the name claims -- the
+// family keeps a future `wakatime_*` key in the same place.
+const char *const kExtensionKeys[] = {"wakatime"};
+const char *const kExtensionFamilies[] = {"wakatime_"};
 const char *const kToastFamilies[] = {"toast."};
 const char *const kUpdateFamilies[] = {"update."};
 
@@ -358,6 +366,8 @@ const SettingSection kSections[] = {
     {"HTML preview", nullptr, 0, kHtmlPreviewFamilies, count_of(kHtmlPreviewFamilies)},
     {"Snippets", nullptr, 0, kSnippetFamilies, count_of(kSnippetFamilies)},
     {"Discord presence", nullptr, 0, kDiscordFamilies, count_of(kDiscordFamilies)},
+    {"Extensions", kExtensionKeys, count_of(kExtensionKeys), kExtensionFamilies,
+     count_of(kExtensionFamilies)},
     {"Toasts", nullptr, 0, kToastFamilies, count_of(kToastFamilies)},
     {"Updates", nullptr, 0, kUpdateFamilies, count_of(kUpdateFamilies)},
 };

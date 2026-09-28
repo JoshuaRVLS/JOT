@@ -1,23 +1,27 @@
 #!/usr/bin/env python3
-"""Statusline time probe: the local clock and the session-time chip on a pty.
+"""Statusline time probe: the local clock and the coding-time chip on a pty.
 
-Three things about these two chips cannot be checked without a real run:
+The coding chip reports how long was coded today in the workspace (the local
+store while WakaTime is off, features/coding_time.h). Three things about the
+two chips cannot be checked without a real run:
 
   * they are painted at the right-hand end of the status row with their own
     glyphs, and the clock reads the *local* time -- not just two digits and a
     colon, which any placeholder would satisfy;
-  * they move with nothing typed at all, which is the whole point of them and is
-    the one thing a screenshot cannot show: the unit tests rewind the session
-    clock through a hook, and this samples the same row *repeatedly* on a live
-    idle run. A series, not two samples: with nothing buying the frame, the bar
-    is only repainted when something else happens to dirty the screen -- an
-    autosave or a watcher tick -- so it sits frozen and then jumps. Reading the
-    chip every 2 s and demanding it advance *every* time is what pins the frame
-    loop's own ask (Editor::status_time_due_soon); a start-and-end pair passes on
-    that one unrelated jump alone;
+  * the coding chip moves with nothing typed at all while the editor has not
+    been left idle, which is the whole point of it and is the one thing a
+    screenshot cannot show: the unit tests plant a total through a hook, and
+    this samples the same row *repeatedly* on a live run. A series, not two
+    samples: with nothing buying the frame, the bar is only repainted when
+    something else happens to dirty the screen -- an autosave or a watcher tick
+    -- so it sits frozen and then jumps. Reading the chip every 2 s and demanding
+    it advance *every* time is what pins the frame loop's own ask
+    (Editor::status_time_due_soon); a start-and-end pair passes on that one
+    unrelated jump alone. The samples all land inside the idle cap, so what they
+    measure is the gate rather than the cap (which the unit tests pin);
   * the two config keys take them away independently, so a user can keep the
-    clock and drop the session timer (the settings are read per frame, so a
-    config file is all it takes).
+    clock and drop the coding chip (the settings are read per frame, so a config
+    file is all it takes).
 
 Usage: test/status_clock_probe.py [path-to-jot-binary]
 Set JOT_PROBE_DUMP=1 to print the sampled rows.
@@ -47,13 +51,14 @@ TIMER_GLYPH = "\U000F051B"
 COLS, ROWS = 120, 30
 # The chips are only painted once the editor has booted its UI kit and drawn a
 # frame, so the first sample waits for that; the rest run at a steady 2 s so the
-# chip has a whole second to move between any two of them.
+# chip has a whole second to move between any two of them, and the whole series
+# stays well inside the coding store's two-minute idle cap.
 FIRST_SAMPLE_S = 3.0
 SAMPLE_STEP_S = 2.0
 IDLE_SAMPLES = 5
 
 CLOCK_RE = re.compile(r"(\d{2}):(\d{2})")
-SESSION_RE = re.compile(r"\s(\d+)(s|m|h )\s")
+CODING_RE = re.compile(r"\s(\d+)(s|m|h )\s")
 
 
 def write_settings(cfg: str, lines: list[str]) -> None:
@@ -127,8 +132,9 @@ def clock_matches_local(row: str) -> bool:
     return (m.group(1), m.group(2)) in allowed
 
 
-def session_seconds(row: str) -> int | None:
-    m = SESSION_RE.search(row)
+def coded_seconds(row: str) -> int | None:
+    """The chip's seconds reading, or None when it is on a minute/hour label."""
+    m = CODING_RE.search(row)
     if not m or m.group(2) != "s":
         return None
     return int(m.group(1))
@@ -166,50 +172,52 @@ def main() -> int:
         return 1
     print("status clock probe: ok - the clock chip is the local time")
 
-    seconds = [session_seconds(row) for row in rows]
+    seconds = [coded_seconds(row) for row in rows]
     if any(s is None for s in seconds):
-        print("status clock probe: FAIL - no session-time chip on the status row")
+        print("status clock probe: FAIL - no coding-time chip on the status row")
         return 1
-    print("status clock probe: ok - session chip idle series " +
+    print("status clock probe: ok - coding chip series " +
           "  ".join(f"{s}s" for s in seconds))
     # Every sample is 2 s after the one before, so a bar that is really being
     # repainted once a second moves *every* time. A frozen bar reads the same
     # number twice (or only moves on the one unrelated repaint inside the
-    # window), which no amount of wall-clock passage fixes.
+    # window), which no amount of clock passage fixes: the local total only
+    # moves when the frame loop asks, and the frame loop only paints what the
+    # moved label buys.
     for i in range(1, len(seconds)):
         if seconds[i] <= seconds[i - 1]:
-            print(f"status clock probe: FAIL - the session chip stalled while idle: "
+            print(f"status clock probe: FAIL - the coding chip stalled: "
                   f"{seconds[i - 1]}s then {seconds[i]}s after "
                   f"{SAMPLE_STEP_S:g}s of nothing\n"
                   f"  the bar is only being repainted on input; the frame loop's "
                   f"status_time_due_soon ask is what should be buying these frames")
             return 1
-    print(f"status clock probe: ok - the session chip advanced at every idle sample "
+    print(f"status clock probe: ok - the coding chip advanced at every sample "
           f"({seconds[0]}s -> {seconds[-1]}s)")
 
     # ── Scene 2: both keys off ───────────────────────────────────────────────
     cfg = "/tmp/jot_status_clock_probe_off"
-    write_settings(cfg, ["status_clock=false", "status_session_time=false"])
+    write_settings(cfg, ["status_clock=false", "status_coding_time=false"])
     off = run_jot(binary, cfg, {"row": FIRST_SAMPLE_S}, timeout_s=FIRST_SAMPLE_S + 1.5)
     row = off.get("row", "")
     if not row:
         print("status clock probe: FAIL - the editor painted no status row")
         return 1
-    if CLOCK_GLYPH in row or TIMER_GLYPH in row or SESSION_RE.search(row):
+    if CLOCK_GLYPH in row or TIMER_GLYPH in row or CODING_RE.search(row):
         print("status clock probe: FAIL - the chips are painted with both keys off")
         return 1
     print("status clock probe: ok - both keys off drops both chips")
 
     # ── Scene 3: the clock alone ─────────────────────────────────────────────
     cfg = "/tmp/jot_status_clock_probe_clock"
-    write_settings(cfg, ["status_session_time=false"])
+    write_settings(cfg, ["status_coding_time=false"])
     only = run_jot(binary, cfg, {"row": FIRST_SAMPLE_S}, timeout_s=FIRST_SAMPLE_S + 1.5)
     row = only.get("row", "")
     if CLOCK_GLYPH not in row:
-        print("status clock probe: FAIL - status_session_time=false also dropped the clock")
+        print("status clock probe: FAIL - status_coding_time=false also dropped the clock")
         return 1
-    if TIMER_GLYPH in row or SESSION_RE.search(row):
-        print("status clock probe: FAIL - the session chip survived its own key being off")
+    if TIMER_GLYPH in row or CODING_RE.search(row):
+        print("status clock probe: FAIL - the coding chip survived its own key being off")
         return 1
     print("status clock probe: ok - the two keys are independent")
 

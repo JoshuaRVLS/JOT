@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <ctime>
 #include <filesystem>
 #include <stdexcept>
 
@@ -199,6 +200,11 @@ void Editor::apply_config_live()
       update_pane_layout();
     }
   }
+  // WakaTime (features/wakatime.h) mirrors its own switch here rather than
+  // reading it per keystroke, and its one-time cli/api-key check waits for the
+  // worker queue -- which does not exist yet when this runs from the
+  // constructor, so run() calls in again once it does.
+  sync_wakatime();
   needs_redraw = true;
 }
 
@@ -421,9 +427,17 @@ void Editor::initialize_state_defaults()
   blink_anchor_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now().time_since_epoch())
                         .count();
-  // The session clock the statusline reports: start it from the same steady
-  // reading the blink clock is anchored on.
-  session_start_ms = blink_anchor_ms;
+  // The coding-time chip's own clock (features/coding_time.h): the local store`
+  // total for this workspace and day, carried over from earlier sessions today,
+  // with the credit window opened at this session's start so the first minutes
+  // count. The workspace this opens with may not be the one the user asks for
+  // yet; coding_time_tick rolls the key over when that changes, which is why
+  // this is only the starting point.
+  coding_time_key = coding_time::key_for(root_dir, coding_time::local_date(std::time(nullptr)));
+  coding_time::load_totals(coding_time::store_path(), coding_time_totals);
+  coding_time.total_ms = coding_time::total_for(coding_time_totals, coding_time_key);
+  coding_time.last_activity_ms = blink_anchor_ms;
+  coding_time.last_credit_ms = blink_anchor_ms;
   blink_suspend_until_ms = 0;
   blink_visible = true;
   show_context_menu = false;
@@ -613,6 +627,12 @@ const EditorHostAPI &Editor::host() const
 
 Editor::~Editor()
 {
+  // The coding total last: what this session earned is only in memory until it
+  // is written, and a force flush takes whatever the live window holds.
+  flush_coding_time(std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count(),
+                    true);
   save_workspace_session();
   save_file_fold_states();
   save_recent_files();

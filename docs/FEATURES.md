@@ -778,15 +778,48 @@ panels) sit over buffer content on every side, so they keep a full box. Everythi
 is drawn with flat corners; the colour comes from the theme's `WinSeparator` /
 `FloatBorder` / `SidebarBorder` slots.
 
-The status row's right-hand end carries two chips that read the machine's own
-clock: the local time (`status_clock`, 24-hour `HH:MM`) and how long this
-session has been up (`status_session_time`). Both are optional and both are
-small, so a narrow terminal gives them up before the diagnostics, git and LSP
-chips. They are also the only thing on screen that moves with nothing typed,
-which is why the frame loop watches them: each frame formats the two labels and
-asks for a repaint only when one of them would come out different, so the bar
-ticks once a second while idle and an idle editor still paints nothing
+The status row's right-hand end carries two time chips: the local wall clock
+(`status_clock`, 24-hour `HH:MM`) and how long was coded today in the workspace
+(`status_coding_time`). The second one has two sources, and which is speaking
+reads off its glyph - a clock outline for WakaTime's own total for today, a
+timer for the local store. Both chips are optional and both are small, so a
+narrow terminal gives them up before the diagnostics, git and LSP chips. They
+are also the only thing on screen that moves with nothing typed, which is why
+the frame loop watches them: each frame formats the two labels and asks for a
+repaint only when one of them would come out different, so the bar ticks once a
+second while the coding total is still moving and an idle editor paints nothing
 except when a label actually moved.
+
+### Coding time
+
+The chip is `status_coding_time`, and what it shows is the time coded today for
+the workspace in front of you, from one of two places:
+
+* **WakaTime** (`wakatime` in the Extensions category of `:settings`) is the one
+  that survives across machines and editors. Turning it on makes the editor
+  report heartbeats to `wakatime-cli`, exactly as the [plugin spec][waka]
+  describes: a save, a file change, or two minutes on the same file. The cli
+  auto-detects the language, project and branch, so JOT passes it the absolute
+  path and the caret and otherwise stays out of the way (`--entity`, `--time`,
+  `--lineno`, `--cursorpos`, `--lines-in-file`, `--write` on a save). It is also
+  the cli that reads `~/.wakatime.cfg`, so a machine already set up for WakaTime
+  needs nothing here; `wakatime_api_key` and `wakatime_api_url` override what it
+  finds, for a self-hosted or WakaTime-compatible server. The cli itself is
+  never downloaded: if it is not on `PATH`, or no key is configured anywhere,
+  the editor says so once instead of tracking nothing quietly.
+* **The local store** (always on) is what keeps the chip worth showing with the
+  integration off. Totals are kept per workspace and day under
+  `configs/coding_time.tsv`, so reopening the editor later today continues
+  today's number rather than restarting a session timer nobody reads. Time is
+  credited between two activity ticks, and any gap past two minutes is dropped,
+  so an editor left open overnight does not log eight hours of nothing.
+
+Today's WakaTime total is fetched at most once a minute, on the worker queue, so
+a slow API never stalls a keystroke; a heartbeat is spawned detached for the same
+reason. The local total is written out at most once a minute while it is moving,
+and once more when the editor shuts down.
+
+[waka]: https://wakatime.com/help/creating-plugin
 
 The mouse is wired throughout - click to place the cursor, drag to select (with edge auto-scroll), double/
 triple-click for word/line selection (double-click stops at `.`, so `ext`
@@ -1202,7 +1235,8 @@ Built-in defaults include `explorer_width=25`, `minimap_width=15`,
 (the C++ declaration/definition checks), `terminal_height=10`,
 `terminal_float_width=85` and `terminal_float_height=75` (the floating
 terminal's box, a percentage of the active pane's text rows each),
-`debugger_height=12`, `status_clock=true`, and `status_session_time=true`. The colour preview adds `colorizer=true`,
+`debugger_height=12`, `status_clock=true`, and `status_coding_time=true`. The Extensions category (WakaTime) adds `wakatime=false`,
+`wakatime_api_key=` and `wakatime_api_url=`. The colour preview adds `colorizer=true`,
 `colorizer_mode=background`, `colorizer_hex=true`, `colorizer_hex_alpha=false`,
 `colorizer_hex_qml=false`, `colorizer_hex_no_hash=false`,
 `colorizer_hex_0x=false`, `colorizer_names=true`, `colorizer_tailwind=false`,

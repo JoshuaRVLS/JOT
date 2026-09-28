@@ -211,13 +211,40 @@ public:
   {
     needs_redraw = true;
   }
-  // The statusline's session clock (features/status_clock.cpp): rewinding it is
-  // how a test gets an elapsed-time label without waiting an hour for one, and
-  // the last reading is cleared with it so the next frame re-formats the labels
+  // The local coding total (features/coding_time.h): planting a number on it is
+  // how a test gets an hour on the chip without waiting an hour, and the window
+  // is left long idle so nothing is credited on top of what was planted. The
+  // last reading is cleared with it, so the next frame re-formats the label
   // instead of trusting the one it already has.
-  void set_session_start_ms_for_test(long long start_ms)
+  void set_coding_time_ms_for_test(long long total_ms)
   {
-    session_start_ms = start_ms;
+    coding_time.total_ms = total_ms;
+    coding_time.last_activity_ms = 0;
+    coding_time.last_credit_ms = 0;
+    status_time_checked_ms = 0;
+  }
+  // Points the local coding store at a workspace (features/coding_time.h). A
+  // real session does this by opening one, and the store then reads that
+  // workspace's own total for today instead of the one it was keyed on before.
+  // The window is left long idle, so nothing is credited on top of what is
+  // planted either side of this call.
+  void set_workspace_root_for_test(const std::string &root)
+  {
+    root_dir = root;
+    coding_time_key = coding_time_current_key();
+    coding_time.total_ms = coding_time::total_for(coding_time_totals, coding_time_key);
+    coding_time.last_activity_ms = 0;
+    coding_time.last_credit_ms = 0;
+  }
+  // WakaTime's side of the chip (features/wakatime.h): the state the cli answers
+  // into. A test sets it here because the real path needs a cli on PATH and a
+  // worker queue -- the pty probe covers that end, and this covers what the bar
+  // does with an answer.
+  void set_wakatime_state_for_test(bool enabled, bool cli_ready, const std::string &today_text)
+  {
+    wakatime_enabled = enabled;
+    wakatime_cli_ready = cli_ready;
+    wakatime_today_text = today_text;
     status_time_checked_ms = 0;
   }
   // Overrides a setting the way :settings does, without writing it to the real

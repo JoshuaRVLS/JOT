@@ -6,6 +6,7 @@ set(JOT_ENGINE_SOURCES
   jot/app/emmet.cpp
   jot/app/auto_save.cpp
   jot/app/buffers.cpp
+  jot/app/coding_time.cpp
   jot/app/cpp_definitions.cpp
   jot/app/web_index.cpp
   jot/app/file.cpp

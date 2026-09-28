@@ -128,22 +128,22 @@ namespace
 } // namespace
 
 // The bar carries two labels that move on their own: the local clock and the
-// session duration. Nothing else in the editor changes without input, so the
-// frame loop asks here whether they have moved on and, when they have, paints
-// the frame that shows it -- the same shape as the completion preview's gate
+// coding-time chip, which reports WakaTime's total for today when that
+// integration has answered and the locally stored total for this workspace
+// otherwise. Nothing else in the editor changes without input, so the frame loop
+// asks here whether they have moved on and, when they have, paints the frame
+// that shows it -- the same shape as the completion preview's gate
 // (main_loop.cpp), except that this one is asked before the paint, because the
 // new label is already true and can go out on the frame that noticed it. The
-// labels are pure functions of the two clocks (features/status_clock.h), so
-// "the text would differ" is answered by formatting them, not by keeping a
-// countdown that could drift out of step with what is painted.
+// labels are pure functions of the two clocks (features/status_clock.h), so "the
+// text would differ" is answered by formatting them, not by keeping a countdown
+// that could drift out of step with what is painted.
+//
+// This is also the editor's once-a-second pass, which is why the local coding
+// total is advanced here (features/coding_time.h) whether or not the bar is
+// showing it: what it stores is time the user spent, not a label.
 bool Editor::status_time_due_soon()
 {
-  const bool wants_clock = config.get_bool("status_clock", true);
-  const bool wants_session = config.get_bool("status_session_time", true);
-  if (!wants_clock && !wants_session)
-  {
-    return false;
-  }
   const long long now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                std::chrono::steady_clock::now().time_since_epoch())
                                .count();
@@ -155,15 +155,33 @@ bool Editor::status_time_due_soon()
   }
   status_time_checked_ms = now_ms;
 
+  coding_time_tick(now_ms, false);
+
+  const bool wants_clock = config.get_bool("status_clock", true);
+  const bool wants_coding = config.get_bool("status_coding_time", true);
+  if (!wants_clock && !wants_coding)
+  {
+    return false;
+  }
+
+  // The coding chip is the one of the two that can move without a clock:
+  // WakaTime's total changes when the cli answers, and this once-a-second gate
+  // is the only place the frame loop asks. Fetching here is what makes an answer
+  // and the repaint that shows it the same frame; the label comparison below is
+  // what tells whether it arrived.
+  if (wants_coding)
+  {
+    wakatime_poll_today();
+  }
+
   const std::string clock =
       wants_clock ? status_clock::format_clock(std::time(nullptr)) : std::string();
-  const std::string session =
-      wants_session ? status_clock::format_duration(now_ms - session_start_ms) : std::string();
-  const bool moved = clock != status_clock_label || session != status_session_label;
+  const std::string coding = wants_coding ? status_coding_label(now_ms) : std::string();
+  const bool moved = clock != status_clock_label || coding != status_coding_text;
   if (moved)
   {
     status_clock_label = clock;
-    status_session_label = session;
+    status_coding_text = coding;
   }
   return moved;
 }
@@ -478,12 +496,11 @@ void Editor::render_status_line()
     }
   }
 
-  // Local time and how long this session has been going, at the right-hand
-  // end of the bar. Both are small and both are optional, so a narrow terminal
-  // gives them up before the diagnostics, git and LSP chips; between them the
-  // clock outranks the session duration. The frame loop watches these same two
-  // labels, which is what repaints the bar when they roll over (see
-  // status_time_due_soon).
+  // Local time and how long was coded today, at the right-hand end of the bar.
+  // Both are small and both are optional, so a narrow terminal gives them up
+  // before the diagnostics, git and LSP chips; between them the clock outranks
+  // the coding chip. The frame loop watches these same two labels, which is what
+  // repaints the bar when they roll over (see status_time_due_soon).
   {
     const long long now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                  std::chrono::steady_clock::now().time_since_epoch())
@@ -500,17 +517,25 @@ void Editor::render_status_line()
           " \U000F0150", // nf-md-clock_outline
           -1});
     }
-    if (config.get_bool("status_session_time", true))
+    if (config.get_bool("status_coding_time", true))
     {
-      right_segments.push_back({
-          " " + status_clock::format_duration(now_ms - session_start_ms) + " ",
-          theme.fg_status_muted,
-          theme.bg_status,
-          false,
-          true,
-          30,
-          " \U000F051B", // nf-md-timer_outline
-          -1});
+      // That chip reports WakaTime's total for today once the integration is on
+      // and has an answer, and the locally stored total for this workspace until
+      // then and whenever it is off -- one chip with two sources, not a second
+      // chip beside it (jot/app/coding_time.cpp). Which one is showing reads off
+      // the glyph: the clock outline the VS Code plugin leads its own status bar
+      // with, against the timer the local store stands in with.
+      const bool from_wakatime = wakatime_enabled && !wakatime_today_text.empty();
+      right_segments.push_back({" " + status_coding_label(now_ms) + " ",
+                                theme.fg_status_muted,
+                                theme.bg_status,
+                                false,
+                                true,
+                                30,
+                                from_wakatime
+                                    ? " \U000F0150"  // nf-md-clock_outline (WakaTime today)
+                                    : " \U000F051B", // nf-md-timer_outline (this session)
+                                -1});
     }
   }
 

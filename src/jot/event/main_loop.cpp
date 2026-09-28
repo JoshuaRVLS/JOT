@@ -170,6 +170,9 @@ void Editor::run()
     web_index_scan_pending = false;
     request_web_index_scan();
   }
+  // The queue exists now, which is all WakaTime's cli check and its first
+  // today-total fetch were waiting for (see sync_wakatime).
+  sync_wakatime();
 
   event_loop_.prepare();
 

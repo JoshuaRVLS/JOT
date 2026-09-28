@@ -9,6 +9,7 @@ set(JOT_FEATURES_SOURCES
   features/color_space.cpp
   features/color_tailwind.cpp
   features/color_terminal_codes.cpp
+  features/coding_time.cpp
   features/completion_rank.cpp
   features/config.cpp
   features/emmet.cpp
@@ -33,5 +34,6 @@ set(JOT_FEATURES_SOURCES
   features/smooth_scroll.cpp
   features/status_clock.cpp
   features/tab_order.cpp
+  features/wakatime.cpp
   features/winbar.cpp
 )

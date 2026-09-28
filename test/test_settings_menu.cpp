@@ -589,7 +589,7 @@ TEST_CASE("Settings rows read in groups, header first", "[jot]")
   // here at all, so what the list has to be is a subsequence of the order.
   const std::string canonical =
       "Editor Appearance Color preview Code intelligence AI assistant Panes & layout "
-      "Markdown preview HTML preview Snippets Discord presence Toasts Updates";
+      "Markdown preview HTML preview Snippets Discord presence Extensions Toasts Updates";
   size_t at = 0;
   for (const std::string &title : seen)
   {

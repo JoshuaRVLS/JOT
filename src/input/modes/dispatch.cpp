@@ -7,6 +7,12 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
   // Keep the cursor solid while typing: restart the blink clock and
   // suspend blinking briefly on every keypress.
   restart_blink();
+  // A keypress is the editor's activity signal for the coding-time chip
+  // (jot/app/coding_time.cpp): it is where the local total learns the user is
+  // here, and it is the WakaTime plugin spec's allowed stand-in for a
+  // modified-file event. It is also the only place every editing mode passes
+  // through, so nothing has to remember to report itself.
+  note_editing_activity(false);
   clear_debugger_breakpoint_hover();
 
   // Terminals encode Ctrl+` inconsistently. Accept common variants:
