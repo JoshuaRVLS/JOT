@@ -18,6 +18,17 @@ jobs:
           - name: Linux x86_64
             os: ubuntu-latest
             platform: linux
+          # Windows is cross-compiled from Linux with mingw-w64 rather than
+          # built on a Windows runner. The MSVC port had drifted into 28 compile
+          # errors while CI kept building it, and nothing here could verify a
+          # fix; mingw-w64 is the toolchain the Windows sources are maintained
+          # against, needs no vcpkg bootstrap, and is the same one the release
+          # job packages. build-static-exe.sh then checks the exe's import table,
+          # so a binary that needs a DLL next to it fails the job instead of
+          # shipping.
+          - name: Windows x86_64 (mingw-w64)
+            os: ubuntu-latest
+            platform: windows
 
     steps:
       - name: Checkout
@@ -31,6 +42,12 @@ jobs:
             cmake ninja-build pkg-config \
             libvterm-dev libtermkey-dev libuv1-dev libutf8proc-dev \
             libtree-sitter-dev
+
+      - name: Install Windows cross toolchain
+        if: matrix.platform == 'windows'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake ninja-build mingw-w64
 
       - name: Configure Linux build
         if: matrix.platform == 'linux'
@@ -47,3 +64,14 @@ jobs:
       - name: Test Linux
         if: matrix.platform == 'linux'
         run: ctest --test-dir build --output-on-failure
+
+      # The Windows test suite does not build yet (the test sources use POSIX
+      # setenv/unsetenv), so this entry compiles and links the shipped binary and
+      # gates its imports; behaviour is covered by the Linux entry.
+      - name: Build Windows exe (static, cross-compiled)
+        if: matrix.platform == 'windows'
+        run: |
+          packaging/windows/build-static-exe.sh \
+            "${GITHUB_WORKSPACE}" \
+            "${GITHUB_WORKSPACE}/build-windows-x86_64" \
+            "${GITHUB_WORKSPACE}/dist/jot-windows-x86_64"

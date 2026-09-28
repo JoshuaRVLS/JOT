@@ -1,6 +1,5 @@
 #include "terminal.h"
 #include "jot/keybind_catalog.h"
-#include "string_util.h"
 #include "ui/input_reader.h"
 #include "ui/xterm_palette.h"
 
@@ -1451,31 +1450,4 @@ void Terminal::render_capture_marker(const std::string &label, int rows_rendered
             rows_rendered);
   }
   fflush(render_capture_);
-}
-
-// 24-bit colour support is advertised, never probed: querying would mean
-// waiting on a terminal reply mid-startup. COLORTERM is the standard signal
-// (kitty, wezterm, foot, alacritty and Windows Terminal all set it), and the
-// direct-colour TERM variants are the fallback for older setups. Anything
-// unrecognised keeps the quantised path, so a wrong guess can never happen --
-// it is only ever a missed optimisation.
-bool terminal_env_supports_truecolor()
-{
-  if (const char *colorterm = std::getenv("COLORTERM"))
-  {
-    const std::string value = string_util::lower_copy(colorterm);
-    if (value.find("truecolor") != std::string::npos || value.find("24bit") != std::string::npos)
-    {
-      return true;
-    }
-  }
-  if (const char *term = std::getenv("TERM"))
-  {
-    const std::string value = string_util::lower_copy(term);
-    if (value.find("direct") != std::string::npos || value.find("truecolor") != std::string::npos)
-    {
-      return true;
-    }
-  }
-  return false;
 }

@@ -37,6 +37,15 @@ function(jot_configure_object_target target_name)
   endif()
 endfunction()
 
+# Every dependency below is folded into the one jot executable, so each is asked
+# for a static archive. Upstream tree-sitter's lib/CMakeLists.txt defaults
+# BUILD_SHARED_LIBS to ON, which would leave a release needing
+# libtree-sitter.dll (or .so) beside the binary, and utf8proc follows the same
+# variable. Forced and set before the first fetch: each dependency reads the
+# value when its own CMakeLists runs, and a stale ON in an existing cache would
+# otherwise keep producing DLLs.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build fetched dependencies as static libraries" FORCE)
+
 if(WIN32)
   find_package(unofficial-libuv CONFIG QUIET)
   if(TARGET unofficial::libuv::libuv)
@@ -54,6 +63,10 @@ if(WIN32)
       if(JOT_FETCH_DEPS)
         include(FetchContent)
         set(LIBUV_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        # We link uv_a (the static target); upstream also builds and installs a
+        # shared uv, which would put a libuv.dll in every package for a library
+        # the exe does not load.
+        set(LIBUV_BUILD_SHARED OFF CACHE BOOL "" FORCE)
         FetchContent_Declare(
           libuv
           GIT_REPOSITORY https://github.com/libuv/libuv.git

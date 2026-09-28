@@ -70,7 +70,9 @@ namespace
     if (!root.empty())
     {
       relative = fs::relative(path, root, ec);
-      if (ec || relative.empty() || relative.native().rfind("..", 0) == 0)
+      // generic_string, not native(): the native string is wide on Windows, so
+      // the narrow ".." prefix this compares against would not build there.
+      if (ec || relative.empty() || relative.generic_string().rfind("..", 0) == 0)
       {
         relative = fs::path(path).parent_path();
       }

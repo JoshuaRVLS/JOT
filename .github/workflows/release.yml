@@ -20,6 +20,12 @@ jobs:
             os: ubuntu-latest
             platform: linux
             archive: jot-linux-x86_64.tar.gz
+          # Cross-compiled with mingw-w64 on the Linux runner; the same script CI
+          # runs, so the exe in the release is the one the import gate passed.
+          - name: Windows x86_64
+            os: ubuntu-latest
+            platform: windows
+            archive: jot-windows-x86_64.zip
 
     steps:
       - name: Checkout
@@ -73,6 +79,31 @@ jobs:
         run: |
           cmake --install build --prefix stage
           tar -C stage -czf "${{ matrix.archive }}" .
+
+      - name: Install Windows cross toolchain
+        if: matrix.platform == 'windows'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake ninja-build mingw-w64
+
+      - name: Build Windows exe (static, cross-compiled)
+        if: matrix.platform == 'windows'
+        run: |
+          packaging/windows/build-static-exe.sh \
+            "${GITHUB_WORKSPACE}" \
+            "${GITHUB_WORKSPACE}/build-windows-x86_64" \
+            "${GITHUB_WORKSPACE}/dist/jot-windows-x86_64"
+
+      - name: Package Windows zip
+        if: matrix.platform == 'windows'
+        run: |
+          # Only the runtime tree goes in: bin/jot.exe and share/jot, the layout
+          # the exe resolves its own data directory from (see the _WIN32 fallback
+          # in src/jot/lua/lua_loader.cpp). The staged include/ and lib/ hold
+          # development files the package does not need, and the build gate left
+          # no DLL of its own for the exe to find.
+          cd "${GITHUB_WORKSPACE}/dist/jot-windows-x86_64"
+          cmake -E tar cf "${GITHUB_WORKSPACE}/${{ matrix.archive }}" --format=zip bin share
 
       - name: Upload package
         uses: actions/upload-artifact@v4

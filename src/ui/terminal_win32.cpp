@@ -7,6 +7,7 @@
 
 #include "terminal.h"
 #include "jot/keybind_catalog.h"
+#include "ui/xterm_palette.h"
 
 #include <windows.h>
 
@@ -1108,10 +1109,55 @@ void Terminal::show_cursor()
   buffer += "\x1b[?25h";
 }
 
-void Terminal::set_color(int fg, int bg)
+// Same contract as the POSIX backend: indices are always palette entries, and a
+// 24-bit value is used verbatim when the console claims truecolour and folded
+// down to the nearest palette entry when it does not. Windows Terminal and
+// conhost since 1703 both understand 38;2/48;2, so the folding is the fallback.
+void Terminal::set_color(int fg, int bg, std::uint32_t fg_rgb, std::uint32_t bg_rgb)
 {
-  char buf[32];
-  snprintf(buf, sizeof(buf), "\x1b[38;5;%dm\x1b[48;5;%dm", fg, bg);
+  char buf[48];
+  if (fg_rgb != kNoRgb && truecolor_)
+  {
+    snprintf(buf,
+             sizeof(buf),
+             "\x1b[38;2;%u;%u;%um",
+             (unsigned)((fg_rgb >> 16) & 0xFF),
+             (unsigned)((fg_rgb >> 8) & 0xFF),
+             (unsigned)(fg_rgb & 0xFF));
+  }
+  else
+  {
+    if (fg_rgb != kNoRgb)
+    {
+      fg = jot_ui::palette_nearest_index(
+          (unsigned char)((fg_rgb >> 16) & 0xFF),
+          (unsigned char)((fg_rgb >> 8) & 0xFF),
+          (unsigned char)(fg_rgb & 0xFF));
+    }
+    snprintf(buf, sizeof(buf), "\x1b[38;5;%dm", fg);
+  }
+  buffer += buf;
+
+  if (bg_rgb != kNoRgb && truecolor_)
+  {
+    snprintf(buf,
+             sizeof(buf),
+             "\x1b[48;2;%u;%u;%um",
+             (unsigned)((bg_rgb >> 16) & 0xFF),
+             (unsigned)((bg_rgb >> 8) & 0xFF),
+             (unsigned)(bg_rgb & 0xFF));
+  }
+  else
+  {
+    if (bg_rgb != kNoRgb)
+    {
+      bg = jot_ui::palette_nearest_index(
+          (unsigned char)((bg_rgb >> 16) & 0xFF),
+          (unsigned char)((bg_rgb >> 8) & 0xFF),
+          (unsigned char)(bg_rgb & 0xFF));
+    }
+    snprintf(buf, sizeof(buf), "\x1b[48;5;%dm", bg);
+  }
   buffer += buf;
 }
 
