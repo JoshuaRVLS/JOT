@@ -704,15 +704,8 @@ bool SearchController::handle_mouse(int x, int y, bool is_click)
   {
     return false;
   }
-  int w = std::min(72, std::max(42, editor_.ui->get_render_width() / 2));
-  int h = replace_visible_ ? 5 : 4;
-  int px = std::max(0, editor_.ui->get_width() - w - 2);
-  if (px + w > editor_.ui->get_width())
-  {
-    w = std::max(20, editor_.ui->get_width() - px);
-  }
-  const int py = editor_.pane_area_top();
-  if (x < px || x >= px + w || y < py || y >= py + h)
+  const PanelGeometry geo = panel_geometry();
+  if (x < geo.x || x >= geo.x + geo.w || y < geo.y || y >= geo.y + geo.h)
   {
     return false;
   }
@@ -721,84 +714,53 @@ bool SearchController::handle_mouse(int x, int y, bool is_click)
     return true; // hover over the panel: consume, no action
   }
 
-  const int label_w = 9;
-  const int input_x = px + label_w;
-
-  // Chips row (title row): Aa / W / .* / Sel toggles, right-aligned.
-  if (y == py)
+  // The title row is the top border: a press there is inert.
+  if (y == geo.y)
   {
-    std::string chips;
-    chips += case_sensitive_ ? " Aa " : " aa ";
-    chips += whole_word_ ? " W " : " w ";
-    if (regex_)
-    {
-      chips += " .* ";
-    }
-    if (scoped_to_selection_)
-    {
-      chips += " Sel ";
-    }
-    std::string count = "0/0";
-    if (result_index_ >= 0 && !results_.empty())
-    {
-      count = std::to_string(result_index_ + 1) + "/" + std::to_string(results_.size());
-    }
-    chips += " " + count + " ";
-    int chip_x = std::max(px + 1, px + w - (int)chips.size() - 1);
-    if (x >= chip_x && x < chip_x + 4)
-    {
-      case_sensitive_ = !case_sensitive_;
-      perform();
-      editor_.needs_redraw = true;
-      return true;
-    }
-    chip_x += 4;
-    if (x >= chip_x && x < chip_x + 3)
-    {
-      whole_word_ = !whole_word_;
-      perform();
-      editor_.needs_redraw = true;
-      return true;
-    }
-    chip_x += 3;
-    if (regex_)
-    {
-      if (x >= chip_x && x < chip_x + 4)
-      {
-        regex_ = false;
-        perform();
-        editor_.needs_redraw = true;
-        return true;
-      }
-      chip_x += 4;
-    }
-    if (scoped_to_selection_)
-    {
-      if (x >= chip_x && x < chip_x + 5)
-      {
-        scoped_to_selection_ = false;
-        perform();
-        editor_.needs_redraw = true;
-        return true;
-      }
-      chip_x += 5;
-    }
     return true;
   }
 
-  // Find / Replace input rows: clicking the input focuses the field.
-  if (y == py + 1)
+  // Find row: the toggle buttons sit at the row's right edge, the field takes
+  // the rest.
+  if (y == geo.y + 1)
   {
-    if (x >= input_x)
+    for (const PanelGeometry::Chip &chip : geo.chip_hits)
+    {
+      if (chip.flag < 0)
+      {
+        continue;
+      }
+      if (x >= geo.cluster_x + chip.start && x < geo.cluster_x + chip.start + chip.width)
+      {
+        if (chip.flag == 0)
+        {
+          case_sensitive_ = !case_sensitive_;
+        }
+        else if (chip.flag == 1)
+        {
+          whole_word_ = !whole_word_;
+        }
+        else
+        {
+          regex_ = !regex_;
+        }
+        perform();
+        editor_.needs_redraw = true;
+        return true;
+      }
+    }
+    if (x >= geo.input_x)
     {
       focus_replace_ = false;
       editor_.needs_redraw = true;
     }
     return true;
   }
-  if (replace_visible_ && y == py + 2)
+
+  // Replace row: clicking the input focuses it.
+  if (replace_visible_ && y == geo.y + 2)
   {
-    if (x >= input_x)
+    if (x >= geo.input_x)
     {
       focus_replace_ = true;
       editor_.needs_redraw = true;

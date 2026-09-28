@@ -62,6 +62,33 @@ public:
   void place_cursor();
 
 private:
+  // The find bar's column geometry, computed once per paint so the painter, the
+  // natively-placed caret and the mouse hit-test all land on the same cells:
+  // the panel rect, the input field, and the right-aligned toggle/count cluster.
+  struct PanelGeometry
+  {
+    int x = 0;
+    int y = 0;
+    int w = 0;
+    int h = 0;
+    int input_x = 0;   // absolute column the input text starts at
+    int input_w = 1;   // input field width in cells
+    int cluster_x = 0; // absolute column the chip cluster starts at
+    std::string chips; // the cluster's text ("Aa W .* 3/12")
+    std::string count; // the match count on its own, for the Lua view
+    // One toggle button inside `chips`. `flag` is 0 case, 1 whole word, 2
+    // regex, -1 for the scope badge (painted with the accent, not clickable).
+    struct Chip
+    {
+      int start = 0; // cell offset in `chips`
+      int width = 0;
+      int flag = -1;
+      bool on = false;
+    };
+    std::vector<Chip> chip_hits;
+  };
+  PanelGeometry panel_geometry() const;
+
   Editor &editor_;
 
   bool visible_ = false;

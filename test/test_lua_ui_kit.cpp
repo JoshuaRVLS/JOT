@@ -1028,8 +1028,10 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   lua_pop(L, 1);
 
   // --- search panel ---
+  // The compact find bar: one row, toggles and the match count on it, and no
+  // key-hint footer row (the footer was the second body line before).
   push_module_field(L, 1, "search_panel");
-  push_box(L, 60, 2, 70, 4);
+  push_box(L, 60, 2, 70, 3);
   lua_pushstring(L, "emplace");
   lua_setfield(L, -2, "query");
   lua_pushstring(L, "");
@@ -1053,8 +1055,52 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   lua_pop(L, 1);
   REQUIRE(g.last_width == 70);
   REQUIRE(g.last_border == "single");
-  REQUIRE(g.lines_count == 2); // find row + footer
-  REQUIRE(g.spans_total >= 0);
+  REQUIRE(g.lines_count == 1); // the find row only, no hint footer
+  REQUIRE(g.lines[0].substr(0, 8) == "Find    ");
+  REQUIRE(g.lines[0].substr(8, 7) == "emplace");
+  // "Aa W .*" then the count, right-aligned on the row.
+  REQUIRE(g.lines[0].size() >= 12);
+  REQUIRE(g.lines[0].substr(g.lines[0].size() - 12) == "Aa W .*  2/7");
+  // The field's focused background covers the whole input, not just the text.
+  bool field_span = false;
+  for (const StubState::RecordedSpan &sp : g.spans_by_line[1])
+  {
+    if (sp.start == 8 && sp.len > 7)
+    {
+      field_span = true;
+    }
+  }
+  REQUIRE(field_span);
+
+  // With the replacement up the bar is two rows: find, then replace.
+  push_module_field(L, 1, "search_panel");
+  push_box(L, 60, 2, 70, 4);
+  lua_pushstring(L, "emplace");
+  lua_setfield(L, -2, "query");
+  lua_pushstring(L, "push_back");
+  lua_setfield(L, -2, "replace_text");
+  lua_pushboolean(L, 1);
+  lua_setfield(L, -2, "replace_visible");
+  lua_pushboolean(L, 0);
+  lua_setfield(L, -2, "focus_replace");
+  lua_pushboolean(L, 0);
+  lua_setfield(L, -2, "case_sensitive");
+  lua_pushboolean(L, 1);
+  lua_setfield(L, -2, "whole_word");
+  lua_pushboolean(L, 0);
+  lua_setfield(L, -2, "regex");
+  lua_pushboolean(L, 0);
+  lua_setfield(L, -2, "scoped_to_selection");
+  lua_pushstring(L, "3 closed");
+  lua_setfield(L, -2, "count");
+  REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+  REQUIRE(lua_toboolean(L, -1));
+  lua_pop(L, 1);
+  REQUIRE(g.lines_count == 2);
+  REQUIRE(g.lines[0].substr(0, 8) == "Find    ");
+  REQUIRE(g.lines[1].substr(0, 8) == "Replace ");
+  REQUIRE(g.lines[1].substr(8, 9) == "push_back");
+  REQUIRE(g.lines[0].find("Aa W .*  3 closed") != std::string::npos);
   push_module_field(L, 1, "search_panel");
   lua_pushnil(L);
   REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
