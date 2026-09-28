@@ -20,6 +20,16 @@ namespace
   using HPCON = void *;
 #endif
 
+// winbase.h declares this one only for a Windows 10 RS5 SDK target
+// (NTDDI_VERSION), and the mingw headers on the CI image default to the older
+// target, so it is spelled out here the way that header expands it:
+// ProcThreadAttributeValue(ProcThreadAttributePseudoConsole, FALSE, TRUE, FALSE).
+// The pseudo-console entry points themselves are resolved at runtime below, so
+// this constant is the only thing the file needs from that SDK level.
+#ifndef PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
+#define PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE 0x00020016
+#endif
+
   using CreatePseudoConsoleFn = HRESULT(WINAPI *)(COORD, HANDLE, HANDLE, DWORD, HPCON *);
   using ResizePseudoConsoleFn = HRESULT(WINAPI *)(HPCON, COORD);
   using ClosePseudoConsoleFn = void(WINAPI *)(HPCON);
