@@ -618,6 +618,7 @@ Editor::~Editor()
   save_recent_files();
   save_recent_workspaces();
   save_home_pins();
+  save_completion_usage();
   stop_all_lsp_clients();
 
   if (lua_api)

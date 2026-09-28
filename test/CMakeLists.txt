@@ -99,6 +99,7 @@ add_executable(jot_tests
   test_ai.cpp
   test_lua_snippet.cpp
   test_completion_matching.cpp
+  test_completion_rank.cpp
   test_completion_ghost.cpp
   test_overlay_placement.cpp
   test_completion_selection.cpp

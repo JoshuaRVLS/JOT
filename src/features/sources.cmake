@@ -9,6 +9,7 @@ set(JOT_FEATURES_SOURCES
   features/color_space.cpp
   features/color_tailwind.cpp
   features/color_terminal_codes.cpp
+  features/completion_rank.cpp
   features/config.cpp
   features/emmet.cpp
   features/web_completion.cpp

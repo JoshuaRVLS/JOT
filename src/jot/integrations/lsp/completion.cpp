@@ -1,6 +1,7 @@
 // Editor-side LSP completion: request triggering, client-side filtering and
 // ranking, and applying the selected item (including snippet expansion).
 #include "editor.h"
+#include "features/completion_rank.h"
 #include "jot/integrations/lsp/common.h"
 #include "jot/lua/api.h"
 #include "lsp/client.h"
@@ -68,6 +69,41 @@ namespace
     return item.label;
   }
 
+  // The characters a qualified name is spelled with, for cutting a decoration
+  // off a label and a snippet's arguments off a call.
+  bool is_qualified_name_char(char c)
+  {
+    const unsigned char uc = (unsigned char)c;
+    return std::isalnum(uc) != 0 || c == '_' || c == ':' || c == '.' || c == '>' || c == '-'
+           || c == '~' || c == '!';
+  }
+
+  // The name a row is about, without the decoration a server may hang on the
+  // label: clangd prefixes every label with a space, or with a bullet for the
+  // symbols it would add an include for, and neither belongs in the learned
+  // table (a name learned as " quick_scan" would never be recognised again). The
+  // text the server matches the typed word against names the symbol, so that is
+  // the name; a snippet's `(${1:x})` tail is cut at the first character that
+  // cannot be part of a qualified name, which is what leaves `printf` of
+  // `printf(${1:format})` and `std::quick_exit` of itself.
+  std::string completion_name(const LSPCompletionItem &item)
+  {
+    const std::string &text = completion_match_text(item);
+    std::size_t start = 0;
+    while (start < text.size() && !is_qualified_name_char(text[start]))
+    {
+      // A leading decoration can be multi-byte (the bullet is three), so the
+      // scan steps bytes rather than characters.
+      start++;
+    }
+    std::size_t end = start;
+    while (end < text.size() && is_qualified_name_char(text[end]))
+    {
+      end++;
+    }
+    return text.substr(start, end - start);
+  }
+
   // Whether `text` leads with `prefix`, case-insensitively -- the one test a
   // typed word has to pass for an item to be a completion *of that word*. The
   // list and the preview read it the same way: what is listed is what could be
@@ -88,37 +124,55 @@ namespace
     return true;
   }
 
-  int completion_match_score(const std::string &query, const LSPCompletionItem &item)
+  // Where a row belongs in the list, in the two parts the ranker compares: the
+  // tier the typed word puts it in (an exact hit, a word the typed text leads
+  // into, or the open list with nothing typed) and the points the server's own
+  // hints carry. The tier is compared first and the learned relevance
+  // (features/completion_rank.h) second, so a habit beats a shorter name and
+  // neither can lift a row over an exact match.
+  //
+  // The points are in the same units as a label character -- the length penalty
+  // the old score carried is kept inside them -- so a list with nothing learned
+  // about it comes out in exactly the order it always did.
+  struct CompletionScore
   {
-    int score = query.empty() ? 50 : 0;
+    int tier = 0;   // 0 not a completion of the typed word, 1 untyped list, 2 leads, 3 exact
+    int points = 0; // preselect / deprecated / kind, minus the label's length
+  };
 
+  CompletionScore completion_score(const std::string &query, const LSPCompletionItem &item)
+  {
+    CompletionScore score;
     const std::string q = lsp_internal::to_lower_copy(query);
     const std::string label = lsp_internal::to_lower_copy(item.label);
     const std::string filter = lsp_internal::to_lower_copy(completion_match_text(item));
     const std::string insert = lsp_internal::to_lower_copy(item.insert_text);
 
-    if (!query.empty())
+    if (query.empty())
     {
-      if (label == q || filter == q || insert == q)
-      {
-        score = 10000;
-      }
-      else if (text_leads_with(completion_match_text(item), query))
-      {
-        score = 7000 - (int)label.size();
-      }
+      score.tier = 1; // the list is up before a letter is typed: nothing to match yet
     }
-    if (score <= 0)
+    else if (label == q || filter == q || insert == q)
     {
-      return 0;
+      score.tier = 3;
     }
+    else if (text_leads_with(completion_match_text(item), query))
+    {
+      score.tier = 2;
+      score.points -= (int)item.label.size();
+    }
+    else
+    {
+      return score; // tier 0: not a completion of the word being typed
+    }
+
     if (item.preselect)
     {
-      score += 250;
+      score.points += 250;
     }
     if (item.deprecated)
     {
-      score -= 200;
+      score.points -= 200;
     }
     switch (item.kind)
     {
@@ -127,10 +181,10 @@ namespace
     case 5:
     case 6:
     case 10:
-      score += 40;
+      score.points += 40;
       break;
     case 14:
-      score -= 20;
+      score.points -= 20;
       break;
     default:
       break;
@@ -484,7 +538,13 @@ bool Editor::refresh_lsp_completion_filter()
            && a.insert_text == b.insert_text;
   };
 
-  std::vector<std::pair<int, LSPCompletionItem>> ranked;
+  struct RankedItem
+  {
+    CompletionScore score;
+    int relevance = 0;
+    LSPCompletionItem item;
+  };
+  std::vector<RankedItem> ranked;
   ranked.reserve(lsp_completion_all_items.size());
   for (const auto &item : lsp_completion_all_items)
   {
@@ -497,32 +557,43 @@ bool Editor::refresh_lsp_completion_filter()
     {
       continue;
     }
-    int score = completion_match_score(query, item);
-    if (query.empty() || score > 0)
+    const CompletionScore score = completion_score(query, item);
+    if (score.tier > 0)
     {
-      ranked.push_back({score, item});
+      ranked.push_back({score, completion_rank_points(completion_name(item)), item});
     }
   }
 
   std::stable_sort(ranked.begin(),
                    ranked.end(),
-                   [](const auto &a, const auto &b)
+                   [](const RankedItem &a, const RankedItem &b)
                    {
-                     if (a.first != b.first)
+                     if (a.score.tier != b.score.tier)
                      {
-                       return a.first > b.first;
+                       return a.score.tier > b.score.tier;
+                     }
+                     // What this user reaches for, and what the file already says,
+                     // ahead of the server's own hints: the point of the model is
+                     // that a familiar name outranks a stranger, however short.
+                     if (a.relevance != b.relevance)
+                     {
+                       return a.relevance > b.relevance;
+                     }
+                     if (a.score.points != b.score.points)
+                     {
+                       return a.score.points > b.score.points;
                      }
                      const std::string &as =
-                         a.second.sort_text.empty() ? a.second.label : a.second.sort_text;
+                         a.item.sort_text.empty() ? a.item.label : a.item.sort_text;
                      const std::string &bs =
-                         b.second.sort_text.empty() ? b.second.label : b.second.sort_text;
+                         b.item.sort_text.empty() ? b.item.label : b.item.sort_text;
                      return as < bs;
                    });
 
   const int max_items = 200;
   for (int i = 0; i < (int)ranked.size() && i < max_items; i++)
   {
-    lsp_completion_items.push_back(std::move(ranked[i].second));
+    lsp_completion_items.push_back(std::move(ranked[i].item));
   }
 
   lsp_completion_prefix = query;
@@ -642,9 +713,87 @@ bool Editor::lsp_completion_preview_due_soon()
   return due;
 }
 
+bool Editor::completion_rank_enabled()
+{
+  return config.get_bool("lsp_completion_learn", true);
+}
+
+void Editor::load_completion_usage()
+{
+  if (completion_usage_loaded)
+  {
+    return;
+  }
+  // Marked loaded whether or not the file was there: the same missing file is not
+  // looked for again on every request of the session.
+  completion_usage_loaded = true;
+  if (!completion_rank_enabled())
+  {
+    return;
+  }
+  CompletionRank::load_usage(CompletionRank::usage_file_path(), completion_usage);
+}
+
+void Editor::save_completion_usage()
+{
+  if (!completion_usage_dirty)
+  {
+    return;
+  }
+  completion_usage_dirty = false;
+  CompletionRank::save_usage(CompletionRank::usage_file_path(), completion_usage);
+}
+
+void Editor::rebuild_completion_context()
+{
+  completion_context.clear();
+  if (!completion_rank_enabled() || buffers.empty())
+  {
+    return;
+  }
+  auto &buf = get_buffer();
+  if (buf.is_lazy())
+  {
+    return;
+  }
+  completion_context.rebuild(buf.lines, buf.cursor.y);
+}
+void Editor::record_completion_use(const std::string &name)
+{
+  if (!completion_rank_enabled() || name.empty())
+  {
+    return;
+  }
+  load_completion_usage();
+  completion_usage.record(lsp_internal::detect_lsp_language(get_buffer().filepath), name);
+  completion_usage_dirty = true;
+}
+
+int Editor::completion_rank_points(const std::string &name)
+{
+  if (!completion_rank_enabled() || name.empty())
+  {
+    return 0;
+  }
+  load_completion_usage();
+  return CompletionRank::relevance(
+      completion_usage, completion_context, completion_usage_language, name);
+}
+
 void Editor::arm_lsp_completion(const std::string &filepath, bool manual)
 {
   auto &buf = get_buffer();
+  completion_usage_language = lsp_internal::detect_lsp_language(filepath);
+  // The context is the words of the whole buffer, so it is read once per popup
+  // rather than once per keystroke: another letter of the same word ranks against
+  // the text the list opened on, and accepting an item is what closes the list
+  // and makes the next popup read the buffer the item landed in. The check comes
+  // before the filepath below is overwritten, so a popup in another file always
+  // re-reads.
+  if (!lsp_completion_visible || lsp_completion_filepath != filepath)
+  {
+    rebuild_completion_context();
+  }
   lsp_completion_anchor = buf.cursor;
   lsp_completion_replace_start = current_completion_start(buf);
   lsp_completion_filepath = filepath;
@@ -822,6 +971,10 @@ bool Editor::apply_selected_lsp_completion()
     hide_lsp_completion();
     return false;
   }
+
+  // One acceptance, kept for the next list (features/completion_rank.h): the user
+  // reaching for this name is the whole signal the model learns from.
+  record_completion_use(completion_name(item));
 
   const std::string &line_ref = buf.line(buf.cursor.y);
   const int cursor = std::clamp(buf.cursor.x, 0, (int)line_ref.size());

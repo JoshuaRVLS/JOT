@@ -1067,6 +1067,22 @@ a trailing `;`, where it would sit past a character accepting would insert
 before. Snippets preview their first line, since the rest cannot be drawn
 inline.
 
+The rows are then ranked by what this user reaches for. Every accepted item
+counts one use of its name, per language, in `configs/completion_usage.tsv`
+under the config home: the file is read on the first completion and written back
+when the editor shuts down, and `lsp_completion_learn` (default true) turns the
+whole thing off. Two signals decide the order among the rows the typed word
+leads into. The first is the habit -- 30 points per acceptance, and it stops
+paying past ten, so one name cannot bury the rest. The second is the file being
+edited: a word already in the buffer scores 90, or 150 when it is on the caret's
+own line, so the name the code is already using leads. Relevance sits after the
+match itself and before the server's own hints, which is what lets a habit beat
+a shorter label while neither can lift a row over an exact match. What is
+learned is the name, not the label: a server decorates labels (clangd prefixes
+each one with a space, or with a bullet for the symbols it would add an include
+for), so the name is taken from the text the server matches the typed word
+against and cut at the first character that cannot be part of it.
+
 ## Command reference
 
 Open the palette with `Ctrl+P` and type an ex-style command. The prompt

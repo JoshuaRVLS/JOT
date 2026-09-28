@@ -1,8 +1,9 @@
 #ifndef JOT_STATE_LSP_STATE_H
 #define JOT_STATE_LSP_STATE_H
 
-#include "jot/model/buffer.h" // Cursor
-#include "jot/model/tasks.h"  // LspInstallJob
+#include "features/completion_rank.h" // what the popup learned
+#include "jot/model/buffer.h"         // Cursor
+#include "jot/model/tasks.h"          // LspInstallJob
 #include "tools/lsp/client.h" // LSPClient, Diagnostic, completion/signature/inlay models
 #include <map>
 #include <memory>
@@ -99,6 +100,16 @@ struct LspUiState
   bool lsp_completion_preview_was_withheld = false;
   std::vector<LSPCompletionItem> lsp_completion_all_items;
   std::vector<LSPCompletionItem> lsp_completion_items;
+  // What the popup learned about this user (features/completion_rank.h): the
+  // names accepted, counted per language, and the words of the buffer being
+  // completed. The table is read from the config home on the first completion and
+  // written back on shutdown, like the workspace session; the context is rebuilt
+  // once per popup, because accepting an item is what changes the words it reads.
+  CompletionRank::Usage completion_usage;
+  CompletionRank::Context completion_context;
+  bool completion_usage_loaded = false;
+  bool completion_usage_dirty = false;
+  std::string completion_usage_language;
   // The rect the popup painted on the last frame, border included, in screen
   // cells (x/y are -1 / w is 0 while it is not on screen), plus the window it
   // painted in it: the item index of its first row and how many rows there are.

@@ -103,6 +103,23 @@ private:
   // the request was made with.
   void arm_lsp_completion(const std::string &filepath, bool manual);
   bool refresh_lsp_completion_filter();
+  // Whether the popup ranks by what the user picks and what the file already
+  // holds (`lsp_completion_learn`). Off is the plain order, and nothing touches
+  // the learned table below.
+  bool completion_rank_enabled();
+  // The learned table, read from the config home once per editor and written back
+  // on shutdown. A missing file is an empty table, not an error.
+  void load_completion_usage();
+  void save_completion_usage();
+  // The words of the buffer being completed, read once per popup: accepting an
+  // item changes them, and the next list ranks against the text it landed in.
+  void rebuild_completion_context();
+  // One acceptance, counted for the language of the file being completed.
+  void record_completion_use(const std::string &name);
+  // The learned relevance of one row's name: a habit of the user's, plus the
+  // file's own words (which decay with distance from the caret). 0 when learning
+  // is off, which is what leaves the list in its plain order.
+  int completion_rank_points(const std::string &name);
   // The workspace's own CSS vocabulary (features/web_completion.h): the class
   // names and custom properties every file in the tree declares, offered inside
   // `class="..."` and `var(--)`. The scan runs on the worker queue and its

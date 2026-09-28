@@ -203,6 +203,10 @@ void Config::load_defaults()
   // How long the typing has to pause before that preview shows. A preview that
   // redraws with every keystroke is a flicker; 0 previews at once.
   settings["lsp_completion_ghost_delay_ms"] = "150";
+  // Rank the popup by the names this user accepts and the words the file already
+  // holds (features/completion_rank.h). Off means the plain order, and nothing is
+  // read from or written to the config home.
+  settings["lsp_completion_learn"] = "true";
   settings["lsp_inlay_hints"] = "true";
   settings["lsp_inlay_type_hints"] = "true";
   settings["decorations_inline_diagnostics"] = "true";
