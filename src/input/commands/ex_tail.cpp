@@ -238,6 +238,29 @@ bool Editor::execute_ex_command_tail(const std::string &lcmd,
       set_message("Yanked " + (inner ? std::string("inside ") : std::string("around ")) + object);
     }
   }
+  else if (lcmd == "deleteword")
+  {
+    delete_word_at_cursor();
+  }
+  else if (lcmd == "changeinside")
+  {
+    // :changeinside string|bracket -- clear the interior and leave the caret in
+    // it. Naming the object is what keeps one key from having to guess the kind
+    // of pair the caret is in.
+    const std::string spec = to_lower_copy(trim_copy(arg));
+    if (spec == "string" || spec == "strings" || spec == "quote" || spec == "quotes")
+    {
+      change_inside_any_quote();
+    }
+    else if (spec == "bracket" || spec == "brackets")
+    {
+      change_inside_bracket();
+    }
+    else
+    {
+      set_message("Usage: :changeinside string|bracket");
+    }
+  }
   else if (lcmd == "selectword")
   {
     select_word_at_cursor();

@@ -87,6 +87,7 @@ add_executable(jot_tests
   test_sidebar_guides.cpp
   test_blank_guides.cpp
   test_bracket_match.cpp
+  test_replace_inside.cpp
   test_word_highlight.cpp
   test_diagnostic_line_bg.cpp
   test_right_panel.cpp

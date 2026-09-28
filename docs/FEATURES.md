@@ -801,7 +801,8 @@ API.
 | `Ctrl+Shift+D` | Duplicate current line |
 | `Ctrl+K` | Delete current line |
 | `Ctrl+/` | Toggle comment (138 languages, per-extension comment markers) |
-| `Ctrl+Backspace` / `Ctrl+Delete` | Delete previous / next word |
+| `Ctrl+Backspace` / `Ctrl+Delete` | Delete previous / next word (from the caret's edge) |
+| `Alt+Backspace` | Delete the whole word the caret is on |
 | `Ctrl+Enter` / `Ctrl+Shift+Enter` | Insert line below / above |
 | `Alt+Enter` / `Alt+Shift+Enter` | Terminal fallback: line below / above |
 | `Ctrl+Space` | LSP completion |
@@ -824,10 +825,36 @@ so the grammar is learnt once:
 | `Alt+V` | Selection: `E` expand, `C` shrink, `K` keep primary, `R` rotate, `A`/`B` cursor above/below, `L` split lines, `M` match all occurrences, `S` select an object |
 | `Alt+]` / `Alt+[` | Next / previous: `F` function, `C` class, `D` diagnostic (`Alt+E` remains an alias) |
 | `Alt+C` | Code: `D` definition, `C` declaration, `T` type definition, `I` implementation, `H` switch header/source, `R` references, `N` rename, `A` code actions, `S` symbols, `W` workspace symbols, `K` documentation |
+| `Alt+X` | Clear inside: `S` the string, `B` the brackets (then type the replacement) |
 
 Objects available today are `F` function, `C` class or type, `A`
 argument/parameter, `W` word, `L` line - the syntax objects come from tree-sitter,
 so they need a grammar for the file type.
+
+### In-place edits
+
+The two things that come up mid-edit get a chord instead of a sequence: the word
+the caret is standing on (`Alt+Backspace`) and the inside of the string or the
+bracket pair it is standing in (`Alt+X S`, `Alt+X B`). There is no insert mode to
+change into, so clearing one leaves the caret where the text was and typing takes
+its place.
+
+`Alt+Backspace` takes the span `Ctrl+D` would have selected, which is what makes
+it different from `Ctrl+Backspace` and `Alt+D W`: those eat from the caret's edge
+to the word's boundary, so a caret in the middle of a word leaves its tail
+behind. A live selection goes first, and with no word under the caret it deletes
+backwards the way `Ctrl+Backspace` does rather than doing nothing.
+
+`Alt+X B` clears the innermost pair the caret is inside, so `call(f(g(a)))` with
+the caret on the `a` clears `g(a)'s` inside and leaves the outer call alone. The
+pair may close rows below, which is how a multi-line call collapses to one line
+with its brackets intact. Brackets inside string literals and comments are not
+pairs: `puts("(")` has one pair, and an apostrophe in a comment cannot pair with
+a bracket on the next line. A pair with nothing between it reports instead of
+editing, so the key cannot dirty a file for a no-op. `Alt+X S` reads the three
+literal kinds the same way and clears the innermost one containing the caret,
+and a caret that is not inside any literal reports rather than clearing the one
+it just left.
 
 ### Navigation
 

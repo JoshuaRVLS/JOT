@@ -632,6 +632,16 @@ void Editor::handle_modeless_input(int ch, bool is_ctrl, bool is_shift, bool is_
     return;
   }
 
+  // Alt+Backspace takes the word the caret is sitting on, where Ctrl+Backspace
+  // (and Alt+D W) eat to the boundary. The Lua keymap registers the same chord,
+  // so this is the fallback when no plugin config is loaded.
+  if (is_alt && (ch == 127 || ch == 8))
+  {
+    hide_lsp_completion();
+    delete_word_at_cursor();
+    return;
+  }
+
   if (ch == 127 || ch == 8)
   {
     bool had_completion = lsp_completion_visible;

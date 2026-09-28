@@ -39,6 +39,21 @@ public:
   bool goto_relative_object(const std::string &kind, int direction);
   // Selection helpers the operator menus act on.
   bool select_word_at_cursor();
+  // The in-place edits: the word span the caret is on, and the inside of the
+  // literal or the bracket pair it is in. Driven here so the span and the
+  // caret that follows the erase are pinned without a real terminal.
+  bool delete_word_at_cursor_for_test()
+  {
+    return delete_word_at_cursor();
+  }
+  bool change_inside_any_quote_for_test()
+  {
+    return change_inside_any_quote();
+  }
+  bool change_inside_bracket_for_test()
+  {
+    return change_inside_bracket();
+  }
   void delete_selection_for_test();
   void delete_char_for_test(bool forward);
   void insert_string_for_test(const std::string &str);

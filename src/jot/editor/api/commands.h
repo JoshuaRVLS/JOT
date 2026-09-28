@@ -40,6 +40,9 @@ private:
   bool surround_selection_or_word(const std::string &left, const std::string &right);
   bool unsurround_selection_or_cursor();
   bool change_inside_quote(char quote);
+  bool change_inside_any_quote();
+  bool change_inside_bracket();
+  bool delete_word_at_cursor();
   void increment_number_at_cursor(int delta);
   void toggle_auto_indent_setting();
   void change_tab_size(int delta);

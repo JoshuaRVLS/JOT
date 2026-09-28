@@ -140,3 +140,18 @@ jot.keymap.set("Alt+C a", ":lspactions", "Code actions")
 jot.keymap.set("Alt+C s", ":symbols", "Document symbols")
 jot.keymap.set("Alt+C w", ":wsymbols", "Workspace symbols")
 jot.keymap.set("Alt+C k", ":hover", "Show documentation")
+
+-- ---------------------------------------------------------------------------
+-- In-place edits: act on the word or the pair the caret is already in.
+--
+-- The operators above take three keys (Alt+D, a qualifier, an object) because
+-- they work on any of several objects, one of them a tree-sitter node. The two
+-- shapes below are the ones that come up mid-edit and want one chord: the word
+-- the caret sits on, and whatever is inside the string or the brackets it is
+-- in. Alt+X carries the pair family the way Alt+V carries selection, and with
+-- no insert mode there is nothing else clearing one is called: the text goes
+-- and the caret takes its place.
+jot.keymap.set("Alt+Backspace", ":deleteword", "Delete the word at the caret")
+jot.keymap.set("Alt+X", "", "Clear inside")
+jot.keymap.set("Alt+X S", ":changeinside string", "Clear inside the string")
+jot.keymap.set("Alt+X B", ":changeinside bracket", "Clear inside the brackets")

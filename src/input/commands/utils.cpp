@@ -139,6 +139,8 @@ namespace CommandLineUtils
                                                       "collapse",
                                                       "unfold",
                                                       "deleteselection",
+                                                      "deleteword",
+                                                      "changeinside",
                                                       "deleteobject",
                                                       "yankobject",
                                                       "yankselection",
@@ -269,7 +271,7 @@ namespace CommandLineUtils
            || lc == "tsinstall"
            || lc == "treesitterinstall"
            || lc == "replace" || lc == "replacei" || lc == "replaceword" || lc == "replacere"
-           || lc == "surround";
+           || lc == "surround" || lc == "changeinside";
   }
 
   bool parse_line_col(const std::string &s, int &line_out, int &col_out)

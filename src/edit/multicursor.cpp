@@ -795,6 +795,44 @@ bool Editor::select_all_occurrences()
   return true;
 }
 
+// Erases the whole word the caret is on. Ctrl+Backspace and Ctrl+Delete eat
+// from the caret's edge and leave the rest of the word, which is the wrong
+// answer when the word is the thing you meant to remove; this takes the span
+// select_word_at_cursor would have taken. Off a word there is no span to take,
+// so it deletes backwards like Ctrl+Backspace rather than doing nothing.
+bool Editor::delete_word_at_cursor()
+{
+  auto &buf = get_buffer();
+  if (buf.is_lazy())
+  {
+    buf.materialize();
+  }
+  // A live selection is what the caret is on, so it goes first: nothing the
+  // user marked should survive a key that means "remove what I pointed at".
+  if (buf.selection.active || !buf.extra_carets.empty())
+  {
+    delete_selection();
+    return true;
+  }
+  if (buf.cursor.y < 0 || buf.cursor.y >= (int)buf.line_count())
+  {
+    return false;
+  }
+  int start = 0;
+  int end = 0;
+  word_span_at(buf.line(buf.cursor.y), buf.cursor.x, start, end);
+  if (start >= end)
+  {
+    delete_word_backward();
+    return true;
+  }
+  buf.selection.start = {start, buf.cursor.y};
+  buf.selection.end = {end, buf.cursor.y};
+  buf.selection.active = true;
+  delete_selection();
+  return true;
+}
+
 // Selects the word under the cursor: the object the word operators act on, and
 // the same span Ctrl+D starts from, so "select the word" and "select the next
 // occurrence" agree on what a word is.

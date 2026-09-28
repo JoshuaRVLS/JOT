@@ -1,4 +1,5 @@
 #include "editor.h"
+#include "bracket_text_object.h"
 #include "jot/lua/api.h"
 #include "quote_text_object.h"
 #include <algorithm>
@@ -6,6 +7,11 @@
 
 namespace
 {
+  // How far a closing bracket is looked for. A call or literal that closes
+  // further than this is not one the caret can plausibly be inside, and the
+  // walk must stay bounded on a large file.
+  constexpr int kBracketPairScanLines = 500;
+
   bool is_word_char(char c)
   {
     const unsigned char uc = (unsigned char)c;
@@ -214,5 +220,85 @@ bool Editor::change_inside_quote(char quote)
   clamp_cursor(get_pane().buffer_id);
   ensure_cursor_visible();
   needs_redraw = true;
+  return true;
+}
+
+// Which of the three literal kinds the caret is inside. The quote character is
+// not part of the request ("clear the string I am in"), so the innermost
+// containing pair wins and the caller is spared a key per kind.
+bool Editor::change_inside_any_quote()
+{
+  auto &buf = get_buffer();
+  if (buf.is_lazy())
+    buf.materialize();
+  if (buf.lines.empty())
+  {
+    set_message("No string pair found");
+    return false;
+  }
+
+  int y = std::clamp(buf.cursor.y, 0, (int)buf.lines.size() - 1);
+  const std::string &line = buf.lines[(size_t)y];
+  char best = 0;
+  int best_span = 0;
+  for (char quote : {'"', '\'', '`'})
+  {
+    QuoteTextObject::Range range = QuoteTextObject::find_inner_range(line, buf.cursor.x, quote);
+    // Outside the pair is outside the string: a caret parked past both quotes
+    // must not wipe the literal it just left.
+    if (!range.found || buf.cursor.x < range.open || buf.cursor.x > range.close)
+    {
+      continue;
+    }
+    const int span = range.close - range.open;
+    if (best == 0 || span < best_span)
+    {
+      best = quote;
+      best_span = span;
+    }
+  }
+  if (best == 0)
+  {
+    set_message("No string pair found");
+    return false;
+  }
+  return change_inside_quote(best);
+}
+
+// Clears everything between the innermost brackets around the caret. Deleting
+// the interior as a selection is what lets one call span lines: the selection
+// is the pair's inside, wherever the closing bracket ended up.
+bool Editor::change_inside_bracket()
+{
+  auto &buf = get_buffer();
+  if (buf.is_lazy())
+    buf.materialize();
+  if (buf.lines.empty())
+  {
+    set_message("No bracket pair found");
+    return false;
+  }
+
+  int y = std::clamp(buf.cursor.y, 0, (int)buf.lines.size() - 1);
+  BracketTextObject::Range range =
+      BracketTextObject::find_inner_range(buf.lines, y, buf.cursor.x, kBracketPairScanLines);
+  if (!range.found)
+  {
+    set_message("No bracket pair found");
+    return false;
+  }
+  if (range.open_line == range.close_line && range.close_col <= range.open_col + 1)
+  {
+    set_message("Nothing inside the brackets");
+    return false;
+  }
+
+  // The pair was found for the primary caret, and delete_selection would take
+  // each extra caret's own selection with it: those were not this pair.
+  buf.extra_carets.clear();
+  buf.selection.start = {range.open_col + 1, range.open_line};
+  buf.selection.end = {range.close_col, range.close_line};
+  buf.selection.active = true;
+  delete_selection();
   return true;
 }

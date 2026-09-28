@@ -61,6 +61,8 @@ void Editor::show_command_help(const std::string &topic_text)
       "  Ctrl+Shift+W     Workspace symbol picker (across the project)",
       "  Alt+D / Alt+Y    Delete / yank an object: then i|a, then f|c|a|w|l",
       "  Alt+V            Selection: expand, shrink, carets, split, match all",
+      "  Alt+Backspace    Delete the word the caret is on",
+      "  Alt+X S / Alt+X B  Clear inside the string / the brackets",
       "  Alt+] / Alt+[    Next / previous function, class, diagnostic",
       "  Ctrl+Shift+X     Workspace diagnostics picker",
       "  :outline         Symbols/outline panel for the current file",
