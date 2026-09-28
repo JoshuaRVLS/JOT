@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <cctype>
 #include <cstdlib>
 #include <map>
 #include <string>
@@ -213,6 +214,8 @@ TEST_CASE("The keymap grammar registers the menus which-key renders", "[jot][key
                              "Alt+D a c",
                              "Alt+D i a",
                              "Alt+D a a",
+                             "Alt+D i s",
+                             "Alt+D a s",
                              "Alt+D w",
                              "Alt+D l"})
   {
@@ -233,7 +236,9 @@ TEST_CASE("The keymap grammar registers the menus which-key renders", "[jot][key
                              "Alt+V a",
                              "Alt+V l",
                              "Alt+V m",
-                             "Alt+V s f"})
+                             "Alt+V s f",
+                             "Alt+V s s",
+                             "Alt+V Shift+S"})
   {
     REQUIRE(find(chords) != nullptr);
   }
@@ -286,8 +291,10 @@ TEST_CASE("Every command a keymap names exists", "[jot][keymap]")
   }
   REQUIRE_FALSE(named.empty());
 
-  // Function actions (the operators) run against a stubbed jot.command, so their
-  // sequence is recorded rather than executed.
+  // Any function action left in the grammar is run against a stubbed
+  // jot.command, so whatever it asks for is checked like the rest. Every leaf
+  // here is a command string today; this stays because a callback is how the
+  // selection menu was spelled when it silently did nothing.
   for (const auto &entry : g.entries)
   {
     if (!entry.has_function || !in_grammar(entry.chords))
@@ -296,7 +303,6 @@ TEST_CASE("Every command a keymap names exists", "[jot][keymap]")
     }
     REQUIRE(call_action(L, entry.function_ref));
   }
-  REQUIRE_FALSE(g.commands_run.empty());
   for (const auto &command : g.commands_run)
   {
     named.push_back(command);
@@ -364,6 +370,17 @@ TEST_CASE("Operator leaves name the object and the verb", "[jot][keymap]")
   REQUIRE(leaf != nullptr);
   REQUIRE(leaf->command == "yankobject word");
 
+  // The selection menu is the same shape, and it has to be: a callback here
+  // called `jot.command`, which registers a command rather than running one, so
+  // every object under `Alt+V s` consumed its key and did nothing.
+  for (const char *object : {"function", "class", "argument", "statement"})
+  {
+    leaf = find(std::string("Alt+V s ") + object[0]);
+    REQUIRE(leaf != nullptr);
+    REQUIRE_FALSE(leaf->has_function);
+    REQUIRE(leaf->command == std::string("textobject around ") + object);
+  }
+
   leaf = find("Alt+V m");
   REQUIRE(leaf != nullptr);
   REQUIRE(leaf->command == "selectoccurrences");
@@ -403,9 +420,29 @@ TEST_CASE("The grammar resolves through the which-key path", "[jot][keymap]")
   }
 
   // Three levels deep: verb -> inside/around -> object, and the leaf is a real
-  // registration rather than another group.
-  REQUIRE(api.plugin_keymap_children("Alt+D a", "editor").size() == 3);
+  // registration rather than another group. The set is checked, not a count, so
+  // an object added to the table has to be added here on purpose.
+  std::vector<std::string> object_keys;
+  for (const auto &child : api.plugin_keymap_children("Alt+D a", "editor"))
+  {
+    object_keys.push_back(child.key);
+  }
+  for (const char *expected : {"f", "c", "a", "s"})
+  {
+    INFO("objects under Alt+D a: " << object_keys.size());
+    REQUIRE(std::find(object_keys.begin(), object_keys.end(), expected) != object_keys.end());
+  }
+  REQUIRE(object_keys.size() == 4);
   REQUIRE(api.plugin_keymap_children("Alt+D a f", "editor").empty());
+
+  // The statement also has the fast chord, which sits beside the `Alt+V s` menu
+  // rather than under it: "Shift+S" is a step of its own, so the menu still
+  // opens. (A bare `S` step would have swallowed it on a plain `s` press -- see
+  // the case-collision case below.)
+  REQUIRE(api.plugin_keymap_is_prefix("Alt+V s", "editor"));
+  const KeymapRecord *fast = find("Alt+V Shift+S");
+  REQUIRE(fast != nullptr);
+  REQUIRE(fast->command == "textobject around statement");
 
   // The code-navigation family, which is the same shape (prefix, then a letter
   // per lookup). Each child has to reach a real ex command: a typo here is a key
@@ -438,6 +475,64 @@ TEST_CASE("The grammar resolves through the which-key path", "[jot][keymap]")
     REQUIRE(record->command == leaf.second);
   }
   REQUIRE(code_keys.size() == code_leaves.size());
+
+  lua_close(L);
+}
+
+// Two children of one prefix that differ only in case are a single binding in
+// practice: which-key matches the pressed key case-insensitively (a plain letter
+// is canonicalised to uppercase) and sorts the uppercase child first, so a
+// capitalised shortcut shadows the lowercase menu beside it. That is how
+// "Alt+V S" once made the `Alt+V s` object menu unreachable, so it is a rule
+// rather than a check on one key.
+TEST_CASE("No two keymap children of a prefix differ only by case", "[jot][keymap]")
+{
+  lua_State *L = luaL_newstate();
+  REQUIRE(L != nullptr);
+  REQUIRE(load_grammar(L));
+
+  const auto split = [](const std::string &chords)
+  {
+    const size_t sp = chords.rfind(' ');
+    if (sp == std::string::npos)
+    {
+      return std::pair<std::string, std::string>{"", chords};
+    }
+    return std::pair<std::string, std::string>{chords.substr(0, sp), chords.substr(sp + 1)};
+  };
+  const auto lower = [](std::string s)
+  {
+    for (char &c : s)
+    {
+      c = (char)std::tolower((unsigned char)c);
+    }
+    return s;
+  };
+
+  std::map<std::string, std::vector<std::string>> by_prefix;
+  for (const auto &entry : g.entries)
+  {
+    const auto parts = split(entry.chords);
+    by_prefix[parts.first].push_back(parts.second);
+  }
+  REQUIRE_FALSE(by_prefix.empty());
+
+  for (const auto &group : by_prefix)
+  {
+    std::map<std::string, std::string> seen;
+    for (const auto &step : group.second)
+    {
+      const std::string key = lower(step);
+      const auto it = seen.find(key);
+      if (it != seen.end() && it->second != step)
+      {
+        INFO("prefix [" << group.first << "]: both [" << it->second << "] and [" << step
+                        << "] are registered");
+        REQUIRE(false);
+      }
+      seen[key] = step;
+    }
+  }
 
   lua_close(L);
 }

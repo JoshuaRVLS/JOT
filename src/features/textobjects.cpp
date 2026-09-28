@@ -27,6 +27,40 @@ namespace
     }
     return key;
   }
+
+  // The statements the grammars do not name with a `_statement` suffix: the
+  // declarations, the blocks and the odd call that stand where a statement does.
+  // A name that does not exist in a grammar costs only a no-op.
+  bool is_statement_extra(const std::string &type)
+  {
+    static const char *const kExtras[] = {
+        "declaration",
+        "variable_declaration",
+        "lexical_declaration",
+        "let_declaration",
+        "short_var_declaration",
+        "var_declaration",
+        "const_declaration",
+        "type_declaration",
+        "local_variable_declaration",
+        "field_declaration",
+        "property_declaration",
+        "variable_assignment",
+        "function_call",
+        "statement_block",
+        "block",
+        "statements",
+        "subshell",
+    };
+    for (const char *name : kExtras)
+    {
+      if (type == name)
+      {
+        return true;
+      }
+    }
+    return false;
+  }
 } // namespace
 
 namespace jot_textobjects
@@ -183,6 +217,17 @@ namespace jot_textobjects
          "class_specifier"},
         {"parameters", "parameter_list", "formal_parameters", "parameter", "parameter_declaration"},
         {"comment", "line_comment", "block_comment"}};
+  }
+
+  bool is_statement_type(const std::string &type)
+  {
+    static const std::string suffix = "_statement";
+    if (type.size() > suffix.size()
+        && type.compare(type.size() - suffix.size(), suffix.size(), suffix) == 0)
+    {
+      return true;
+    }
+    return is_statement_extra(type);
   }
 
   const std::vector<std::string> &body_fields()

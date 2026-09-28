@@ -41,14 +41,14 @@ namespace
                         "  return sum;\n"
                         "}\n";
 
-  // Loads the source and puts the cursor on line 5 (inside add()'s body).
-  bool load_and_place(Editor &e, int line, int col)
+  // Loads a source file and puts the cursor at `line`:`col`.
+  bool load_and_place_source(Editor &e, const char *source, int line, int col)
   {
     static int counter = 0;
     const std::string path = "/tmp/jot_textobject_" + std::to_string(::getpid()) + "_"
                              + std::to_string(counter++) + ".cpp";
     std::ofstream out(path);
-    out << kSource;
+    out << source;
     out.close();
     e.load_file(path);
     if (!e.syntax_tree_ready_for_test())
@@ -59,6 +59,22 @@ namespace
     e.scroll_cursor_to_for_test(line, col);
     return true;
   }
+
+  // Loads the shared source and puts the cursor on line 5 (inside add()'s body).
+  bool load_and_place(Editor &e, int line, int col)
+  {
+    return load_and_place_source(e, kSource, line, col);
+  }
+
+  // A call written over several rows: the statement the caret sits in is the
+  // whole multi-line declaration, not the one row it is on.
+  const char *kMultiLine = "int main() {\n"
+                           "  int total = compute(\n"
+                           "      1,\n"
+                           "      2,\n"
+                           "      3);\n"
+                           "  return total;\n"
+                           "}\n";
 } // namespace
 
 TEST_CASE("Expand walks out of the syntax nodes the cursor sits in", "[jot][textobject]")
@@ -149,6 +165,62 @@ TEST_CASE("Inside a function selects the body, around selects the definition", "
   e.scroll_cursor_to_for_test(4, 8);
   REQUIRE(e.select_textobject_for_test("argument", true));
   REQUIRE(e.host().core.selected_text() == "a");
+}
+
+// The statement object: the smallest statement the caret is inside. Single-line
+// statements are one row, and a statement written over several rows comes back
+// whole -- which is the point (walking out with expand takes a press per level).
+TEST_CASE("A statement textobject selects the statement, rows and all", "[jot][textobject]")
+{
+  Editor &e = probe_editor();
+  if (!load_and_place(e, 5, 6)) // inside "int sum = a + b;"
+  {
+    SUCCEED("cpp grammar not installed; the statement object is skipped");
+    return;
+  }
+  REQUIRE(e.select_textobject_for_test("statement", false));
+  const std::string one_line = e.host().core.selected_text();
+  INFO("one line: [" << one_line << "]");
+  REQUIRE(one_line == "int sum = a + b;");
+
+  // The multi-line case: the caret is on the `1,` row inside the call, and the
+  // selection is the whole declaration that row belongs to.
+  if (!load_and_place_source(e, kMultiLine, 2, 6))
+  {
+    SUCCEED("cpp grammar not installed; the multi-line case is skipped");
+    return;
+  }
+  REQUIRE(e.select_textobject_for_test("statement", false));
+  const std::string multi = e.host().core.selected_text();
+  INFO("multi: [" << multi << "]");
+  REQUIRE(multi.find('\n') != std::string::npos);
+  REQUIRE(multi.find("int total = compute(") != std::string::npos);
+  REQUIRE(multi.find("3)") != std::string::npos);
+  // The next statement is not part of it: the object stops at the statement.
+  REQUIRE(multi.find("return total") == std::string::npos);
+}
+
+// Statements are recognized by the naming convention the grammars keep, so the
+// rule needs no parser and no per-language table.
+TEST_CASE("Statement node names are read from the grammar's own spelling", "[jot][textobject]")
+{
+  using jot_textobjects::is_statement_type;
+  // The convention: a statement ends in `_statement`.
+  REQUIRE(is_statement_type("expression_statement"));
+  REQUIRE(is_statement_type("return_statement"));
+  REQUIRE(is_statement_type("if_statement"));
+  REQUIRE(is_statement_type("compound_statement"));
+  REQUIRE(is_statement_type("import_from_statement"));
+  // The ones a grammar spells without it.
+  REQUIRE(is_statement_type("declaration"));
+  REQUIRE(is_statement_type("lexical_declaration"));
+  REQUIRE(is_statement_type("let_declaration"));
+  REQUIRE(is_statement_type("block"));
+  // Not statements, and not near misses.
+  REQUIRE_FALSE(is_statement_type("expression"));
+  REQUIRE_FALSE(is_statement_type("identifier"));
+  REQUIRE_FALSE(is_statement_type("_statement"));
+  REQUIRE_FALSE(is_statement_type("statements_extra"));
 }
 
 TEST_CASE("Next and previous function step between definitions", "[jot][textobject]")

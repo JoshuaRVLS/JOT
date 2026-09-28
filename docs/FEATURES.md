@@ -858,14 +858,18 @@ so the grammar is learnt once:
 | `Alt+D W` / `Alt+D L` | Delete the word / the line (objects that need no inside/around) |
 | `Alt+D A F`, `Alt+D I A` | Delete around a function, inside an argument |
 | `Alt+Y A C`, `Alt+Y W` | Yank around a class, yank the word |
-| `Alt+V` | Selection: `E` expand, `C` shrink, `K` keep primary, `R` rotate, `A`/`B` cursor above/below, `L` split lines, `M` match all occurrences, `S` select an object |
+| `Alt+V` | Selection: `E` expand, `C` shrink, `K` keep primary, `R` rotate, `A`/`B` cursor above/below, `L` split lines, `M` match all occurrences, `S` the object menu, `Shift+S` the current statement |
 | `Alt+]` / `Alt+[` | Next / previous: `F` function, `C` class, `D` diagnostic (`Alt+E` remains an alias) |
 | `Alt+C` | Code: `D` definition, `C` declaration, `T` type definition, `I` implementation, `H` switch header/source, `R` references, `N` rename, `A` code actions, `S` symbols, `W` workspace symbols, `K` documentation |
 | `Alt+X` | Clear inside: `S` the string, `B` the brackets (then type the replacement) |
 
 Objects available today are `F` function, `C` class or type, `A`
-argument/parameter, `W` word, `L` line - the syntax objects come from tree-sitter,
-so they need a grammar for the file type.
+argument/parameter, `S` statement, `W` word, `L` line - the syntax objects come
+from tree-sitter, so they need a grammar for the file type. The statement is the
+one that is reached mid-edit rather than while browsing, and the one that
+usually spans rows (a declaration, an `if`, a call split over lines), so it also
+has `Alt+V Shift+S`: one press selects the whole statement where walking out
+with expand takes a press per level.
 
 ### In-place edits
 

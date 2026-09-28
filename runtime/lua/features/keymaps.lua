@@ -65,6 +65,7 @@ local objects = {
   { "f", "function" },
   { "c", "class" },
   { "a", "argument" },
+  { "s", "statement" },
 }
 
 for _, op in ipairs(operators) do
@@ -97,13 +98,26 @@ jot.keymap.set("Alt+V b", ":addcaretbelow", "Add a cursor on the line below")
 jot.keymap.set("Alt+V a", ":addcaretabove", "Add a cursor on the line above")
 jot.keymap.set("Alt+V l", ":splitlines", "One cursor per line of the selection")
 jot.keymap.set("Alt+V m", ":selectoccurrences", "Every occurrence becomes a cursor")
+-- Command strings, like every other leaf here: `jot.command` registers a named
+-- command, it does not run an ex command, so a callback that called it left the
+-- key doing nothing at all.
 jot.keymap.set("Alt+V s", "", "Select an object")
 for _, object in ipairs(objects) do
   local okey, oname = object[1], object[2]
-  jot.keymap.set("Alt+V s " .. okey, function()
-    jot.command("textobject around " .. oname)
-  end, "Select the " .. oname)
+  jot.keymap.set("Alt+V s " .. okey, ":textobject around " .. oname, "Select the " .. oname)
 end
+-- The statement is the object that comes up while editing rather than while
+-- browsing, and it is the one that spans lines (a declaration, an `if`, a call
+-- written over several rows), so it gets a chord without the menu: one press
+-- selects it instead of walking out with expand.
+--
+-- Shift+S and not S: which-key matches the pressed key against a child
+-- case-insensitively (a plain letter is canonicalised to its uppercase form),
+-- and the uppercase children sort first. "Alt+V S" would therefore be the child
+-- a plain `s` matched, and the object menu below it would never open. A shifted
+-- letter canonicalises to "Shift+S", which is a token of its own, so the menu
+-- keeps its `s` and the shortcut sits beside it.
+jot.keymap.set("Alt+V Shift+S", ":textobject around statement", "Select the current statement")
 
 -- Next/previous: one rule, many things (the unimpaired family). Diagnostics gain
 -- a home here instead of an arbitrary chord; Alt+E stays as an alias.

@@ -75,6 +75,16 @@ namespace jot_textobjects
   // the callers have one or the other.
   Names names_for_extension(const std::string &extension_or_language);
 
+  // Whether a node type is a statement. Every grammar this editor ships spells a
+  // statement with a `_statement` suffix (`expression_statement`,
+  // `return_statement`, `if_statement`, ...), so the rule reads the name rather
+  // than carrying one more table per language -- the one naming convention the
+  // grammars do keep. The declarations, blocks and calls that are statements
+  // without the suffix (C's `declaration`, JavaScript's `lexical_declaration`,
+  // Rust's `let_declaration`, a `block`) are the names a per-language table would
+  // hold instead, and they are listed in the implementation.
+  bool is_statement_type(const std::string &type);
+
   // Field names to try, in order, when a textobject wants the *inside* of a node:
   // the body of a function or class, or the declared name of a parameter.
   // "around" is the node itself.

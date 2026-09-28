@@ -309,7 +309,7 @@ bool Editor::execute_ex_command_tail(const std::string &lcmd,
   }
   else if (lcmd == "textobject" || lcmd == "textobj")
   {
-    // :textobject [inside|around] function|class|argument|comment
+    // :textobject [inside|around] function|class|argument|comment|statement
     std::string spec = trim_copy(arg);
     bool inner = false;
     for (const std::string &prefix : {"inside ", "inner ", "i "})
@@ -332,7 +332,7 @@ bool Editor::execute_ex_command_tail(const std::string &lcmd,
     const std::string kind = trim_copy(spec);
     if (kind.empty())
     {
-      set_message("Usage: :textobject [inside|around] function|class|argument|comment");
+      set_message("Usage: :textobject [inside|around] function|class|argument|comment|statement");
     }
     else
     {

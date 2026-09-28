@@ -105,6 +105,12 @@ namespace
     {
       return names.is_comment(type);
     }
+    if (kind == "statement")
+    {
+      // Statements are named by convention rather than per language, so this
+      // one does not go through the table.
+      return jot_textobjects::is_statement_type(type);
+    }
     return false;
   }
 
