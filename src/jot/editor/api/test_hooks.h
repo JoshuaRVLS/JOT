@@ -401,6 +401,16 @@ public:
   {
     return handle_settings_input(ch);
   }
+  // Feeds a paste through the event dispatch a terminal paste takes, so a test
+  // pins where a pasted block lands (the settings panel's field or the buffer)
+  // without a pty.
+  void paste_event_for_test(const std::string &text)
+  {
+    Event ev{};
+    ev.type = EVENT_PASTE;
+    ev.paste.text = text.c_str();
+    handle_terminal_event(ev);
+  }
   // Terminal panel state for headless tests: the integrated-terminal
   // fields are private EditorState, so tests configure them directly to
   // exercise the panel geometry / resize-drag math without spawning a

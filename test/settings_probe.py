@@ -10,6 +10,11 @@ them, that an enum row shows its cycling chevrons, and that Enter opens the
 choices as a list that applies what the cursor is on -- with the glyphs the
 native layout recorded rather than whatever Lua felt like drawing.
 
+The panel's two text fields are checked the same way a hand would: a bracketed
+paste -- the escape pair every terminal wraps a paste in -- has to land in the
+row being edited (and be saved from there) or in the search bar, and never in
+the buffer behind the panel.
+
 Every scene is its own session (one screen read per run), opening this probe's
 workspace and then :settings from the command palette.
 
@@ -34,6 +39,9 @@ ENTER = b"\r"
 ESC = b"\x1b"
 RIGHT = b"\x1b[C"
 DOWN = b"\x1b[B"
+
+# A bracketed paste, the escape pair a terminal wraps a paste body in.
+PASTE_START, PASTE_END = b"\x1b[200~", b"\x1b[201~"
 
 TOGGLE_ON = "\uf205"   # nf-fa-toggle_on
 TOGGLE_OFF = "\uf204"  # nf-fa-toggle_off
@@ -115,6 +123,7 @@ def main() -> int:
 
     failures: list[str] = []
     raws: dict[str, bytes] = {}
+    cfgs: dict[str, str] = {}
 
     def scene(name: str, extra, tail: float = TAIL) -> str:
         # A fresh config home per scene per run: the panel *writes* settings
@@ -122,6 +131,7 @@ def main() -> int:
         # next run a starting point left over from this one.
         cfg = f"/tmp/jot_settings_probe_cfg_{name}_{os.getpid()}"
         shutil.rmtree(cfg, ignore_errors=True)
+        cfgs[name] = cfg
         screen = settings_run(binary, root, cfg, extra, tail)
         view = screen.text()
         # The escape stream as written: the glyph checks read this, because a
@@ -266,6 +276,41 @@ def main() -> int:
         fail("the drop-down survived Esc")
     if "viewerbackend" not in view:
         fail("Esc closed the whole panel instead of just the list")
+
+    # Scene 11: a paste lands in the row being edited, and is saved from there.
+    # `/` filters to the row, Enter opens its inline editor, the bracketed paste
+    # is the key, and the last Enter applies it (config.save writes the file).
+    pasted = "probe-pasted-key"
+    view = scene("pasted", [(TYPE, b"wakatimeapikey"), (STEP, ENTER),
+                            (TYPE, PASTE_START + pasted.encode() + PASTE_END),
+                            (STEP, ENTER)])
+    print("scene 11: a bracketed paste lands in the row being edited")
+    pasted_row = row_of(view, "WakaTime API key")
+    if not pasted_row:
+        fail("the WakaTime API key row is not on screen after filtering to it")
+    elif pasted not in pasted_row:
+        fail(f"the pasted value is not on the row: {pasted_row!r}")
+    written = os.path.join(cfgs["pasted"], "configs", "settings.conf")
+    saved = open(written).read() if os.path.exists(written) else ""
+    if f"wakatime_api_key={pasted}" not in saved:
+        fail(f"the pasted value was not the one saved: {saved!r}")
+
+    # Scene 12: the same paste with the panel put away leaves the buffer alone.
+    # The query and the value both went to the panel; if either had reached the
+    # buffer behind it, the text would be on screen once the panel is gone.
+    view = scene("kept-out", [(TYPE, b"wakatimeapikey"), (STEP, ENTER),
+                              (TYPE, PASTE_START + pasted.encode() + PASTE_END),
+                              (STEP, ENTER), (STEP, ESC), (STEP, ESC)])
+    print("scene 12: the panel keeps a paste out of the buffer behind it")
+    if pasted in view or "wakatimeapikey" in view:
+        fail("a pasted value reached the buffer behind the panel")
+    # The probe opens the workspace itself, so the surface behind the panel is
+    # the empty scratch buffer: the statusline naming it is what says the read
+    # above was of the buffer rather than of a panel still painting.
+    if "Search" in view:
+        fail("the panel is still up, so the buffer behind it was never read")
+    elif "[No Name]" not in view:
+        fail("the editor's statusline is not on screen after the panel closed")
 
     if failures:
         print()

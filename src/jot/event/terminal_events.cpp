@@ -19,6 +19,13 @@ void Editor::handle_terminal_event(const Event &ev)
       needs_redraw = true;
       return;
     }
+    // A panel with a text field of its own takes the paste first: with
+    // :settings up, the row being edited (or its search bar) is what the user
+    // is typing into, and the buffer behind the panel is not.
+    if (handle_settings_paste(ev.paste.text ? ev.paste.text : ""))
+    {
+      return;
+    }
     cancel_lsp_mouse_hover();
     clipboard = ev.paste.text ? ev.paste.text : "";
     paste_text(clipboard);

@@ -941,6 +941,53 @@ bool Editor::handle_settings_input(int ch)
   return true;
 }
 
+bool Editor::handle_settings_paste(const std::string &text)
+{
+  if (!show_settings_menu)
+  {
+    return false;
+  }
+
+  // The choices drop-down owns the keyboard while it is up, and a choice is
+  // picked rather than typed: the paste is dropped, not put in the row behind
+  // the list.
+  if (settings_dropdown_open)
+  {
+    return true;
+  }
+
+  // One field can take text, and it is whichever one a keystroke would have
+  // gone to: the row being edited, or the search bar.
+  SettingsEntry *cur = settings_selected_entry();
+  const auto append_printable = [&text](std::string &into)
+  {
+    for (const char c : text)
+    {
+      // Control bytes are dropped, the same guard a typed key passes: a copied
+      // API key arrives with the newline its copy carried, and that newline
+      // would otherwise sit inside a value nothing can type a newline into.
+      if ((unsigned char)c >= 32 && (unsigned char)c != 127)
+      {
+        into.push_back(c);
+      }
+    }
+  };
+  if (cur && cur->editing)
+  {
+    append_printable(cur->edit_input);
+  }
+  else
+  {
+    append_printable(settings_query);
+    settings_selected = 0;
+    // Last: the filter rebuilds the entries, so nothing may point into them
+    // past this line.
+    refresh_settings_filter();
+  }
+  needs_redraw = true;
+  return true;
+}
+
 bool Editor::handle_settings_mouse(int x, int y, bool is_click)
 {
   if (!show_settings_menu)

@@ -149,6 +149,47 @@ TEST_CASE("Settings menu edits ints inline with validation", "[jot]")
   REQUIRE(e.config_int_for_test("tab_size") == 8);
 }
 
+TEST_CASE("Settings menu takes a paste into the row being edited", "[jot]")
+{
+  Editor &e = probe_editor();
+  open_menu(e);
+
+  const int idx = entry_index(e, "wakatime_api_key");
+  REQUIRE(idx >= 0);
+  REQUIRE(e.settings_entries_for_test()[(size_t)idx].type == SettingsEntry::Type::String);
+  e.settings_select_for_test(idx);
+  REQUIRE(e.settings_input_for_test('\n'));
+  REQUIRE(e.settings_entries_for_test()[(size_t)idx].editing);
+  const std::vector<std::string> buffer_before = e.buffer_for_test(-1).lines;
+
+  // A key copied out of a WakaTime account arrives with the newline its copy
+  // carried, and that newline must end nothing: the value is what was pasted
+  // without it, since nothing can type a newline into the row either.
+  e.paste_event_for_test("abc-123\n");
+  REQUIRE(e.settings_entries_for_test()[(size_t)idx].edit_input == "abc-123");
+  // The buffer behind the panel is not the field the user is looking at.
+  REQUIRE(e.buffer_for_test(-1).lines == buffer_before);
+
+  REQUIRE(e.settings_input_for_test('\n'));
+  REQUIRE(e.config_value_for_test("wakatime_api_key") == "abc-123");
+  REQUIRE_FALSE(e.settings_entries_for_test()[(size_t)idx].editing);
+}
+
+TEST_CASE("Settings menu keeps a pasted query out of the buffer", "[jot]")
+{
+  Editor &e = probe_editor();
+  open_menu(e);
+  const std::vector<std::string> buffer_before = e.buffer_for_test(-1).lines;
+
+  // No row is being edited, so the paste is the search bar's -- the same field
+  // a typed letter goes to -- and the list narrows to what arrived.
+  e.paste_event_for_test("wakatime_api");
+  REQUIRE(e.settings_query_for_test() == "wakatime_api");
+  REQUIRE(filtered_contains(e, "wakatime_api_key"));
+  REQUIRE_FALSE(filtered_contains(e, "tab_size"));
+  REQUIRE(e.buffer_for_test(-1).lines == buffer_before);
+}
+
 TEST_CASE("Settings menu closes on Esc", "[jot]")
 {
   Editor &e = probe_editor();

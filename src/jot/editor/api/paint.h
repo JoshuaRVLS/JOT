@@ -207,6 +207,11 @@ private:
   void open_settings_dropdown();
   bool handle_settings_dropdown_input(int ch);
   bool handle_settings_input(int ch);
+  // A terminal paste, for the two fields above: the row being edited keeps it,
+  // the search bar takes it when no row is open, and the buffer behind the
+  // panel never sees it. False when the panel is not up, so the paste falls
+  // through to the editor's own paste_text.
+  bool handle_settings_paste(const std::string &text);
   bool handle_settings_mouse(int x, int y, bool is_click);
   void render_buffer_content(const SplitPane &pane, int pane_index, int buffer_id);
   // The regions that share a separator with this pane: the other visible panes
