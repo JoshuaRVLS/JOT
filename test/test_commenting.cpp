@@ -146,3 +146,22 @@ TEST_CASE("Blank lines never grow marker-only rows", "[commenting]")
   toggle(lines, cpp, 0, 2, true);
   REQUIRE(lines == std::vector<std::string>{"//a();", "", "//b();"});
 }
+
+TEST_CASE("A lone blank line still gets a marker", "[commenting]")
+{
+  // Ctrl+/ with no selection on an empty line has no range to comment, so the
+  // "blank lines never grow marker-only rows" rule must not swallow it: that is
+  // the only way to start a comment on an empty line.
+  const commenting::Style cpp = commenting::style_for(".cpp");
+  std::vector<std::string> lines = {""};
+  toggle(lines, cpp, 0, 0, false);
+  REQUIRE(lines == std::vector<std::string>{"//"});
+  toggle(lines, cpp, 0, 0, false);
+  REQUIRE(lines == std::vector<std::string>{""});
+
+  // Indentation is kept, and the marker lands after it like any other line.
+  const commenting::Style py = commenting::style_for(".py");
+  lines = {"    "};
+  toggle(lines, py, 0, 0, false);
+  REQUIRE(lines == std::vector<std::string>{"    #"});
+}

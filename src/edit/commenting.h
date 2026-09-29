@@ -110,6 +110,11 @@ namespace commenting
         && !all_line_commented
         && range_is_block_commented(lines, start_y, end_y, style);
     const bool uncomment = wrapped_in_block || all_line_commented;
+    // A lone blank line still gets its marker: with no range to comment there
+    // is nothing else to stamp, and Ctrl+/ on an empty line is how a comment
+    // gets started there. Blanks inside a multi-line range stay skipped so a
+    // selection never grows marker-only rows.
+    const bool blank_line_counts = start_y == end_y;
 
     for (int i = start_y; i <= end_y; i++)
     {
@@ -221,7 +226,7 @@ namespace commenting
         // Comment the line unless it already carries a marker (a line already
         // commented is left alone); blank lines are skipped so a selection
         // never grows marker-only rows.
-        if (!line_commented && !body.empty())
+        if (!line_commented && (!body.empty() || blank_line_counts))
         {
           lines[i] = indent + std::string(style.prefix) + body;
           if (!style.suffix.empty())
