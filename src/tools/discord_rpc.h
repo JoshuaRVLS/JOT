@@ -55,6 +55,13 @@ public:
   {
     return last_error_;
   }
+  // How the peer last hung up ("failed reading data (code 1003)"), empty when
+  // it never did. Kept across reconnects so a presence that keeps flapping can
+  // still be asked why.
+  const std::string &last_close() const
+  {
+    return last_close_;
+  }
   // An activity is waiting to be (re)sent, e.g. queued before the handshake
   // finished.
   bool has_pending_activity() const
@@ -78,6 +85,7 @@ private:
   std::string app_id_;
   std::string read_buf_;
   std::string last_error_;
+  std::string last_close_;
   std::vector<std::string> probed_;
   jot_discord::Activity pending_;
   bool has_pending_ = false;

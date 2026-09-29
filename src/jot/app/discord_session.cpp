@@ -538,6 +538,12 @@ std::string DiscordController::command(const std::string &argument)
   {
     text += " -- bad exclude pattern: " + pattern_error_;
   }
+  if (!rpc_.last_close().empty())
+  {
+    // Why the previous session ended, which is the question asked when the
+    // presence appears to be dropping connections on its own.
+    text += " -- last close: " + rpc_.last_close();
+  }
   if (!rpc_.probed_endpoints().empty())
   {
     text += " -- endpoints: " + rpc_.probed_endpoints().front();

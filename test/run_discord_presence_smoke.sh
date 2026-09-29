@@ -126,6 +126,28 @@ if [ "$HANDSHAKE_OK" != "yes" ]; then
   exit 1
 fi
 
+# The fake server is as strict as arRPC about frame bodies, so this is where a
+# keepalive Discord tolerates but an emulated server rejects shows up: the
+# client must have sent heartbeats, and none of them may have been unparseable
+# (the server records the ones it had to close over).
+if ! python3 - "$FRAMES" <<'PY'
+import json, sys
+frames = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+bad = [f for f in frames if "error" in f]
+if bad:
+    print(f"discord smoke: FAIL - the fake Discord closed over {len(bad)} frame(s) "
+          f"it could not parse, first: opcode {bad[0]['opcode']} body {bad[0]['body']!r}",
+          file=sys.stderr)
+    sys.exit(1)
+if not any(f["opcode"] == 3 for f in frames):
+    print("discord smoke: FAIL - the session sent no keepalive", file=sys.stderr)
+    sys.exit(1)
+print("discord smoke: PASS - keepalives were sent and every frame parsed")
+PY
+then
+  exit 1
+fi
+
 python3 - "$FRAMES" <<'PY'
 import json, sys
 frames = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]

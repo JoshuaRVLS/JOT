@@ -274,3 +274,65 @@ TEST_CASE("Discord IPC queues an activity until the handshake completes", "[jot]
   unlink(endpoint.c_str());
   fs::remove_all(dir);
 }
+
+TEST_CASE("Discord IPC sends a keepalive the emulated servers can parse", "[jot]")
+{
+  // The bug this pins down: the PING that keeps the session alive went out with
+  // an empty body. Discord's own client ignores it, but the emulated servers
+  // many installs actually talk to (Vesktop and the mods embedding arRPC) run
+  // every frame body through JSON.parse and close with 1003 "failed reading
+  // data" on anything that is not JSON - so the session died right after each
+  // heartbeat and the presence flapped connected -> disconnected forever.
+  char tmpl[] = "/tmp/jot_discord_rpc_XXXXXX";
+  REQUIRE(mkdtemp(tmpl) != nullptr);
+  const std::string dir = tmpl;
+  const std::string endpoint = dir + "/discord-ipc-0";
+  const int listener = make_listener(endpoint);
+  REQUIRE(listener >= 0);
+  ScopedRuntimeDir runtime(dir);
+
+  DiscordRPC rpc;
+  rpc.set_app_id("42");
+
+  const long long now = 200000;
+  rpc.poll(now);
+  const int peer = accept(listener, nullptr, nullptr);
+  REQUIRE(peer >= 0);
+  int opcode = -1;
+  std::string json;
+  REQUIRE(read_frame(peer, opcode, json));
+  REQUIRE(opcode == 0);
+  REQUIRE(send_all(peer,
+                   frame_bytes(1, "{\"evt\":\"READY\",\"data\":{\"heartbeat_interval\":30000}}")));
+  rpc.poll(now + 10);
+  REQUIRE(rpc.is_connected());
+
+  // One interval on, the keepalive goes out, and its body has to be JSON.
+  rpc.poll(now + 30011);
+  REQUIRE(read_frame(peer, opcode, json));
+  REQUIRE(opcode == 3); // PING
+  REQUIRE_FALSE(json.empty());
+  REQUIRE(json.front() == '{');
+  REQUIRE(json.back() == '}');
+
+  // The peer answers, and the session is still up on the next poll.
+  REQUIRE(send_all(peer, frame_bytes(4, "{}")));
+  rpc.poll(now + 30021);
+  REQUIRE(rpc.is_connected());
+
+  // When a peer does hang up, its CLOSE reason is kept: it is the whole
+  // diagnosis, and nothing else in the editor can see it.
+  REQUIRE(send_all(peer, frame_bytes(2, "{\"code\":1003,\"message\":\"failed reading data\"}")));
+  rpc.poll(now + 30030);
+  REQUIRE_FALSE(rpc.is_connected());
+  REQUIRE(rpc.last_close() == "failed reading data (code 1003)");
+
+  // A deliberate disconnect is not a peer failure, so it clears the reason.
+  rpc.disconnect();
+  REQUIRE(rpc.last_close().empty());
+
+  close(peer);
+  close(listener);
+  unlink(endpoint.c_str());
+  fs::remove_all(dir);
+}

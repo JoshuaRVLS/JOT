@@ -6,6 +6,11 @@ src/tools/discord_rpc.cpp: answers the handshake with READY, records every frame
 it receives as JSON lines, and can answer with an error reply (to check that the
 editor surfaces Discord's rejections).
 
+It also parses every frame body as JSON and closes with 1003 the way arRPC does
+(the server Vesktop and the client mods embed), because that strictness is what
+real installs run into: a keepalive Discord itself tolerates gets the socket
+closed there.
+
 Usage: discord_fake_server.py <socket-path> <out.jsonl> [error_reply]
 """
 import json
@@ -38,6 +43,11 @@ def send_frame(conn, opcode, payload):
     conn.sendall(struct.pack("<II", opcode, len(data)) + data)
 
 
+def record(out_path, entry):
+    with open(out_path, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry) + "\n")
+
+
 def main():
     path, out_path = sys.argv[1], sys.argv[2]
     error_reply = sys.argv[3] if len(sys.argv) > 3 else ""
@@ -52,15 +62,23 @@ def main():
         send_frame(conn, 1, json.dumps({
             "cmd": "DISPATCH",
             "evt": "READY",
-            "data": {"v": 1, "heartbeat_interval": 30000},
+            # Short on purpose: the smoke run lasts seconds, so the 30s interval a
+            # real Discord reports would never produce a heartbeat inside it.
+            "data": {"v": 1, "heartbeat_interval": 2000},
         }))
         while True:
             frame = read_frame(conn)
             if frame is None:
                 return
             opcode, body = frame
-            with open(out_path, "a", encoding="utf-8") as handle:
-                handle.write(json.dumps({"opcode": opcode, "body": body}) + "\n")
+            try:
+                json.loads(body)
+            except ValueError:
+                record(out_path, {"opcode": opcode, "body": body, "error": "failed reading data"})
+                send_frame(conn, 2, json.dumps({"code": 1003, "message": "failed reading data"}))
+                conn.close()
+                return
+            record(out_path, {"opcode": opcode, "body": body})
             if opcode == 1 and error_reply and "SET_ACTIVITY" in body:
                 send_frame(conn, 1, json.dumps({
                     "cmd": "SET_ACTIVITY",

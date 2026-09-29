@@ -1199,7 +1199,10 @@ file, language, workspace, git branch and (when the remote is a browsable URL) a
 timeout. On by default; every row is a template (see `discord_details_*` in
 `:settings`). Discord artwork has to be uploaded to your Discord application
 once - `packaging/discord-presence/ASSETS.md` walks through it, and
-`:discord assets` lists exactly which keys the current window needs.
+`:discord assets` lists exactly which keys the current window needs. The
+emulated IPC servers several clients ship (Vesktop and the mods embedding arRPC)
+are stricter than Discord itself about frame bodies, and `:discord status`
+reports the reason the peer gave the last time it hung up.
 
 ## Configuration
 

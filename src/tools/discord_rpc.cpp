@@ -195,6 +195,8 @@ void DiscordRPC::disconnect()
   has_pending_ = false;
   pending_ = jot_discord::Activity{};
   last_error_.clear();
+  // An explicit disconnect is not a peer failure, so it is not kept as one.
+  last_close_.clear();
 }
 
 void DiscordRPC::send_handshake()
@@ -264,7 +266,13 @@ void DiscordRPC::poll(long long now_ms)
     }
     if (now_ms - last_heartbeat_ms_ >= heartbeat_interval_ms_)
     {
-      send_frame(3, ""); // PING
+      // The keepalive body must be parseable JSON, even though Discord's own
+      // client ignores it. The emulated servers several clients ship (Vesktop
+      // and the mods embedding arRPC) run the body through JSON.parse and hang
+      // up with 1003 "failed reading data" on anything else, so an empty PING
+      // tore the session down right after every heartbeat and the presence
+      // flapped connected -> disconnected forever.
+      send_frame(3, "{}"); // PING
       last_heartbeat_ms_ = now_ms;
     }
     break;
@@ -404,8 +412,24 @@ void DiscordRPC::handle_frame(int opcode, const std::string &json)
     break;
   }
   case 2: // CLOSE
+  {
+    // Keep the peer's own reason for hanging up: "failed reading data" names
+    // the fault, and it is the only thing that turns a presence that keeps
+    // dropping into something reportable by :discord status.
+    const std::string message = json_string_field(json, "message");
+    long long code = 0;
+    if (json_int_field(json, "code", code))
+    {
+      last_close_ = message.empty() ? "code " + std::to_string(code)
+                                    : message + " (code " + std::to_string(code) + ")";
+    }
+    else
+    {
+      last_close_ = message;
+    }
     close_connection();
     break;
+  }
   case 4: // PONG
     break;
   default:
