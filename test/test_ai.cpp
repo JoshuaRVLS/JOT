@@ -10,6 +10,7 @@
 // on a real screen - is test/ai_probe.py's job.
 #include <catch2/catch_test_macros.hpp>
 #include <cstdlib>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -638,4 +639,29 @@ TEST_CASE("AI inline runs the request it was asked for", "[ai][lua]")
   // And a missing prompt is a question, not a request.
   REQUIRE(state.run("return tostring(ai.inline.run(''))") == "false");
   REQUIRE(has(state.run("return ai.rec.messages[#ai.rec.messages]"), "what should the code become"));
+}
+
+TEST_CASE("Bundled AI runtime is not loaded while disabled", "[ai]")
+{
+  // The assistant ships disabled for now. api_bindings.cpp holds the only call
+  // to load_ai_runtime, and uncommenting it is what brings the feature back, so
+  // this pins the disable against an accidental re-enable and fails at the
+  // moment someone does restore it (retire this case with that commit).
+  std::ifstream in(std::string(JOT_SOURCE_DIR) + "/src/jot/lua/api_bindings.cpp");
+  REQUIRE(in.good());
+  std::string line;
+  bool loaded = false;
+  while (std::getline(in, line))
+  {
+    const size_t first = line.find_first_not_of(" \t");
+    if (first == std::string::npos || line.compare(first, 2, "//") == 0)
+    {
+      continue;
+    }
+    if (line.find("load_ai_runtime(L);") != std::string::npos)
+    {
+      loaded = true;
+    }
+  }
+  REQUIRE_FALSE(loaded);
 }

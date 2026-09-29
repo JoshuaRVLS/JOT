@@ -173,6 +173,29 @@ def inline_session(binary: str, root: str, cfg: str, path: str, accept: bool, du
                       rows=ROWS, cfg=cfg, cwd=root, phases=phases)
 
 
+def ai_runtime_enabled(binary: str) -> bool:
+    """True when the bundled AI runtime is loaded and its chat command answers.
+
+    api_bindings.cpp can skip load_ai_runtime, which ships the assistant
+    disabled; opening the chat is the one thing only a loaded runtime can do,
+    so it is what decides whether this probe has anything to test. The chat
+    command and its buffer title come from features/ai/init.lua and chat.lua.
+    """
+    root = "/tmp/jot_ai_probe_detect"
+    cfg = "/tmp/jot_ai_probe_cfg_detect"
+    shutil.rmtree(root, ignore_errors=True)
+    shutil.rmtree(cfg, ignore_errors=True)
+    os.makedirs(root)
+    path = os.path.join(root, "a.cpp")
+    with open(path, "w") as fh:
+        fh.write("int a = 1;\n")
+    screen = run_in_pty(binary, [path], b"", settle=3.0, after=0.6, cols=COLS,
+                        rows=ROWS, cfg=cfg, cwd=root,
+                        phases=[(0.6, PALETTE), (0.8, b"CodeCompanionChat"),
+                                (0.6, ENTER), (0.6, b"")])
+    return "# Chat" in screen.text()
+
+
 def main() -> int:
     binary = sys.argv[1] if len(sys.argv) > 1 else "build/apps/jot/jot"
     dump = "--dump" in sys.argv
@@ -181,6 +204,10 @@ def main() -> int:
         return 2
     if shutil.which("curl") is None:
         print("ai probe: SKIP - curl is not on PATH")
+        return 2
+    if not ai_runtime_enabled(binary):
+        print("ai probe: SKIP - the bundled AI runtime is disabled "
+              "(api_bindings.cpp skips load_ai_runtime)")
         return 2
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)

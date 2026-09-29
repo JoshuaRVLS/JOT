@@ -35,9 +35,7 @@ void Editor::show_command_help(const std::string &topic_text)
                 ":gitunstageall :gitcommit <message> :gitlog :gitblame "
                 ":gitrefresh :theme <name>"
                 ":gitdiffclose"
-                ":gitdiffrefresh"
-                ":Cc [text] :CodeCompanionChat :CodeCompanionSend "
-                ":CodeCompanionActions :CodeCompanionStatus");
+                ":gitdiffrefresh");
     return;
   }
 
@@ -125,7 +123,6 @@ void Editor::show_command_help(const std::string &topic_text)
       "  Alt+O              Sort selected lines",
       "  Alt+Up / Alt+Down  Move line up/down",
       "  Alt+I / Alt+A      Smart line start / line end",
-      "  Alt+Shift+A then  C/N/S/X chat, I rewrite, A prompts",
       "  Alt+Shift+T        Floating terminal (Esc hides it)",
       "  Alt+G / Alt+Shift+G File start / file end",
       "",

@@ -729,11 +729,11 @@ bool LuaAPI::init()
   // keymaps so its Tab handling shadows the built-in fallback only while a
   // snippet is active.
   load_snippet_runtime(L);
-  // AI assistant (:CodeCompanionChat, :CodeCompanion and friends,
-  // features/ai/*.lua): a CodeCompanion-style chat buffer, inline rewrites and
-  // the provider adapters (OpenAI-compatible HTTP, Anthropic, a CLI on PATH).
-  // Loaded after snippets so a reply's code fences can seed a snippet session.
-  load_ai_runtime(L);
+  // AI assistant (features/ai/*.lua) is disabled for now: skipping
+  // load_ai_runtime leaves no :CodeCompanion* commands and no Alt+Shift+A
+  // keymap family registered. The module tree and the loader stay in place, so
+  // re-enabling is this one call.
+  // load_ai_runtime(L);
   // Self-update (:update + silent startup check, features/update.lua). Loaded
   // last so user config can tune update.* settings before the module boots.
   jot_lua::load_bundled_lua_file(L, "features/update.lua", "Update");
