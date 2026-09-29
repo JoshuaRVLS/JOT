@@ -356,6 +356,74 @@ namespace jot_wakatime
     return today.empty() ? fallback : today;
   }
 
+  namespace
+  {
+    // How long the install's fetch may take. Generous for a few megabytes on a
+    // slow link, and bounded so the worker queue behind it -- the git status and
+    // the LSP scans -- is never held for as long as curl would like to wait.
+    constexpr int kInstallTimeoutSeconds = 300;
+    // The mode the installed binary is given: the zip already carries one, but
+    // an archive written on Windows can lose it.
+    constexpr const char *kInstallMode = "755";
+
+    // $WAKATIME_HOME, else the home directory: the two variables the cli itself
+    // reads, so JOT's idea of the WakaTime home is the cli's own.
+    std::string home_dir()
+    {
+      if (const char *wakatime_home = std::getenv("WAKATIME_HOME"); wakatime_home && *wakatime_home)
+      {
+        return wakatime_home;
+      }
+      if (const char *env_home = std::getenv("HOME"); env_home && *env_home)
+      {
+        return env_home;
+      }
+#ifdef _WIN32
+      if (const char *profile = std::getenv("USERPROFILE"); profile && *profile)
+      {
+        return profile;
+      }
+#endif
+      return "";
+    }
+
+    // The release's architecture slug for whatever the machine calls itself:
+    // `uname -m` prints x86_64 and aarch64, %PROCESSOR_ARCHITECTURE% holds AMD64
+    // and ARM64, and mac prints arm64. Either case, and empty for an
+    // architecture the project does not ship.
+    std::string arch_slug(const std::string &machine)
+    {
+      std::string lower;
+      lower.reserve(machine.size());
+      for (char c : machine)
+      {
+        lower.push_back(c >= 'A' && c <= 'Z' ? (char)(c + ('a' - 'A')) : c);
+      }
+      if (lower == "x86_64" || lower == "amd64" || lower == "x64")
+      {
+        return "amd64";
+      }
+      if (lower == "aarch64" || lower == "arm64")
+      {
+        return "arm64";
+      }
+      if (lower == "i386" || lower == "i486" || lower == "i586" || lower == "i686" || lower == "x86"
+          || lower == "ia32")
+      {
+        return "386";
+      }
+      if (lower == "arm" || lower == "armv6l" || lower == "armv7l")
+      {
+        return "arm";
+      }
+      if (lower == "riscv64")
+      {
+        return "riscv64";
+      }
+      return "";
+    }
+  } // namespace
+
   std::string cfg_api_key(const std::string &cfg_text)
   {
     bool in_settings = false;
@@ -393,25 +461,122 @@ namespace jot_wakatime
 
   std::string cfg_path()
   {
-    std::string home;
-    if (const char *wakatime_home = std::getenv("WAKATIME_HOME"); wakatime_home && *wakatime_home)
-    {
-      home = wakatime_home;
-    }
-    else if (const char *env_home = std::getenv("HOME"); env_home && *env_home)
-    {
-      home = env_home;
-    }
-#ifdef _WIN32
-    else if (const char *profile = std::getenv("USERPROFILE"); profile && *profile)
-    {
-      home = profile;
-    }
-#endif
+    const std::string home = home_dir();
     if (home.empty())
     {
       return "";
     }
     return (std::filesystem::path(home) / ".wakatime.cfg").string();
+  }
+
+  // -----------------------------------------------------------------------------
+  // Installing the cli
+  // -----------------------------------------------------------------------------
+
+  std::string asset_name(const std::string &platform, const std::string &machine)
+  {
+    std::string os;
+    if (platform == "linux")
+    {
+      os = "linux";
+    }
+    else if (platform == "mac" || platform == "darwin")
+    {
+      os = "darwin";
+    }
+    else if (platform == "win" || platform == "windows")
+    {
+      os = "windows";
+    }
+    const std::string arch = arch_slug(machine);
+    if (os.empty() || arch.empty())
+    {
+      return "";
+    }
+    return "wakatime-cli-" + os + "-" + arch + ".zip";
+  }
+
+  std::string asset_binary(const std::string &asset, const std::string &platform)
+  {
+    constexpr const char *kSuffix = ".zip";
+    constexpr size_t kSuffixLength = 4;
+    if (asset.size() <= kSuffixLength
+        || asset.compare(asset.size() - kSuffixLength, kSuffixLength, kSuffix) != 0)
+    {
+      return "";
+    }
+    return asset.substr(0, asset.size() - kSuffixLength)
+           + ((platform == "win" || platform == "windows") ? ".exe" : "");
+  }
+
+  std::string cli_name(const std::string &platform)
+  {
+    return (platform == "win" || platform == "windows") ? "wakatime-cli.exe" : "wakatime-cli";
+  }
+
+  std::string install_dir()
+  {
+    const std::string home = home_dir();
+    if (home.empty())
+    {
+      return "";
+    }
+    return (std::filesystem::path(home) / ".wakatime").string();
+  }
+
+  std::string managed_cli_path(const std::string &platform)
+  {
+    const std::string dir = install_dir();
+    if (dir.empty())
+    {
+      return "";
+    }
+    return (std::filesystem::path(dir) / cli_name(platform)).string();
+  }
+
+  std::string release_url(const std::string &asset)
+  {
+    if (asset.empty())
+    {
+      return "";
+    }
+    return "https://github.com/wakatime/wakatime-cli/releases/latest/download/" + asset;
+  }
+
+  std::string
+  install_script(const std::string &platform, const std::string &dir, const std::string &asset)
+  {
+    const std::string binary = asset_binary(asset, platform);
+    const std::string url = release_url(asset);
+    if (binary.empty() || url.empty() || dir.empty())
+    {
+      return "";
+    }
+    const bool windows = platform == "win" || platform == "windows";
+    const std::string separator = windows ? "\\" : "/";
+    const std::string archive = dir + separator + "wakatime-cli.zip";
+    const std::string unpacked = dir + separator + binary;
+    const std::string installed = dir + separator + cli_name(platform);
+    const std::string quoted_dir = shell_util::shell_quote(dir);
+    const std::string quoted_archive = shell_util::shell_quote(archive);
+    const std::string quoted_url = shell_util::shell_quote(url);
+    if (windows)
+    {
+      // Windows' own curl.exe and tar.exe, the same two the LSP installers use
+      // there: no unzip and no chmod, neither of which exists to call.
+      return "mkdir " + quoted_dir + " 2>NUL & curl -fsSL --max-time "
+             + std::to_string(kInstallTimeoutSeconds) + " -o " + quoted_archive + " " + quoted_url
+             + " && tar -xf " + quoted_archive + " -C " + quoted_dir + " && move /Y "
+             + shell_util::shell_quote(unpacked) + " " + shell_util::shell_quote(installed)
+             + " && del " + quoted_archive;
+    }
+    // tar is the fallback for a machine without unzip: the zip is also a valid
+    // archive to every tar that is not GNU's.
+    return "mkdir -p " + quoted_dir + " && curl -fsSL --max-time "
+           + std::to_string(kInstallTimeoutSeconds) + " -o " + quoted_archive + " " + quoted_url
+           + " && (cd " + quoted_dir + " && (unzip -oq " + quoted_archive + " || tar -xf "
+           + quoted_archive + ")) && mv " + shell_util::shell_quote(unpacked) + " "
+           + shell_util::shell_quote(installed) + " && chmod " + kInstallMode + " "
+           + shell_util::shell_quote(installed) + " && rm -f " + quoted_archive;
   }
 } // namespace jot_wakatime

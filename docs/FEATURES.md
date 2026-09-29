@@ -804,9 +804,18 @@ the workspace in front of you, from one of two places:
   `--lineno`, `--cursorpos`, `--lines-in-file`, `--write` on a save). It is also
   the cli that reads `~/.wakatime.cfg`, so a machine already set up for WakaTime
   needs nothing here; `wakatime_api_key` and `wakatime_api_url` override what it
-  finds, for a self-hosted or WakaTime-compatible server. The cli itself is
-  never downloaded: if it is not on `PATH`, or no key is configured anywhere,
-  the editor says so once instead of tracking nothing quietly.
+  finds, for a self-hosted or WakaTime-compatible server. The cli is installed
+  rather than assumed: the first enable with no `wakatime-cli` on `PATH` fetches
+  the release build for this machine (linux/darwin/windows, amd64/arm64/386/arm/
+  riscv64) and unpacks it into `~/.wakatime/` (`$WAKATIME_HOME` when set) as
+  plain `wakatime-cli`, the name every other WakaTime plugin looks for, so a
+  copy on `PATH` is left alone and runs after an install go to the editor's own.
+  That download is the one thing turning the integration on does behind the
+  user's back, which is why the setting is off by default; it is bounded, it
+  happens off the keystroke path, and what came of it is on the message line. A
+  machine that cannot reach the release - offline, or an architecture with no
+  build - is told so once and keeps using the local store; a later settings
+  apply tries again.
 - **The local store** (always on) is what keeps the chip worth showing with the
   integration off. Totals are kept per workspace and day under
   `configs/coding_time.tsv`, so reopening the editor later today continues

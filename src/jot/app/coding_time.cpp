@@ -19,6 +19,7 @@
 #include "features/status_clock.h"
 #include "features/wakatime.h"
 #include "tools/shell_util.h"
+#include "tools/string_util.h"
 
 #include <chrono>
 #include <cstdio>
@@ -26,6 +27,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <string_view>
 #include <system_error>
 #include <utility>
 
@@ -93,6 +95,71 @@ namespace
                std::chrono::system_clock::now().time_since_epoch())
         .count();
   }
+
+  // What the one-time cli check found, which nowadays includes the install that
+  // check now does: whether tracking can start, which binary the runs go to, and
+  // whether a failure is worth another look on the next config apply.
+  struct CliProbe
+  {
+    std::string report;     // what to tell the user; empty when tracking can start
+    std::string cli_path;   // the managed copy, empty when PATH has a cli already
+    bool installed = false; // this check put the binary there
+    bool retry = false;     // an install that failed, so a later apply tries again
+  };
+
+  // The editor's own copy of the cli, without asking PATH: the binary an earlier
+  // run installed. Empty when there is nothing there to run.
+  std::string managed_cli()
+  {
+    const std::string path = jot_wakatime::managed_cli_path(shell_util::install_platform());
+    if (path.empty())
+    {
+      return "";
+    }
+    std::error_code error;
+    if (!std::filesystem::exists(path, error) || error)
+    {
+      return "";
+    }
+    return path;
+  }
+
+  // Runs an install for its verdict: every step of the script is chained, so the
+  // exit status is whether the binary landed. stderr is folded into the stream
+  // read here rather than left on the terminal (curl's progress and complaints
+  // would paint over the UI), and its last line is what a failure can report.
+  bool run_install(const std::string &script, std::string &detail)
+  {
+    FILE *pipe = shell_util::open_command_pipe(script + " 2>&1", "r");
+    if (!pipe)
+    {
+      return false;
+    }
+    std::string output;
+    char chunk[4096];
+    size_t read = 0;
+    while ((read = fread(chunk, 1, sizeof(chunk), pipe)) > 0)
+    {
+      output.append(chunk, read);
+    }
+    const bool ok = shell_util::command_exit_code(shell_util::close_command_pipe(pipe)) == 0;
+
+    std::string last;
+    for (std::string_view line : string_util::lines(output))
+    {
+      const std::string_view trimmed = string_util::trim_view(line);
+      if (!trimmed.empty())
+      {
+        last = std::string(trimmed);
+      }
+    }
+    if (last.size() > 80)
+    {
+      last.resize(80);
+    }
+    detail = ok ? std::string() : last;
+    return ok;
+  }
 } // namespace
 
 void Editor::note_editing_activity(bool is_write)
@@ -119,7 +186,11 @@ jot_wakatime::Options Editor::wakatime_options()
 
 std::string Editor::wakatime_command(const std::vector<std::string> &args) const
 {
-  return "wakatime-cli " + jot_wakatime::join_args(args);
+  // A managed copy is an absolute path, so it is quoted whole: the shell has to
+  // see a home directory with a space in it as one word.
+  const std::string binary =
+      wakatime_cli_path.empty() ? "wakatime-cli" : shell_util::shell_quote(wakatime_cli_path);
+  return binary + " " + jot_wakatime::join_args(args);
 }
 
 void Editor::sync_wakatime()
@@ -139,6 +210,7 @@ void Editor::sync_wakatime()
     wakatime_probed = false;
     wakatime_probe_key.clear();
     wakatime_cli_ready = false;
+    wakatime_cli_path.clear();
     needs_redraw = true;
   }
   if (!wakatime_enabled || !task_queue_)
@@ -146,9 +218,9 @@ void Editor::sync_wakatime()
     return;
   }
 
-  // The check is a PATH lookup and a config read, so it runs on the worker
-  // queue, once -- and again if the key setting changes, so a key typed into
-  // :settings starts tracking without a restart.
+  // The check is a PATH lookup, a filesystem lookup, a download and a config
+  // read, so it runs on the worker queue, once -- and again if the key setting
+  // changes, so a key typed into :settings starts tracking without a restart.
   const std::string configured_key = config.get("wakatime_api_key", "");
   if (wakatime_probed && wakatime_probe_key == configured_key)
   {
@@ -157,36 +229,86 @@ void Editor::sync_wakatime()
   wakatime_probed = true;
   wakatime_probe_key = configured_key;
 
-  task_queue_->submit_val<std::string>(
-      [configured_key]() -> std::string
+  task_queue_->submit_val<CliProbe>(
+      [configured_key]() -> CliProbe
       {
+        CliProbe probe;
         if (!shell_util::command_exists("wakatime-cli"))
         {
-          return "WakaTime: wakatime-cli not found on PATH";
+          // PATH has none, so the editor's own copy is next. One installed on an
+          // earlier run is used as it is: re-downloading the cli on every start
+          // would make an editor's startup depend on the network.
+          probe.cli_path = managed_cli();
+          if (probe.cli_path.empty())
+          {
+            const std::string platform = shell_util::install_platform();
+            const std::string asset =
+                jot_wakatime::asset_name(platform, shell_util::machine_arch());
+            const std::string dir = jot_wakatime::install_dir();
+            const std::string script = asset.empty() || dir.empty()
+                                           ? std::string()
+                                           : jot_wakatime::install_script(platform, dir, asset);
+            if (script.empty())
+            {
+              probe.report = "WakaTime: no wakatime-cli build for this machine";
+            }
+            else
+            {
+              // Turning the integration on is what asks for this: it is nothing
+              // without the cli, and telling the user to fetch a binary this
+              // editor then shells out to would be a worse neighbour than
+              // fetching it once, into the WakaTime home every plugin shares.
+              std::string detail;
+              const bool ok = run_install(script, detail);
+              probe.cli_path = ok ? managed_cli() : std::string();
+              probe.installed = !probe.cli_path.empty();
+              if (probe.cli_path.empty())
+              {
+                probe.report = "WakaTime: could not install wakatime-cli";
+                if (!detail.empty())
+                {
+                  probe.report += " (" + detail + ")";
+                }
+                probe.retry = true;
+              }
+            }
+          }
+        }
+        if (!probe.report.empty())
+        {
+          return probe; // no cli behind it, so the key behind that is moot
         }
         // No key here is fine as long as the cli has one of its own: that is
         // the whole point of driving it, so an existing WakaTime setup keeps
         // working with no JOT setting at all.
-        if (!configured_key.empty())
+        if (configured_key.empty()
+            && jot_wakatime::cfg_api_key(read_file_text(jot_wakatime::cfg_path())).empty())
         {
-          return "";
+          probe.report = "WakaTime: no API key (set wakatime_api_key)";
         }
-        if (jot_wakatime::cfg_api_key(read_file_text(jot_wakatime::cfg_path())).empty())
-        {
-          return "WakaTime: no API key (set wakatime_api_key)";
-        }
-        return "";
+        return probe;
       },
-      [this](std::string report)
+      [this](CliProbe probe)
       {
         if (!running)
         {
           return;
         }
-        wakatime_cli_ready = report.empty();
-        if (!report.empty())
+        wakatime_cli_path = probe.cli_path;
+        wakatime_cli_ready = probe.report.empty();
+        // A failed install is a network away from working, so the next config
+        // apply asks again rather than waiting for a restart.
+        if (probe.retry)
         {
-          set_message(report, true);
+          wakatime_probed = false;
+        }
+        if (probe.installed)
+        {
+          set_message("WakaTime: installed wakatime-cli", true);
+        }
+        if (!probe.report.empty())
+        {
+          set_message(probe.report, true);
         }
         needs_redraw = true;
       });

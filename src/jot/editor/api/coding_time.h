@@ -10,9 +10,10 @@
 // :settings is where WakaTime is turned on; the local store runs either way,
 // because it is what the chip falls back to.
 //
-// The cli is never downloaded. A missing one is reported on the message line,
-// because an editor that silently installs a binary behind the user's back is a
-// worse neighbour than one that says what is missing.
+// The cli behind all of it is installed on the first enable when PATH has none
+// (features/wakatime.h writes the script, the install runs off the keystroke
+// path, and the message line says what came of it), and every run after that
+// goes to the same managed copy until the user deletes it.
 //
 // This file is jot/app/coding_time.cpp -- the two sources share the ticks the
 // editor hands out (a keypress, a save, a file switch, and the frame loop's
@@ -28,13 +29,15 @@ void note_editing_activity(bool is_write);
 // mirrored, so a key typed into :settings takes effect on the next heartbeat.
 jot_wakatime::Options wakatime_options();
 
-// `wakatime-cli <args>`, values already quoted by the pure half.
+// `wakatime-cli <args>`, values already quoted by the pure half, run from
+// wherever the check above found the binary: PATH, or the managed copy.
 std::string wakatime_command(const std::vector<std::string> &args) const;
 
 // Applies the `wakatime` setting: called from apply_config_live (which runs
 // before the worker queue exists) and again from run() (after it), so the
-// one-time cli/api-key check and the first total can wait for the queue they
-// need. Idempotent, and a re-enable probes again.
+// one-time cli check -- which installs the cli when PATH has none -- and the
+// api-key check can wait for the queue they need. Idempotent, and a re-enable
+// probes again.
 void sync_wakatime();
 
 // One heartbeat, when the plugin spec's rule says the event deserves one.

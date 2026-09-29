@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Probe: the WakaTime integration, against a stub wakatime-cli on PATH.
+"""Probe: the WakaTime integration, against stub wakatime-cli, curl and unzip.
 
 The integration's whole contract is with wakatime-cli: the editor spawns it and
 reads what it prints. So the probe puts a stub `wakatime-cli` first on PATH that
@@ -8,17 +8,31 @@ payload. What the editor actually asked for is then read back from the file the
 stub wrote -- the production path (the worker queue, the shell, the plugin spec's
 rule), not a seam.
 
+The editor installs that cli when PATH has none, and the install is a curl and an
+unpack: the probe stubs those too, as two more PATH entries that write down what
+they were handed. The stub unzip unpacks the file the stub curl "downloaded"
+using the release's real layout (one binary named after the asset, .exe on
+Windows), so a wrong asset or a wrong inner name in the editor fails here rather
+than on a user's machine.
+
 Scenes:
 
-  * an edit and a save put two heartbeats in the record: the first without
-    `--write`, the second with it and on the absolute path of the file in the
-    buffer. The spec's rule is what keeps it at two and not one per keystroke;
+  * an edit and a save put two heartbeats in the record, from the cli on PATH --
+    the first without `--write`, the second with it and on the absolute path of
+    the file in the buffer. The spec's rule is what keeps it at two and not one
+    per keystroke -- and nothing is downloaded, because PATH already had one;
   * the record holds a `--today --output json` run, and the bar shows the total
     the stub answered with -- so the fetch, the parse and the chip are one
     chain, on a real screen;
-  * with `wakatime=false` nothing is spawned at all and the chip falls back to
-    the local total (features/coding_time.h);
-  * with no cli on PATH the editor says so instead of tracking nothing quietly.
+  * with no cli on PATH the install runs against the stub curl/unzip: this
+    machine's release asset is fetched and unpacked into
+    $WAKATIME_HOME/.wakatime/wakatime-cli, and every run after that comes from
+    that absolute path;
+  * a copy already in the WakaTime home is used as it is, with no second
+    download;
+  * an install that cannot download is reported once and leaves the chip on the
+    local total, with nothing spawned;
+  * with `wakatime=false` nothing is spawned and nothing is installed.
 
 Usage: test/wakatime_probe.py [path-to-jot] [--dump]
 Exit codes: 0 pass, 1 fail, 2 skipped (no binary).
@@ -26,6 +40,7 @@ Exit codes: 0 pass, 1 fail, 2 skipped (no binary).
 from __future__ import annotations
 
 import os
+import platform
 import re
 import shutil
 import stat
@@ -36,7 +51,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pty_screen import run_in_pty  # noqa: E402
 
 ROOT = "/tmp/jot_wakatime_probe"
+# Three PATH entries, one per scene shape: a cli to run, curl and unzip to
+# install with but no cli, and a curl that cannot download.
 BIN = "/tmp/jot_wakatime_probe_bin"
+INSTALL_BIN = "/tmp/jot_wakatime_probe_install_bin"
+FAIL_BIN = "/tmp/jot_wakatime_probe_fail_bin"
+# $WAKATIME_HOME, the directory the installed copy is looked for in and where the
+# cli would keep its own config.
+HOME = "/tmp/jot_wakatime_probe_home"
+# The cli source the stub unzip drops as the "unpacked" binary, kept outside every
+# PATH entry so nothing finds it before it is installed.
+CLI_STUB = "/tmp/jot_wakatime_probe_cli_stub"
 # A plain text file on purpose: no language server and no formatter-on-save, so
 # the bar has room for the chip and the scene is about the heartbeat rather than
 # about clangd's own tray of chips.
@@ -49,10 +74,12 @@ TODAY_TEXT = "1 hr 30 mins"
 CLOCK_GLYPH = "\U000F0150"
 TIMER_GLYPH = "\U000F051B"
 
-# The stub: one line per invocation with the argv it was given, and the payload
-# vscode-wakatime reads for today (`text` at the top level).
-STUB = """#!/bin/sh
-printf '%s\\n' "$*" >> "$JOT_WAKATIME_RECORD"
+# The stub: one line per invocation, the name it was run under and the argv it
+# was given, and the payload vscode-wakatime reads for today (`text` at the top
+# level). The name comes first because the installed copy is run by absolute
+# path: which binary answered is what tells an install from a PATH lookup.
+STUB_CLI = """#!/bin/sh
+printf '%s|%s\\n' "$0" "$*" >> "$JOT_WAKATIME_RECORD"
 for arg in "$@"; do
   if [ "$arg" = "--today" ]; then
     printf '%s\\n' '{"has_team_features":false,"text":"1 hr 30 mins","total_seconds":5400}'
@@ -62,18 +89,89 @@ done
 exit 0
 """
 
+# The download: it records what it was asked for, and where it was told to write
+# the archive it puts the URL, which is all the stub unzip needs to know the
+# asset's name.
+STUB_CURL = """#!/bin/sh
+printf 'curl|%s\\n' "$*" >> "$JOT_WAKATIME_RECORD"
+out=""; url=""; prev=""
+for arg in "$@"; do
+  [ "$prev" = "-o" ] && out="$arg"
+  case "$arg" in http*) url="$arg" ;; esac
+  prev="$arg"
+done
+[ -n "$out" ] && printf '%s\\n' "$url" > "$out"
+exit 0
+"""
+
+# A download that fails, for the scene where the machine is offline. Recorded the
+# same way, so the probe can tell an attempt from a silent skip.
+STUB_CURL_FAIL = """#!/bin/sh
+printf 'curl|%s\\n' "$*" >> "$JOT_WAKATIME_RECORD"
+exit 22
+"""
+
+# The unpack, using the release's real layout: the archive holds exactly one
+# binary named after the asset, without the .zip and with .exe on Windows.
+STUB_UNZIP = """#!/bin/sh
+printf 'unzip|%s\\n' "$*" >> "$JOT_WAKATIME_RECORD"
+dir=""; archive=""; prev=""
+for arg in "$@"; do
+  [ "$prev" = "-d" ] && dir="$arg"
+  case "$arg" in *.zip) archive="$arg" ;; esac
+  prev="$arg"
+done
+[ -z "$dir" ] && dir="."
+name=$(basename "$(cat "$archive" 2>/dev/null)")
+name=${name%.zip}
+case "$name" in *windows*) name="$name.exe" ;; esac
+[ -z "$name" ] && exit 1
+cp "$JOT_WAKATIME_CLI_STUB" "$dir/$name" && chmod +x "$dir/$name"
+"""
+
+
+def host_asset() -> str:
+    """The release asset this machine needs, by the same naming the editor uses."""
+    os_name = {"Linux": "linux", "Darwin": "darwin", "Windows": "windows"}.get(
+        platform.system(), "")
+    arch = {
+        "x86_64": "amd64", "amd64": "amd64", "AMD64": "amd64",
+        "aarch64": "arm64", "arm64": "arm64", "ARM64": "arm64",
+        "i686": "386", "x86": "386",
+        "armv7l": "arm", "arm": "arm", "riscv64": "riscv64",
+    }.get(platform.machine(), "")
+    if not os_name or not arch:
+        return ""
+    return f"wakatime-cli-{os_name}-{arch}.zip"
+
+
+def write_stub(path: str, body: str) -> None:
+    with open(path, "w") as fh:
+        fh.write(body)
+    os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
 
 def write_workspace() -> None:
-    shutil.rmtree(ROOT, ignore_errors=True)
-    shutil.rmtree(BIN, ignore_errors=True)
-    os.makedirs(ROOT, exist_ok=True)
-    os.makedirs(BIN, exist_ok=True)
+    for directory in (ROOT, BIN, INSTALL_BIN, FAIL_BIN):
+        shutil.rmtree(directory, ignore_errors=True)
+        os.makedirs(directory)
     with open(os.path.join(ROOT, FILE), "w") as fh:
         fh.write(FILE_BODY)
-    stub = os.path.join(BIN, "wakatime-cli")
-    with open(stub, "w") as fh:
-        fh.write(STUB)
-    os.chmod(stub, os.stat(stub).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    write_stub(CLI_STUB, STUB_CLI)
+    write_stub(os.path.join(BIN, "wakatime-cli"), STUB_CLI)
+    for directory, curl in ((BIN, STUB_CURL), (INSTALL_BIN, STUB_CURL), (FAIL_BIN, STUB_CURL_FAIL)):
+        write_stub(os.path.join(directory, "curl"), curl)
+        write_stub(os.path.join(directory, "unzip"), STUB_UNZIP)
+
+
+def installed_cli(home: str) -> str:
+    return os.path.join(home, ".wakatime", "wakatime-cli")
+
+
+def preinstall(home: str) -> None:
+    """A managed copy from an earlier run: the stub, where the editor looks."""
+    os.makedirs(os.path.dirname(installed_cli(home)), exist_ok=True)
+    write_stub(installed_cli(home), STUB_CLI)
 
 
 def write_settings(cfg: str, lines: list[str]) -> None:
@@ -83,8 +181,8 @@ def write_settings(cfg: str, lines: list[str]) -> None:
             fh.write(line + "\n")
 
 
-def recorded(record: str, want: int, timeout: float = 2.0):
-    """The stub's argv lines, once there are at least `want` of them."""
+def recorded(record: str, want: int, timeout: float = 2.0) -> list[str]:
+    """The stubs' recorded lines, once there are at least `want` of them."""
     deadline = time.time() + timeout
     lines: list[str] = []
     while True:
@@ -97,12 +195,14 @@ def recorded(record: str, want: int, timeout: float = 2.0):
         time.sleep(0.05)
 
 
-def run(binary: str, cfg: str, record: str, keys: bytes = b"", phases=None,
-        env_path: str = None, settle: float = 2.5, after: float = 0.5,
-        until_timeout: float = 8.0, sink: list = None):
+def run(binary: str, cfg: str, record: str, home: str, keys: bytes = b"",
+        path: str = BIN + ":/usr/bin:/bin", phases=None, settle: float = 2.5,
+        after: float = 0.5, until_timeout: float = 10.0, sink: list = None):
     env = {
-        "PATH": env_path if env_path is not None else BIN + ":/usr/bin:/bin",
+        "PATH": path,
         "JOT_WAKATIME_RECORD": record,
+        "WAKATIME_HOME": home,
+        "JOT_WAKATIME_CLI_STUB": CLI_STUB,
     }
     # `sink` collects every byte the child wrote. A toast is painted once and
     # fades, so the report can be gone from the final screen while its text is
@@ -118,12 +218,29 @@ def run(binary: str, cfg: str, record: str, keys: bytes = b"", phases=None,
                       phases=phases, until_timeout=until_timeout, on_output=on_output)
 
 
-def today_runs(lines) -> list[str]:
-    return [line for line in lines if "--today" in line]
+def curl_runs(lines) -> list[str]:
+    return [line for line in lines if line.startswith("curl|")]
+
+
+def unzip_runs(lines) -> list[str]:
+    return [line for line in lines if line.startswith("unzip|")]
+
+
+def cli_runs(lines) -> list[str]:
+    """The lines a wakatime-cli wrote, which is every line that is not a stub."""
+    return [line for line in lines if not line.startswith(("curl|", "unzip|"))]
 
 
 def heartbeat_runs(lines) -> list[str]:
-    return [line for line in lines if "--entity" in line]
+    return [line for line in cli_runs(lines) if "--entity" in line]
+
+
+def today_runs(lines) -> list[str]:
+    return [line for line in cli_runs(lines) if "--today" in line]
+
+
+def argv0(line: str) -> str:
+    return line.split("|", 1)[0]
 
 
 def main() -> int:
@@ -135,10 +252,18 @@ def main() -> int:
 
     write_workspace()
     failures: list[str] = []
+    # The install scenes need PATH to really have no cli: if this machine has one
+    # in /usr/bin, every one of them would find that instead of installing.
+    host_cli = shutil.which("wakatime-cli")
+    if host_cli:
+        print(f"wakatime probe: note - this machine has {host_cli}, "
+              "skipping the install scenes")
 
-    # ── Scene 1: tracking on, one edit and one save ──────────────────────────
+    # ── Scene 1: tracking on, one edit and one save, cli already on PATH ─────
     cfg = "/tmp/jot_wakatime_probe_cfg_on"
     record = "/tmp/jot_wakatime_probe_record_on"
+    home = HOME + "_on"
+    shutil.rmtree(home, ignore_errors=True)
     if os.path.exists(record):
         os.remove(record)
     # `x` deletes a character, which is a keystroke (a heartbeat without
@@ -148,7 +273,7 @@ def main() -> int:
     # here is a seam the editor does not already have.
     write_settings(cfg, ["wakatime=true", "wakatime_api_key=probe-key",
                          "auto_save=true", "auto_save_interval_ms=200"])
-    screen = run(binary, cfg, record, keys=b"x", phases=[
+    screen = run(binary, cfg, record, home, keys=b"x", phases=[
         (0.5, lambda _s, r=record: len(heartbeat_runs(recorded(r, 1, 0.05))) >= 1),
         (0.5, lambda _s, r=record: len(heartbeat_runs(recorded(r, 2, 0.05))) >= 2),
     ])
@@ -168,11 +293,20 @@ def main() -> int:
         failures.append("the editor never asked the cli for today's total")
     elif "--output json" not in today[0]:
         failures.append(f"today's total was not asked for as json: {today[0]!r}")
-    for line in lines:
+    for line in cli_runs(lines):
         if "--key 'probe-key'" not in line and "--key probe-key" not in line:
             failures.append(f"a run is missing the configured api key: {line!r}")
         if "jot-wakatime" not in line:
             failures.append(f"a run is missing the plugin id: {line!r}")
+        # The shell reports the path it resolved, so a run of the cli on PATH
+        # names the PATH entry: anything else would mean the editor replaced it
+        # with a copy of its own.
+        if argv0(line) != os.path.join(BIN, "wakatime-cli"):
+            failures.append(f"a run did not use the cli from PATH: {line!r}")
+    # PATH already has one, so the editor has nothing to install and must not go
+    # looking for something to download.
+    if curl_runs(lines) or unzip_runs(lines):
+        failures.append(f"an install ran with a cli already on PATH: {lines!r}")
 
     if not hearts:
         failures.append("the edit and the save produced no heartbeat at all")
@@ -209,7 +343,7 @@ def main() -> int:
     if os.path.exists(record):
         os.remove(record)
     write_settings(cfg, ["wakatime=false", "wakatime_api_key=probe-key"])
-    off = run(binary, cfg, record, keys=b"x", after=1.5)
+    off = run(binary, cfg, record, HOME + "_off", keys=b"x", after=1.5)
     if dump:
         print(off.text())
         print("-" * 70)
@@ -222,33 +356,13 @@ def main() -> int:
     if not re.search(r"\s\d+(s|m|h \d+m)\s", off.text()):
         failures.append("the chip carries no local total with WakaTime off")
 
-    # ── Scene 3: the cli is not installed ────────────────────────────────────
-    # Only meaningful when the host really has none; a machine with WakaTime
-    # installed would find its own and this scene would be about that instead.
-    if shutil.which("wakatime-cli"):
-        print("wakatime probe: note - wakatime-cli is installed here, "
-              "skipping the missing-cli scene")
-    else:
-        cfg = "/tmp/jot_wakatime_probe_cfg_missing"
-        record = "/tmp/jot_wakatime_probe_record_missing"
-        if os.path.exists(record):
-            os.remove(record)
-        write_settings(cfg, ["wakatime=true", "wakatime_api_key=probe-key"])
-        sink: list = []
-        missing = run(binary, cfg, record, keys=b"x", env_path="/usr/bin:/bin",
-                      after=1.5, sink=sink)
-        said = b"".join(sink).decode("utf-8", "replace")
-        if dump:
-            print(missing.text())
-            print("-" * 70)
-        if "wakatime-cli not found" not in said:
-            failures.append("a missing cli was not reported to the user")
-        if TIMER_GLYPH not in missing.text():
-            failures.append("the chip lost its local fallback with no cli")
-        if TODAY_TEXT in missing.text():
-            failures.append("the chip shows a WakaTime total with no cli")
-        if os.path.exists(record):
-            failures.append(f"a spawn was attempted with no cli on PATH: {record}")
+    if not host_cli:
+        asset = host_asset()
+        if not asset:
+            print("wakatime probe: note - no release asset for this machine, "
+                  "skipping the install scenes")
+        else:
+            failures.extend(install_scenes(binary, dump, asset))
 
     if failures:
         for failure in failures:
@@ -256,6 +370,127 @@ def main() -> int:
         return 1
     print("wakatime probe: PASS")
     return 0
+
+
+def install_scenes(binary: str, dump: bool, asset: str) -> list[str]:
+    """The three scenes that need a machine with no wakatime-cli on PATH."""
+    failures: list[str] = []
+    entity = os.path.join(ROOT, FILE)
+
+    # ── Scene 3: no cli on PATH, so the editor installs one ──────────────────
+    cfg = "/tmp/jot_wakatime_probe_cfg_install"
+    record = "/tmp/jot_wakatime_probe_record_install"
+    home = HOME + "_install"
+    shutil.rmtree(home, ignore_errors=True)
+    if os.path.exists(record):
+        os.remove(record)
+    write_settings(cfg, ["wakatime=true", "wakatime_api_key=probe-key"])
+    sink: list = []
+    # No key is sent until the install has landed: a keystroke before the cli is
+    # ready is dropped on purpose (nothing can be reported yet), so the scene
+    # waits for the binary rather than racing it, and only then types.
+    install = run(binary, cfg, record, home, keys=b"", sink=sink, path=INSTALL_BIN + ":/usr/bin:/bin",
+                  until_timeout=20.0, phases=[
+                      (0.5, lambda _s, h=home: os.path.exists(installed_cli(h))),
+                      (0.8, b"y"),
+                      (0.5, lambda _s, r=record: len(heartbeat_runs(recorded(r, 1, 0.05))) >= 1),
+                  ])
+    if dump:
+        print(install.text())
+        print("-" * 70)
+    said = b"".join(sink).decode("utf-8", "replace")
+    lines = recorded(record, 1, 1.0)
+    cli_path = installed_cli(home)
+    print(f"wakatime probe: install scene ran {len(curl_runs(lines))} curl, "
+          f"{len(unzip_runs(lines))} unzip, {len(cli_runs(lines))} cli run(s)")
+    for line in lines:
+        print(f"    {line}")
+
+    downloads = curl_runs(lines)
+    url = f"releases/latest/download/{asset}"
+    if not downloads:
+        failures.append("no cli on PATH, and nothing was downloaded")
+    elif url not in downloads[0]:
+        failures.append(f"the install did not fetch this machine's asset ({asset}): {downloads[0]!r}")
+    if not unzip_runs(lines):
+        failures.append("the download was never unpacked")
+    if not os.path.exists(cli_path):
+        failures.append(f"the install left no cli at {cli_path}")
+    elif not os.access(cli_path, os.X_OK):
+        failures.append(f"the installed cli is not executable: {cli_path}")
+    # Every run after the install goes to the managed copy, by absolute path: on
+    # a machine whose PATH has no cli, a bare name would not be found at all.
+    installed_hearts = [line for line in heartbeat_runs(lines) if argv0(line) == cli_path]
+    if not installed_hearts:
+        failures.append(f"the heartbeat did not come from the installed cli: {cli_runs(lines)!r}")
+    for line in installed_hearts:
+        if entity not in line:
+            failures.append(f"a heartbeat is not for {entity}: {line!r}")
+    if "installed wakatime-cli" not in said:
+        failures.append("the install was never reported to the user")
+    if TIMER_GLYPH in install.text():
+        failures.append("the chip is on the local total with the cli installed and answering")
+
+    # ── Scene 4: a copy from an earlier run is used, not re-downloaded ───────
+    cfg = "/tmp/jot_wakatime_probe_cfg_present"
+    record = "/tmp/jot_wakatime_probe_record_present"
+    home = HOME + "_present"
+    shutil.rmtree(home, ignore_errors=True)
+    preinstall(home)
+    if os.path.exists(record):
+        os.remove(record)
+    write_settings(cfg, ["wakatime=true", "wakatime_api_key=probe-key"])
+    present = run(binary, cfg, record, home, keys=b"x", path=INSTALL_BIN + ":/usr/bin:/bin",
+                  phases=[(0.5, lambda _s, r=record: len(heartbeat_runs(recorded(r, 1, 0.05))) >= 1)])
+    if dump:
+        print(present.text())
+        print("-" * 70)
+    lines = recorded(record, 1, 1.0)
+    print(f"wakatime probe: already-installed scene ran {len(heartbeat_runs(lines))} heartbeat(s)")
+    for line in lines:
+        print(f"    {line}")
+    if curl_runs(lines) or unzip_runs(lines):
+        failures.append(f"the cli was downloaded again over the installed copy: {lines!r}")
+    if not [line for line in heartbeat_runs(lines) if argv0(line) == installed_cli(home)]:
+        failures.append(f"the installed copy was not the one run: {cli_runs(lines)!r}")
+    if TODAY_TEXT not in present.text():
+        failures.append("the installed cli's total did not reach the bar")
+
+    # ── Scene 5: the install cannot download ────────────────────────────────
+    # A machine that is offline, and the shape of that has to be honest: one
+    # report, no spawns, and the local total still on the bar.
+    cfg = "/tmp/jot_wakatime_probe_cfg_failed"
+    record = "/tmp/jot_wakatime_probe_record_failed"
+    home = HOME + "_failed"
+    shutil.rmtree(home, ignore_errors=True)
+    if os.path.exists(record):
+        os.remove(record)
+    write_settings(cfg, ["wakatime=true", "wakatime_api_key=probe-key"])
+    sink = []
+    failed = run(binary, cfg, record, home, keys=b"x", sink=sink, after=2.0,
+                 path=FAIL_BIN + ":/usr/bin:/bin")
+    if dump:
+        print(failed.text())
+        print("-" * 70)
+    said = b"".join(sink).decode("utf-8", "replace")
+    lines = recorded(record, 1, 1.0)
+    print(f"wakatime probe: failed-install scene ran {len(curl_runs(lines))} curl run(s)")
+    for line in lines:
+        print(f"    {line}")
+    if not curl_runs(lines):
+        failures.append("a failed download was not even attempted")
+    if "could not install wakatime-cli" not in said:
+        failures.append("a failed install was not reported to the user")
+    if cli_runs(lines):
+        failures.append(f"a run happened without a cli: {cli_runs(lines)!r}")
+    if os.path.exists(installed_cli(home)):
+        failures.append("a failed install still left a cli behind")
+    if TIMER_GLYPH not in failed.text():
+        failures.append("the chip lost its local fallback when the install failed")
+    if TODAY_TEXT in failed.text():
+        failures.append("the chip shows a WakaTime total with no cli at all")
+
+    return failures
 
 
 if __name__ == "__main__":

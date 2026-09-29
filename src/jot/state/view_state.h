@@ -90,8 +90,13 @@ struct ViewState
   // `wakatime_today_text` is what makes the chip fall back to the local total,
   // which is also all it shows until the first answer arrives.
   bool wakatime_enabled = false;
-  bool wakatime_probed = false;    // the PATH / api-key check has run
+  bool wakatime_probed = false;    // the PATH / install / api-key check has run
   bool wakatime_cli_ready = false; // it passed, so spawning is worth it
+  // The binary that check settled on: empty when PATH has a wakatime-cli of the
+  // user's own, otherwise the absolute path of the one this editor installed
+  // into the WakaTime home (features/wakatime.h), which is what every spawn and
+  // every poll below is then run from.
+  std::string wakatime_cli_path;
   // The wakatime_api_key the check above ran against, so typing a key in
   // :settings re-runs it instead of waiting for a restart.
   std::string wakatime_probe_key;

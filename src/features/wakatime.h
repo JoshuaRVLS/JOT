@@ -15,7 +15,9 @@
 //   * when a heartbeat is worth sending (the spec's "two minutes, or the file
 //     changed, or a save") and what arguments it carries;
 //   * what the statusline's activity chip says -- today's total once the cli
-//     has answered, the local session duration until then.
+//     has answered, the local session duration until then;
+//   * which release asset this machine needs and the script that unpacks it,
+//     for the install the editor runs when PATH has no cli at all.
 #include <string>
 #include <vector>
 
@@ -98,6 +100,57 @@ namespace jot_wakatime
   // directory, then .wakatime.cfg. The same file and the same two variables
   // the cli itself reads, so JOT and an existing WakaTime setup agree.
   std::string cfg_path();
+
+  // ---------------------------------------------------------------------------
+  // Installing the cli
+  // ---------------------------------------------------------------------------
+  //
+  // The integration is only as good as the binary behind it, so the editor
+  // fetches one the first time the user turns WakaTime on and PATH has none.
+  // Nothing here runs a command: this half picks the asset this machine needs
+  // and writes the script that installs it, and the editor runs that script off
+  // the keystroke path.
+
+  // The release asset for a machine: wakatime-cli-<os>-<arch>.zip, where
+  // `platform` is the installers' tag ("linux", "mac", "win") and `machine` is
+  // what the machine calls its architecture -- `uname -m` on POSIX,
+  // %PROCESSOR_ARCHITECTURE% on Windows, either case. Empty when that pair has
+  // no build, which is the caller's cue that there is nothing to install here.
+  std::string asset_name(const std::string &platform, const std::string &machine);
+
+  // The file inside that asset: the asset's own name without .zip, and .exe on
+  // Windows. This is the release's layout rather than a guess -- the asset
+  // wakatime-cli-linux-amd64.zip holds one executable, wakatime-cli-linux-amd64.
+  // Empty for a name that is not an asset.
+  std::string asset_binary(const std::string &asset, const std::string &platform);
+
+  // What the installed binary is called: the name the cli answers to on PATH,
+  // so a managed copy reads the same to this editor and to every other WakaTime
+  // plugin on the machine.
+  std::string cli_name(const std::string &platform);
+
+  // Where that copy lives: $WAKATIME_HOME, else the home directory, then
+  // .wakatime -- the directory the cli itself treats as home, which is what
+  // makes an install here shared with the other editors' plugins. Empty when
+  // there is no home to install into.
+  std::string install_dir();
+
+  // install_dir()/cli_name(platform), empty when there is no home.
+  std::string managed_cli_path(const std::string &platform);
+
+  // The download URL: the release repo's `latest/download/<asset>` redirect, so
+  // the newest build is always the one fetched and there is no version to keep
+  // current.
+  std::string release_url(const std::string &asset);
+
+  // The one command that installs: make the directory, fetch the asset, unpack
+  // it, rename it to cli_name() and drop the archive -- each step chained, so
+  // the exit status is the install's own verdict. Empty when there is no asset
+  // or no directory to install into. The fetch is bounded, because this runs on
+  // the worker queue and a stalled network must not hold the git status and the
+  // LSP scans behind it.
+  std::string
+  install_script(const std::string &platform, const std::string &dir, const std::string &asset);
 } // namespace jot_wakatime
 
 #endif // JOT_FEATURES_WAKATIME_H

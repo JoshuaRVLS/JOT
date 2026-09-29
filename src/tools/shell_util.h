@@ -136,6 +136,44 @@ namespace shell_util
 #endif
   }
 
+  // What the machine calls its own architecture ("x86_64", "AMD64", "arm64"):
+  // `uname -m` on POSIX, PROCESSOR_ARCHITECTURE on Windows. Whoever needs it to
+  // pick a release asset maps it; empty when the machine cannot say.
+  inline std::string machine_arch()
+  {
+#ifdef _WIN32
+    // A 32-bit process on 64-bit Windows reports x86 in PROCESSOR_ARCHITECTURE
+    // and the real architecture in PROCESSOR_ARCHITEW6432: the asset has to be
+    // chosen from the second one.
+    if (const char *native = std::getenv("PROCESSOR_ARCHITEW6432"); native && *native)
+    {
+      return native;
+    }
+    const char *arch = std::getenv("PROCESSOR_ARCHITECTURE");
+    return arch ? arch : "";
+#else
+    FILE *pipe = open_command_pipe("uname -m" + null_redirect(), "r");
+    if (!pipe)
+    {
+      return "";
+    }
+    char line[64] = {0};
+    const bool read = std::fgets(line, sizeof(line), pipe) != nullptr;
+    close_command_pipe(pipe);
+    if (!read)
+    {
+      return "";
+    }
+    std::string out(line);
+    while (!out.empty()
+           && (out.back() == '\n' || out.back() == '\r' || out.back() == '\t' || out.back() == ' '))
+    {
+      out.pop_back();
+    }
+    return out;
+#endif
+  }
+
   // True when the named program is on PATH (where / command -v).
   inline bool command_exists(const std::string &name)
   {

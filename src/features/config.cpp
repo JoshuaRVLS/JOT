@@ -128,7 +128,8 @@ void Config::load_defaults()
   // visible and editable in :settings; left empty, wakatime-cli reads api_key
   // out of ~/.wakatime.cfg itself, so an existing WakaTime setup needs no key
   // here at all. wakatime_api_url points at a self-hosted or WakaTime-compatible
-  // server. The cli itself is never downloaded: a missing one is reported.
+  // server. Turning it on with no cli on PATH installs one into ~/.wakatime
+  // (features/wakatime.h), which is why the default is off.
   settings["wakatime"] = "false";
   settings["wakatime_api_key"] = "";
   settings["wakatime_api_url"] = "";

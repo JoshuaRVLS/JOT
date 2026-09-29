@@ -191,6 +191,109 @@ TEST_CASE("WakaTime: the cli's config path follows its own two variables", "[jot
   }
 }
 
+TEST_CASE("WakaTime: the release asset is the one this machine needs", "[jot][wakatime]")
+{
+  // The release's own naming, one zip per os and arch. The machine strings
+  // differ per platform and that is the trap this table pins: uname prints
+  // x86_64 and aarch64, mac prints arm64, and Windows stores AMD64.
+  REQUIRE(asset_name("linux", "x86_64") == "wakatime-cli-linux-amd64.zip");
+  REQUIRE(asset_name("linux", "aarch64") == "wakatime-cli-linux-arm64.zip");
+  REQUIRE(asset_name("linux", "riscv64") == "wakatime-cli-linux-riscv64.zip");
+  REQUIRE(asset_name("linux", "armv7l") == "wakatime-cli-linux-arm.zip");
+  REQUIRE(asset_name("linux", "i686") == "wakatime-cli-linux-386.zip");
+  REQUIRE(asset_name("mac", "x86_64") == "wakatime-cli-darwin-amd64.zip");
+  REQUIRE(asset_name("mac", "arm64") == "wakatime-cli-darwin-arm64.zip");
+  REQUIRE(asset_name("win", "AMD64") == "wakatime-cli-windows-amd64.zip");
+  REQUIRE(asset_name("win", "ARM64") == "wakatime-cli-windows-arm64.zip");
+  REQUIRE(asset_name("win", "x86") == "wakatime-cli-windows-386.zip");
+
+  // No build is a real answer: an architecture the project does not ship, or a
+  // platform nothing installs on, is an empty asset rather than a wrong one, and
+  // the editor reports that instead of downloading something useless.
+  REQUIRE(asset_name("linux", "sparc64").empty());
+  REQUIRE(asset_name("linux", "").empty());
+  REQUIRE(asset_name("plan9", "x86_64").empty());
+}
+
+TEST_CASE("WakaTime: an asset holds one binary, named after itself", "[jot][wakatime]")
+{
+  // Checked against a real release rather than guessed:
+  // wakatime-cli-linux-amd64.zip holds exactly wakatime-cli-linux-amd64, and the
+  // Windows asset adds the .exe.
+  REQUIRE(asset_binary("wakatime-cli-linux-amd64.zip", "linux") == "wakatime-cli-linux-amd64");
+  REQUIRE(asset_binary("wakatime-cli-darwin-arm64.zip", "mac") == "wakatime-cli-darwin-arm64");
+  REQUIRE(asset_binary("wakatime-cli-windows-amd64.zip", "win")
+          == "wakatime-cli-windows-amd64.exe");
+  REQUIRE(asset_binary("checksums_sha256.txt", "linux").empty());
+  REQUIRE(asset_binary("", "linux").empty());
+
+  // The name it is filed under is the one it answers to on PATH, so a managed
+  // copy reads the same to this editor and to every other WakaTime plugin.
+  REQUIRE(cli_name("linux") == "wakatime-cli");
+  REQUIRE(cli_name("mac") == "wakatime-cli");
+  REQUIRE(cli_name("win") == "wakatime-cli.exe");
+}
+
+TEST_CASE("WakaTime: the install goes into the cli's own home", "[jot][wakatime]")
+{
+  unsetenv("WAKATIME_HOME");
+  setenv("WAKATIME_HOME", "/tmp/jot_wakatime_home", 1);
+  REQUIRE(install_dir() == "/tmp/jot_wakatime_home/.wakatime");
+  REQUIRE(managed_cli_path("linux") == "/tmp/jot_wakatime_home/.wakatime/wakatime-cli");
+  REQUIRE(managed_cli_path("win") == "/tmp/jot_wakatime_home/.wakatime/wakatime-cli.exe");
+
+  // No WAKATIME_HOME and it is the home directory, the same place the cli's own
+  // config comes from.
+  unsetenv("WAKATIME_HOME");
+  const char *home = std::getenv("HOME");
+  if (home && *home)
+  {
+    REQUIRE(install_dir() == std::string(home) + "/.wakatime");
+  }
+}
+
+TEST_CASE("WakaTime: the install script fetches the asset and unpacks it", "[jot][wakatime]")
+{
+  const std::string asset = "wakatime-cli-linux-amd64.zip";
+  REQUIRE(release_url(asset)
+          == "https://github.com/wakatime/wakatime-cli/releases/latest/download/" + asset);
+  REQUIRE(release_url("").empty());
+
+  // POSIX: make the directory, fetch, unpack (tar as the fallback for a machine
+  // without unzip), rename to the plain name, set the exec bit, drop the
+  // archive. A directory with a space is one shell word throughout.
+  const std::string sh = install_script("linux", "/tmp/my home", asset);
+  REQUIRE(sh.find("mkdir -p '/tmp/my home'") == 0);
+  REQUIRE(sh.find("curl -fsSL --max-time ") != std::string::npos);
+  REQUIRE(sh.find(" -o '/tmp/my home/wakatime-cli.zip' '" + release_url(asset) + "'")
+          != std::string::npos);
+  REQUIRE(sh.find("unzip -oq '/tmp/my home/wakatime-cli.zip'") != std::string::npos);
+  REQUIRE(sh.find("tar -xf '/tmp/my home/wakatime-cli.zip'") != std::string::npos);
+  REQUIRE(sh.find("mv '/tmp/my home/wakatime-cli-linux-amd64' '/tmp/my home/wakatime-cli'")
+          != std::string::npos);
+  REQUIRE(sh.find("chmod 755 '/tmp/my home/wakatime-cli'") != std::string::npos);
+  REQUIRE(sh.find("rm -f '/tmp/my home/wakatime-cli.zip'") != std::string::npos);
+
+  // Windows: the tools a fresh install already has, and none it does not -- no
+  // unzip, no chmod, no /bin/sh, the same rule the LSP installers are held to.
+  const std::string cmd = install_script("win", "C:\\Users\\me\\.wakatime", asset);
+  REQUIRE(cmd.find("curl -fsSL --max-time ") != std::string::npos);
+  REQUIRE(cmd.find("tar -xf ") != std::string::npos);
+  REQUIRE(cmd.find("move /Y ") != std::string::npos);
+  REQUIRE(cmd.find("del ") != std::string::npos);
+  REQUIRE(cmd.find("unzip") == std::string::npos);
+  REQUIRE(cmd.find("chmod") == std::string::npos);
+  REQUIRE(cmd.find("/bin/sh") == std::string::npos);
+  // The directory may already be there from an earlier run, and that is not a
+  // failure: mkdir's complaint is silenced and the chain carries on.
+  REQUIRE(cmd.find("2>NUL & curl") != std::string::npos);
+
+  // Nothing installable is no script at all: the caller reports it instead of
+  // running something that cannot work.
+  REQUIRE(install_script("linux", "/tmp/x", "checksums_sha256.txt").empty());
+  REQUIRE(install_script("linux", "", asset).empty());
+}
+
 TEST_CASE("WakaTime: offline and missing-key exit codes are not failures", "[jot][wakatime]")
 {
   // The two codes the spec's plugins treat as "queued, not lost", plus the
