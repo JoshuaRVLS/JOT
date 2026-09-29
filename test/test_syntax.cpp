@@ -2,6 +2,8 @@
 #include "tree_sitter/manager.h"
 #include "types.h"
 #include <catch2/catch_test_macros.hpp>
+#include <fstream>
+#include <iterator>
 #include <set>
 #include <string>
 
@@ -277,6 +279,25 @@ TEST_CASE("Bundled C Query Names Only Nodes The C Grammar Defines", "[jot]")
     INFO("bundled C query lost the node " << node);
     REQUIRE(c.find(node) != std::string::npos);
   }
+}
+
+TEST_CASE("Grammar Registry Points At Live Repositories", "[jot]")
+{
+  // The registry URL is what :tsinstall clones, so a grammar that moves leaves
+  // its language uninstallable with no other symptom. `query` and `jq` both
+  // moved (tree-sitter/tree-sitter-query and itchyny/tree-sitter-jq now 404),
+  // discovered by tools/treesitter_query_audit.py, which could not fetch their
+  // node types. Pin the homes Helix's language list uses so they cannot drift
+  // back to a dead path.
+  std::ifstream in(std::string(JOT_LUA_SOURCE_DIR) + "/treesitter/registry.lua");
+  REQUIRE(in.good());
+  const std::string registry((std::istreambuf_iterator<char>(in)),
+                             std::istreambuf_iterator<char>());
+  REQUIRE(registry.find("https://github.com/tree-sitter-grammars/tree-sitter-query")
+          != std::string::npos);
+  REQUIRE(registry.find("https://github.com/flurie/tree-sitter-jq") != std::string::npos);
+  REQUIRE(registry.find("https://github.com/tree-sitter/tree-sitter-query") == std::string::npos);
+  REQUIRE(registry.find("https://github.com/itchyny/tree-sitter-jq") == std::string::npos);
 }
 
 TEST_CASE("Bundled Djot Query Names Only Nodes The Djot Grammar Defines", "[jot]")
