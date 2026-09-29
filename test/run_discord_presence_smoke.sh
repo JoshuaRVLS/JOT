@@ -83,19 +83,22 @@ if [ "$STATUS" -ne 124 ] && [ "$STATUS" -ne 0 ]; then
 fi
 
 # The terminal status line must show the presence chip (the chip is what tells
-# the user the feature is alive at all).
+# the user the feature is alive at all), and it must name the state: with this
+# fake Discord answering, that state is connected.
 if ! python3 - "$WORK/screen.log" <<'PY'
 import re, sys
 raw = open(sys.argv[1], "rb").read().decode("utf-8", "replace")
 text = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", raw)
 text = re.sub(r"\x1b\][^\x07\x1b]*(\x07|\x1b\\)", "", text)
-sys.exit(0 if "Discord" in text else 1)
+if "Discord" not in text:
+    sys.exit(1)
+sys.exit(0 if "Discord Connected" in text else 2)
 PY
 then
-  echo "discord smoke: FAIL - no Discord chip in the terminal status line" >&2
+  echo "discord smoke: FAIL - no connected Discord chip in the terminal status line" >&2
   exit 1
 fi
-echo "discord smoke: ok - Discord chip visible in the terminal status line"
+echo "discord smoke: ok - the chip reads 'Discord Connected' in the terminal status line"
 
 if [ ! -s "$FRAMES" ]; then
   echo "discord smoke: FAIL - no IPC frames reached the fake Discord" >&2

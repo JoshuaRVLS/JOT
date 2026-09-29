@@ -8,6 +8,7 @@
 #include "tools/lsp/install.h"
 #include "ui/components.h"
 #include "ui/text.h"
+#include "ui/xterm_palette.h"
 #include <algorithm>
 #include <chrono>
 #include <ctime>
@@ -27,6 +28,15 @@ namespace
       return name;
     name = p.root_path().string();
     return name.empty() ? path : name;
+  }
+
+  // The Discord mark's ink: the brand blurple its own client paints it in. The
+  // palette entry this used to be named (88) is xterm's dark red, which is why
+  // the icon came out red on every theme.
+  int discord_icon_fg()
+  {
+    static const int color = jot_ui::exact_color_from_hex("#5865F2");
+    return color;
   }
 
   std::string status_workspace_label(const std::string &root_dir)
@@ -436,8 +446,10 @@ void Editor::render_status_line()
   }
 
   // Discord presence chip: only while the feature is on and something is worth
-  // reporting (connected, connecting, or an error from Discord such as a
-  // missing asset key). :discord status carries the full detail.
+  // reporting (connected, or whichever state it is in instead). It rides on the
+  // left, after the cursor block: whether this editor is live on Discord says
+  // something about the session, while the right side is the file's own news.
+  // :discord status carries the full detail.
   const std::string &discord_status = discord.status();
   if (config.get_bool("discord_show_status", true) && !discord_status.empty()
       && discord_status != "off")
@@ -447,29 +459,37 @@ void Editor::render_status_line()
     int bg = theme.bg_status_muted;
     if (discord_status == "on")
     {
-      text = " Discord ";
+      text = " Discord Connected ";
       fg = theme.fg_status_info;
       bg = theme.bg_status_info;
     }
     else if (discord_status == "idle")
     {
-      text = " Discord idle ";
+      text = " Discord Idle ";
     }
     else if (discord_status == "excluded")
     {
-      text = " Discord off (workspace) ";
+      text = " Discord Off (workspace) ";
     }
     else if (discord_status == "error")
     {
-      text = " Discord error ";
+      text = " Discord Error ";
       fg = theme.fg_status_message;
       bg = theme.bg_status_error;
     }
+    else if (discord.rpc().get_state() == DiscordRPC::HANDSHAKING)
+    {
+      // The socket answered and the handshake is in flight: a moment at most,
+      // and calling that "Disconnected" would flicker on every start.
+      text = " Discord Connecting ";
+    }
     else
     {
-      text = " Discord... ";
+      // Nothing answered, which is what Discord not running looks like. The
+      // client keeps retrying, so this is the resting state of a dead Discord.
+      text = " Discord Disconnected ";
     }
-    right_segments.push_back({text, fg, bg, false, true, 45, "\U000F066F", 88});
+    left_segments.push_back({text, fg, bg, false, true, 45, "\U000F066F", discord_icon_fg()});
   }
 
   // Lua-registered status segments (see jot.status.register). They render on

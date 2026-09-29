@@ -7,6 +7,7 @@
 #include "editor.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 #include <cstdlib>
 #include <string>
 
@@ -129,7 +130,9 @@ TEST_CASE("Discord status is visible in the status line", "[jot]")
   REQUIRE(e.needs_redraw_for_test());
 
   // And the chip really is painted: scan the status rows for the label. No
-  // Discord runs here, so the session reports the connecting state.
+  // Discord runs here, so the client stays DISCONNECTED - the controller's own
+  // status string is "connecting" (it retries), and the chip is where that
+  // becomes the word the user reads.
   e.render_for_test();
   UI *ui = e.ui_for_test();
   REQUIRE(ui != nullptr);
@@ -151,6 +154,44 @@ TEST_CASE("Discord status is visible in the status line", "[jot]")
   }
   INFO("status rows:" << status_rows);
   REQUIRE(status_rows.find("Discord") != std::string::npos);
+
+  // The label names the state rather than the feature: with nothing listening on
+  // a Discord socket, the honest one is disconnected.
+  REQUIRE(status_rows.find("Discord Disconnected") != std::string::npos);
+
+  // It rides on the left half. The chip is about the session (is this editor on
+  // Discord?), while the right side carries the file's own news.
+  int discord_col = -1;
+  int discord_row = -1;
+  for (int y = height - 2; y < height && discord_col < 0; y++)
+  {
+    const std::string row = row_text(y);
+    const size_t at = row.find("Discord");
+    if (at != std::string::npos)
+    {
+      discord_col = (int)at;
+      discord_row = y;
+    }
+  }
+  REQUIRE(discord_col >= 0);
+  REQUIRE(discord_col < e.ui_width_for_test() / 2);
+
+  // And the mark in front of it is Discord's own blurple. It used to be palette
+  // entry 88, which is xterm's dark red, and that is what made the icon look
+  // like an error marker.
+  std::uint32_t mark_rgb = 0;
+  bool found_mark = false;
+  for (int x = 0; x < e.ui_width_for_test(); x++)
+  {
+    const UICell *cell = ui->cell_at(x, discord_row);
+    if (cell && cell->ch == "\U000F066F")
+    {
+      mark_rgb = cell->fg_rgb;
+      found_mark = true;
+    }
+  }
+  REQUIRE(found_mark);
+  REQUIRE(mark_rgb == 0x5865F2u);
 
   // No cell in the status rows may hold a control character: the status line is
   // assembled from byte-offset spans, and a stray newline would move the
