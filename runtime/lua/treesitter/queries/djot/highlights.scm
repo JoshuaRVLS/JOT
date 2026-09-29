@@ -221,10 +221,7 @@
     "}"
   ] @punctuation.bracket)
 
-[
-  (class)
-  (class_name)
-] @type
+(class_name) @type
 
 (identifier) @tag
 
@@ -360,7 +357,6 @@
   (raw_inline)
   (verbatim)
   (reference_label)
-  (class)
   (class_name)
   (identifier)
   (key_value)

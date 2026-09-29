@@ -279,6 +279,18 @@ TEST_CASE("Bundled C Query Names Only Nodes The C Grammar Defines", "[jot]")
   }
 }
 
+TEST_CASE("Bundled Djot Query Names Only Nodes The Djot Grammar Defines", "[jot]")
+{
+  // The same failure as the C query: djot's class node is `class_name`, and a
+  // `(class)` reference made the whole query fail to compile, so .dj files
+  // silently fell back to regex. Kept as a static check because the djot
+  // parser is rarely installed where the tests run.
+  const std::string djot = embedded_query("treesitter/queries/djot/highlights.scm");
+  REQUIRE_FALSE(djot.empty());
+  REQUIRE(djot.find("(class)") == std::string::npos);
+  REQUIRE(djot.find("(class_name)") != std::string::npos);
+}
+
 TEST_CASE("Theme Syntax Palette Falls Back To Readable Theme Colors", "[jot]")
 {
   Theme theme;
@@ -396,24 +408,45 @@ TEST_CASE("Tree Sitter C++ Query Available When Parser Installed", "[jot]")
   }
 }
 
-TEST_CASE("Bundled C And C++ Queries Compile When Their Parser Is Installed", "[jot]")
+TEST_CASE("Bundled Queries Compile When Their Parser Is Installed", "[jot]")
 {
-  // The static check above pins the one node that bit us; this compiles the
-  // actual bundled sources against whatever C/C++ parser the machine has, so
-  // any future grammar drift (a renamed or removed node) surfaces here instead
-  // of as a language that quietly highlights nothing.
+  // The static checks above pin the nodes that bit us; this compiles the
+  // actual bundled sources against whatever parser the machine has, so any
+  // future grammar drift (a renamed or removed node) surfaces here instead of
+  // as a language that quietly highlights nothing. `c` and `markdown` are the
+  // two that shipped a phantom node and never activated; `cpp` and `djot` are
+  // their closest siblings.
+  struct Bundled
+  {
+    const char *language;
+    const char *extension;
+    const char *library;
+  };
+  const Bundled bundled[] = {
+      {"c", ".c", "libtree-sitter-c.so"},
+      {"cpp", ".cpp", "libtree-sitter-cpp.so"},
+      {"markdown", ".md", "libtree-sitter-markdown.so"},
+      {"djot", ".dj", "libtree-sitter-djot.so"},
+  };
+
   TreeSitterManager manager;
-  const std::string c = embedded_query("treesitter/queries/c/highlights.scm");
-  const std::string cpp = embedded_query("treesitter/queries/cpp/highlights.scm");
-  REQUIRE_FALSE(c.empty());
-  REQUIRE_FALSE(cpp.empty());
-  manager.register_language("c", {".c", ".h"}, c, "", "", "tree_sitter_c", {"libtree-sitter-c.so"});
-  manager.register_language(
-      "cpp", {".cpp"}, cpp, "", "", "tree_sitter_cpp", {"libtree-sitter-cpp.so"});
+  for (const Bundled &entry : bundled)
+  {
+    const std::string source = embedded_query(
+        (std::string("treesitter/queries/") + entry.language + "/highlights.scm").c_str());
+    REQUIRE_FALSE(source.empty());
+    manager.register_language(entry.language,
+                              {entry.extension},
+                              source,
+                              "",
+                              "",
+                              std::string("tree_sitter_") + entry.language,
+                              {entry.library});
+  }
   // The default search covers the per-user install and dlopen's own paths, but
-  // a system C parser (the common case for .c) lives in /usr/lib and only a
-  // bare dlopen would see it; name the usual roots so the compile below is a
-  // real check where a parser exists rather than a silent skip.
+  // a system parser (the common case for c and markdown) lives in /usr/lib and
+  // only a bare dlopen would see it; name the usual roots so the compile below
+  // is a real check where a parser exists rather than a silent skip.
 #ifndef _WIN32
   std::vector<std::string> library_paths;
   if (const char *home = getenv("HOME"))
@@ -425,18 +458,18 @@ TEST_CASE("Bundled C And C++ Queries Compile When Their Parser Is Installed", "[
   manager.set_runtime_options(library_paths, {}, {});
 #endif
 
-  for (const char *ext : {".c", ".cpp"})
+  for (const Bundled &entry : bundled)
   {
     // get_highlight_query is what loads the parser and compiles the source; the
     // status getter only reports what a previous call cached, so asking it
     // first would report "parser not attempted" and skip this whole check.
-    TSQuery *query = manager.get_highlight_query(ext);
-    TreeSitterRuntimeStatus status = manager.runtime_status_for_extension(ext);
+    TSQuery *query = manager.get_highlight_query(entry.extension);
+    TreeSitterRuntimeStatus status = manager.runtime_status_for_extension(entry.extension);
     if (!status.parser_loaded)
     {
       continue; // no parser on this machine: nothing to compile against
     }
-    INFO(ext << " -- " << status.query_message);
+    INFO(entry.language << " -- " << status.query_message);
     REQUIRE(query != nullptr);
   }
 }
