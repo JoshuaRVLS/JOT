@@ -254,6 +254,31 @@ TEST_CASE("Bundled JSX Queries Cover React Elements And Stay Compilable", "[jot]
   REQUIRE(javascript.find("(this) @keyword") != std::string::npos);
 }
 
+TEST_CASE("Bundled C Query Names Only Nodes The C Grammar Defines", "[jot]")
+{
+  // tree-sitter-c has no `preproc_endif` node: `#endif` belongs to the
+  // enclosing preproc_if/preproc_ifdef as a token, not a node of its own.
+  // Naming it made the whole bundled query fail to compile
+  // (TSQueryErrorNodeType), which silently dropped every .c and .h buffer from
+  // tree-sitter to the regex fallback even though the parser was installed and
+  // :tsstatus listed it as "parser loaded". The directives the grammar really
+  // exposes have to stay named, or a future edit trades one silent regression
+  // for another.
+  const std::string c = embedded_query("treesitter/queries/c/highlights.scm");
+  REQUIRE_FALSE(c.empty());
+  REQUIRE(c.find("(preproc_endif)") == std::string::npos);
+  for (const char *node : {"(preproc_if)",
+                           "(preproc_elif)",
+                           "(preproc_else)",
+                           "(preproc_include)",
+                           "(preproc_def)",
+                           "(preproc_arg)"})
+  {
+    INFO("bundled C query lost the node " << node);
+    REQUIRE(c.find(node) != std::string::npos);
+  }
+}
+
 TEST_CASE("Theme Syntax Palette Falls Back To Readable Theme Colors", "[jot]")
 {
   Theme theme;
@@ -368,6 +393,51 @@ TEST_CASE("Tree Sitter C++ Query Available When Parser Installed", "[jot]")
   else
   {
     REQUIRE(query == nullptr);
+  }
+}
+
+TEST_CASE("Bundled C And C++ Queries Compile When Their Parser Is Installed", "[jot]")
+{
+  // The static check above pins the one node that bit us; this compiles the
+  // actual bundled sources against whatever C/C++ parser the machine has, so
+  // any future grammar drift (a renamed or removed node) surfaces here instead
+  // of as a language that quietly highlights nothing.
+  TreeSitterManager manager;
+  const std::string c = embedded_query("treesitter/queries/c/highlights.scm");
+  const std::string cpp = embedded_query("treesitter/queries/cpp/highlights.scm");
+  REQUIRE_FALSE(c.empty());
+  REQUIRE_FALSE(cpp.empty());
+  manager.register_language("c", {".c", ".h"}, c, "", "", "tree_sitter_c", {"libtree-sitter-c.so"});
+  manager.register_language(
+      "cpp", {".cpp"}, cpp, "", "", "tree_sitter_cpp", {"libtree-sitter-cpp.so"});
+  // The default search covers the per-user install and dlopen's own paths, but
+  // a system C parser (the common case for .c) lives in /usr/lib and only a
+  // bare dlopen would see it; name the usual roots so the compile below is a
+  // real check where a parser exists rather than a silent skip.
+#ifndef _WIN32
+  std::vector<std::string> library_paths;
+  if (const char *home = getenv("HOME"))
+  {
+    library_paths.push_back(std::string(home) + "/.local/share/jot/treesitter/parsers");
+  }
+  library_paths.push_back("/usr/lib");
+  library_paths.push_back("/usr/local/lib");
+  manager.set_runtime_options(library_paths, {}, {});
+#endif
+
+  for (const char *ext : {".c", ".cpp"})
+  {
+    // get_highlight_query is what loads the parser and compiles the source; the
+    // status getter only reports what a previous call cached, so asking it
+    // first would report "parser not attempted" and skip this whole check.
+    TSQuery *query = manager.get_highlight_query(ext);
+    TreeSitterRuntimeStatus status = manager.runtime_status_for_extension(ext);
+    if (!status.parser_loaded)
+    {
+      continue; // no parser on this machine: nothing to compile against
+    }
+    INFO(ext << " -- " << status.query_message);
+    REQUIRE(query != nullptr);
   }
 }
 
