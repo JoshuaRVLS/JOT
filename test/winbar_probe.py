@@ -43,7 +43,7 @@ CHEVRON = "\uf054"
 # as the harness records a truecolour cell (1000 + rgb). The first bug here was
 # the whole group resolving to nothing, which left the row on the struct default
 # (palette 0, black) -- no band at all on a near-black theme.
-WINBAR_BG, PANE_BG = 1000 + 0x12101D, 1000 + 0x0E0C18
+WINBAR_BG, PANE_BG = 1000 + 0x0B0A14, 1000 + 0x07060E
 
 SOURCE = """// winbar probe
 class Widget

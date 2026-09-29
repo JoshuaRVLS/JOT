@@ -7,30 +7,34 @@ jot ships four themes: its own pair, and a port of kepano's Flexoki.
 
 | Theme | Look |
 |---|---|
-| `jot-dark` (default) - *yoru sumi* | near-black indigo (`#0e0c18`) with a compact chrome ladder, five low-chroma inks and a single muted-rose accent |
+| `jot-dark` (default) - *yoru sumi* | near-black indigo (`#07060e`) with a compact chrome ladder, a deep low-chroma ink for each syntax family and a single deep-rose accent |
 | `jot-light` - *mochi milk* | its own warm pastel pair - strawberry jam, matcha and ramune blue on cream paper (`#fffaf4`) |
 | `flexoki-dark` | Flexoki's ink palette: black (`#100f0f`) paper, base-200 text, green keywords, cyan strings |
 | `flexoki-light` | the same scheme on Flexoki paper (`#fffcf0`) with the 600-step accents |
 
 ### jot-dark - "yoru sumi" (night ink)
 
-A near-black indigo ground (`#0e0c18`) - deeper than the usual neutral
-`#1c1c1c`, and not a grey-blue terminal default - carrying five low-chroma inks
-instead of a candy-stand spread: **rose** (`#e58db9`) for keywords, tags and
-every accent; **jade** (`#93cea9`) for strings; **periwinkle** (`#93b3dc`) for
-functions, methods, members and builtins; **amber** (`#dcae7c`) for numbers,
-constants, attributes and warnings; **lilac** (`#b2a5e2`) for types,
-constructors, builtin types and namespaces. Text is a soft lavender
-(`#d7d3e3`) rather than paper white, with comments, punctuation and operators
-one tint of it, so a file reads as ink with four places for the eye to land.
+A near-black indigo ground (`#07060e`) - deeper than the usual neutral
+`#1c1c1c`, and not a grey-blue terminal default - carrying a deep low-chroma
+ink for nearly every syntax family instead of a candy-stand spread: **rose**
+(`#c96f9c`) for keywords, control flow and every accent; **coral** (`#c58084`)
+for tags; **jade** (`#6fa886`) for strings; **periwinkle** (`#7b98c2`) for
+functions, methods and builtins; **cyan** (`#6f9fb0`) for members and imported
+modules; **amber** (`#bd9366`) for numbers, constants, directives, attributes
+and warnings; **gold** (`#b8a06a`) for string escapes and macro constants;
+**lilac** (`#9689c4`) for types, constructors, storage keywords and namespaces;
+and **indigo** (`#8b93d6`) for builtin types. Text is a soft lavender
+(`#c5c0d4`) rather than paper white, with comments, punctuation and operators
+one deep tint of it, so a file reads as ink with many quiet places for the eye
+to land.
 
-The chrome is deliberately compact: sidebar `#12101d`, status line and tabline
-`#14111f`, floats `#161322`, the selected row `#1c1929`, each a few steps off
-the editor's own ground. The frame recedes into the page and the border colour
-(`#292540`) reads as a rule rather than a box. The rose is the one saturated
-colour in the scheme, and it is spent where a hand goes: the active pane
-border, the cursor, the cursor line number, the focused terminal tab and the
-search hit.
+The chrome is deliberately compact and darker still: sidebar `#0b0a14`, status
+line and tabline `#0c0b16`, floats `#0e0d19`, the selected row `#161329`, each a
+few steps off the editor's own ground. The frame recedes into the page and the
+border colour (`#1c1930`) reads as a rule rather than a box. The rose is the one
+saturated colour in the scheme, and it is spent where a hand goes: the active
+pane border, the cursor, the cursor line number, the focused terminal tab and
+the search hit.
 
 ### jot-light - "mochi milk"
 
@@ -69,7 +73,7 @@ the change keeps working. Any other name now needs a file of its own.
 Apply with `:colorscheme jot-light` or from Lua:
 
 ```lua
-set_hl("Normal", { fg = "#d7d3e3", bg = "#0e0c18" })
+set_hl("Normal", { fg = "#c5c0d4", bg = "#07060e" })
 set_hl("Keyword", { fg = 215 }) -- an xterm index still works
 ```
 
@@ -82,9 +86,9 @@ is neither is ignored, leaving the slot at whatever it inherited. Use `-1` or
 
 ```json
 {
-  "Normal": {"fg": "#d7d3e3", "bg": "#0e0c18"},
-  "Comment": {"fg": "#8b87a2", "bg": "#0e0c18"},
-  "Keyword": {"fg": "#e58db9", "bg": "#0e0c18"},
+  "Normal": {"fg": "#c5c0d4", "bg": "#07060e"},
+  "Comment": {"fg": "#7d7994", "bg": "#07060e"},
+  "Keyword": {"fg": "#c96f9c", "bg": "#07060e"},
   "Visual": {"fg": 231, "bg": 240}
 }
 ```
@@ -241,19 +245,19 @@ A minimal annotated theme:
 
 ```json
 {
-  "Normal": {"fg": "#d8d3c6", "bg": "#0e0c18"},         // plain text / editor background
-  "Comment": {"fg": "#8b87a2", "bg": "#0e0c18"},        // comments
-  "keyword": {"fg": "#d9a1c6", "bg": "#0e0c18"},        // all keywords
-  "keyword.control": {"fg": "#e58db9", "bg": "#0e0c18"}, // if/for/while - override control
-  "string": {"fg": "#93cea9", "bg": "#0e0c18"},         // string literals
-  "number": {"fg": "#dcae7c", "bg": "#0e0c18"},         // numbers, constants fall back here
-  "function": {"fg": "#93b3dc", "bg": "#0e0c18"},       // function names
-  "function.method": {"fg": "#93b3dc", "bg": "#0e0c18"}, // method names (optional: keep = function)
-  "type": {"fg": "#b2a5e2", "bg": "#0e0c18"},           // type identifiers
-  "property": {"fg": "#9fc0e0", "bg": "#0e0c18"},       // obj.field members
-  "punctuation": {"fg": "#8e8aa6", "bg": "#0e0c18"},    // dim the brackets/semicolons
-  "tag": {"fg": "#e58db9", "bg": "#0e0c18"},            // HTML/JSX tags
-  "attribute": {"fg": "#dcae7c", "bg": "#0e0c18"}       // HTML/JSX tag attributes
+  "Normal": {"fg": "#c5c0d4", "bg": "#07060e"},         // plain text / editor background
+  "Comment": {"fg": "#7d7994", "bg": "#07060e"},        // comments
+  "keyword": {"fg": "#c96f9c", "bg": "#07060e"},        // all keywords
+  "keyword.control": {"fg": "#cf76a6", "bg": "#07060e"}, // if/for/while - override control
+  "string": {"fg": "#6fa886", "bg": "#07060e"},         // string literals
+  "number": {"fg": "#bd9366", "bg": "#07060e"},         // numbers, constants fall back here
+  "function": {"fg": "#7b98c2", "bg": "#07060e"},       // function names
+  "function.method": {"fg": "#82a6d4", "bg": "#07060e"}, // method names (optional: keep = function)
+  "type": {"fg": "#9689c4", "bg": "#07060e"},           // type identifiers
+  "property": {"fg": "#6f9fb0", "bg": "#07060e"},       // obj.field members
+  "punctuation": {"fg": "#7c7890", "bg": "#07060e"},    // dim the brackets/semicolons
+  "tag": {"fg": "#c58084", "bg": "#07060e"},            // HTML/JSX tags
+  "attribute": {"fg": "#b8a06a", "bg": "#07060e"}       // HTML/JSX tag attributes
 }
 ```
 

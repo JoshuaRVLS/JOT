@@ -12,7 +12,7 @@
 // that came out of the engine -- plus the two names that used to be bundled
 // (`dark`, `light`) and still have to work.
 //
-// Both shipped themes name exact 24-bit colours ("#e58db9") rather than xterm
+// Both shipped themes name exact 24-bit colours ("#c96f9c") rather than xterm
 // palette indices, so a case that wants a slot's colour reads it back through
 // the same conversion the renderer uses instead of comparing an index.
 #include "editor.h"
@@ -215,20 +215,26 @@ TEST_CASE("jot-dark applies the yoru sumi scheme", "[jot][theme]")
   // Exact colours, not palette entries: the whole point of the hex form is that
   // the scheme is authored in 24-bit space.
   REQUIRE(jot_ui::is_exact_color(t.fg_default));
-  REQUIRE(rgb_of(t.fg_default) == 0xD7D3E3); // soft lavender ink, not paper white
-  REQUIRE(rgb_of(t.bg_default) == 0x0E0C18); // near-black indigo, not the neutral #1c1c1c
+  REQUIRE(rgb_of(t.fg_default) == 0xC5C0D4); // soft lavender ink, not paper white
+  REQUIRE(rgb_of(t.bg_default) == 0x07060E); // near-black indigo, deeper than the neutral #1c1c1c
   REQUIRE(jot_ui::is_exact_color(t.bg_default));
-  REQUIRE(rgb_of(t.fg_keyword) == 0xE58DB9); // muted rose -- the one accent
-  REQUIRE(rgb_of(t.fg_string) == 0x93CEA9);  // jade
-  REQUIRE(rgb_of(t.fg_function_method) == 0x93B3DC);
-  REQUIRE(rgb_of(t.fg_number) == 0xDCAE7C); // amber
+  REQUIRE(rgb_of(t.fg_keyword) == 0xC96F9C); // deep rose -- the one accent
+  REQUIRE(rgb_of(t.fg_string) == 0x6FA886);  // jade
+  REQUIRE(rgb_of(t.fg_function_method) == 0x82A6D4);
+  REQUIRE(rgb_of(t.fg_number) == 0xBD9366); // amber
+  // More of the palette is spoken for than the five inks the scheme used to
+  // carry: property/module and tag now have hues of their own rather than
+  // borrowing periwinkle and rose.
+  REQUIRE(rgb_of(t.fg_field) == 0x6F9FB0);
+  REQUIRE(rgb_of(t.fg_module) == 0x6F9FB0);
+  REQUIRE(rgb_of(t.fg_tag) == 0xC58084);
   // The active border carries the accent rather than a blue: that rose is what
   // makes jot's chrome read as its own palette, not a neutral grey editor.
-  REQUIRE(rgb_of(t.fg_active_border) == 0xE58DB9);
+  REQUIRE(rgb_of(t.fg_active_border) == 0xC96F9C);
   // The chrome sits a few steps off the editor's own ground, so the frame
   // recedes and the code is the only thing with contrast.
-  REQUIRE(rgb_of(t.bg_sidebar) == 0x12101D);
-  REQUIRE(rgb_of(t.bg_status) == 0x14111F);
+  REQUIRE(rgb_of(t.bg_sidebar) == 0x0B0A14);
+  REQUIRE(rgb_of(t.bg_status) == 0x0C0B16);
 }
 
 TEST_CASE("The breadcrumb groups reach the Winbar slots", "[jot][theme]")
@@ -243,13 +249,13 @@ TEST_CASE("The breadcrumb groups reach the Winbar slots", "[jot][theme]")
   REQUIRE(e.apply_theme_for_test("jot-dark"));
   const Theme &t = e.theme_for_test();
   REQUIRE(jot_ui::is_exact_color(t.bg_winbar));
-  REQUIRE(rgb_of(t.bg_winbar) == 0x12101D);
-  REQUIRE(rgb_of(t.fg_winbar) == 0xD7D3E3);
-  REQUIRE(rgb_of(t.fg_winbar_crumb) == 0x8F8BA8);
-  REQUIRE(rgb_of(t.bg_winbar_crumb) == 0x12101D);
-  REQUIRE(rgb_of(t.fg_winbar_separator) == 0x3A3558);
-  REQUIRE(rgb_of(t.fg_winbar_hover) == 0xEEEAf8);
-  REQUIRE(rgb_of(t.bg_winbar_hover) == 0x1C1929);
+  REQUIRE(rgb_of(t.bg_winbar) == 0x0B0A14);
+  REQUIRE(rgb_of(t.fg_winbar) == 0xC5C0D4);
+  REQUIRE(rgb_of(t.fg_winbar_crumb) == 0x7D7994);
+  REQUIRE(rgb_of(t.bg_winbar_crumb) == 0x0B0A14);
+  REQUIRE(rgb_of(t.fg_winbar_separator) == 0x2B2745);
+  REQUIRE(rgb_of(t.fg_winbar_hover) == 0xDED9EC);
+  REQUIRE(rgb_of(t.bg_winbar_hover) == 0x161329);
 }
 
 TEST_CASE("jot-light is the same inks as jam and matcha on cream paper", "[jot][theme]")
@@ -340,9 +346,9 @@ TEST_CASE("Hex theme colours accept every documented form", "[jot][theme]")
   REQUIRE(rgb_of(t.fg_keyword) == 0xA0B0C0);
   REQUIRE(rgb_of(t.fg_cursor) == 0x00FF00);
   // Unparseable colours are ignored: the slot keeps what the base theme set.
-  REQUIRE(rgb_of(t.fg_comment) == 0x8B87A2);
-  REQUIRE(rgb_of(t.fg_string) == 0x93CEA9);
-  REQUIRE(rgb_of(t.fg_number) == 0xDCAE7C);
+  REQUIRE(rgb_of(t.fg_comment) == 0x7D7994);
+  REQUIRE(rgb_of(t.fg_string) == 0x6FA886);
+  REQUIRE(rgb_of(t.fg_number) == 0xBD9366);
 }
 
 TEST_CASE("A hex and an index can name the same slot value", "[jot][theme]")
@@ -409,7 +415,7 @@ TEST_CASE("The names the removed catalog used still resolve", "[jot][theme]")
   // is actually painted.
   REQUIRE(e.apply_theme_for_test("dark"));
   REQUIRE(e.theme_name_for_test() == "jot-dark");
-  REQUIRE(rgb_of(e.theme_for_test().bg_default) == 0x0E0C18);
+  REQUIRE(rgb_of(e.theme_for_test().bg_default) == 0x07060E);
 
   REQUIRE(e.apply_theme_for_test("light"));
   REQUIRE(e.theme_name_for_test() == "jot-light");
@@ -423,7 +429,7 @@ TEST_CASE("The names the removed catalog used still resolve", "[jot][theme]")
   // than half-applying a palette.
   REQUIRE_FALSE(e.apply_theme_for_test("gruvbox"));
   REQUIRE(e.theme_name_for_test() == "jot-dark");
-  REQUIRE(rgb_of(e.theme_for_test().bg_default) == 0x0E0C18);
+  REQUIRE(rgb_of(e.theme_for_test().bg_default) == 0x07060E);
 }
 
 TEST_CASE("A file the user writes under a legacy name beats the alias", "[jot][theme]")

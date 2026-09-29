@@ -4,7 +4,7 @@
 The panel tab strip and the git/debugger view tabs are drawn by the bundled Lua
 side panel, which reads its colours from the editor. A fallback that pairs one
 theme slot with another can land two equal colours in one cell (jot-dark has the
-keyword accent and the selection background both at #e58db9), which paints the
+keyword accent and the selection background both at #c96f9c), which paints the
 active tab in its own background: the text is on the grid and invisible. Checked
 the way a reader would see it: every inked cell in the dock has to carry a
 foreground that differs from its background.
