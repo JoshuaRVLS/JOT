@@ -303,15 +303,11 @@ public:
   }
   // Re-anchors the blink phase without the input-pause hold restart_blink()
   // applies (which would keep the caret solid through the whole measurement).
-  // A test that watches the caret flip needs a known phase to start from.
+  // A test that watches the caret flip needs a known phase to start from; this
+  // is the clock restart a pointer move uses.
   void reset_blink_phase_for_test()
   {
-    blink_anchor_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          std::chrono::steady_clock::now().time_since_epoch())
-                          .count();
-    blink_suspend_until_ms = 0;
-    blink_visible = true;
-    needs_redraw = true;
+    restart_blink_pointer();
   }
   // Moves the end of the input pause without waiting it out: a case that pins
   // the half after a pause would otherwise sit through the real hold first.

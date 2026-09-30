@@ -153,6 +153,11 @@ private:
   // suspends blinking for a short window, so the cursor stays solid right
   // after any input instead of blinking mid-keystroke.
   void restart_blink();
+  // Restarts the blink clock for a pointer move. The caret shows at its new
+  // home and then keeps the ordinary rhythm: a click is not a typing burst, so
+  // there is nothing to stay solid through, and the typing hold made the blink
+  // look like it stopped instead of restarting.
+  void restart_blink_pointer();
   void delete_word_backward();
   void delete_word_forward();
   void delete_selection();

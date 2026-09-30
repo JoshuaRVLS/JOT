@@ -414,7 +414,7 @@ bool Editor::handle_tabline_mouse(int x,
     close_buffer_at(tab.buffer_id);
     tabline_hover_index = -1;
     focus_state = FOCUS_EDITOR;
-    restart_blink();
+    restart_blink_pointer();
     needs_redraw = true;
     return true;
   }
@@ -428,7 +428,7 @@ bool Editor::handle_tabline_mouse(int x,
     tabline_drag_x = x;
     tabline_drag_moved = false;
     focus_state = FOCUS_EDITOR;
-    restart_blink();
+    restart_blink_pointer();
     needs_redraw = true;
     return true;
   }

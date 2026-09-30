@@ -14,6 +14,14 @@ namespace
   // between keys, and a pause to read lets the blink start.
   constexpr long long kBlinkHoldMs = 700;
 
+  // Now on the millisecond clock the blink phase is measured in.
+  long long blink_now_ms()
+  {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+  }
+
   bool is_word_byte(char c)
   {
     const unsigned char uc = (unsigned char)c;
@@ -92,11 +100,19 @@ bool Editor::multicursor_active()
 
 void Editor::restart_blink()
 {
-  const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          std::chrono::steady_clock::now().time_since_epoch())
-                          .count();
-  blink_anchor_ms = now_ms;
-  blink_suspend_until_ms = now_ms + kBlinkHoldMs;
+  blink_anchor_ms = blink_now_ms();
+  blink_suspend_until_ms = blink_anchor_ms + kBlinkHoldMs;
+  blink_visible = true;
+  needs_redraw = true;
+}
+
+// A pointer move is not a typing burst: there is nothing to keep the caret
+// solid through, and sitting out the hold made the blink look like it had
+// stopped. The caret shows at the new home and keeps the ordinary rhythm.
+void Editor::restart_blink_pointer()
+{
+  blink_anchor_ms = blink_now_ms();
+  blink_suspend_until_ms = 0;
   blink_visible = true;
   needs_redraw = true;
 }

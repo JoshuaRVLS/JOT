@@ -1300,9 +1300,11 @@ The caret is configured with two keys:
 - `cursor_blink_ms` - half of the blink cycle, in milliseconds: the caret is
   visible for that long, then hidden for the same. `0` makes it solid. The
   phase is jot's own clock, shared by the terminal and GUI frontends. Typing
-  or moving the caret lands it solid and holds it there for 700 ms, and the
-  cycle runs from the end of that pause, so the half after it is a whole one
-  rather than whatever fragment a keystroke-timed clock had left.
+  lands it solid and holds it there for 700 ms, and the cycle runs from the end
+  of that pause, so the half after it is a whole one rather than whatever
+  fragment a keystroke-timed clock had left. A mouse click is not a typing
+  burst: it re-anchors the phase with no hold, so the caret shows at the clicked
+  cell and blinks a normal half from there.
 
 The mouse wheel can scroll smoothly. `smooth_scroll` is off by default - the
 wheel jumps a notch per event, as it always has - and `smooth_scroll=true`

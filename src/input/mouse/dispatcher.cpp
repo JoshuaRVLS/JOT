@@ -952,7 +952,7 @@ void Editor::handle_mouse(void *event_ptr)
           cancel_lsp_mouse_hover();
           hide_lsp_signature();
           hide_lsp_completion();
-          restart_blink();
+          restart_blink_pointer();
           needs_redraw = true;
           return;
         }
@@ -1149,7 +1149,7 @@ void Editor::handle_mouse(void *event_ptr)
     add_caret_at(click_y, click_x);
     mouse_selecting = false;
     mouse_drag_started = false;
-    restart_blink();
+    restart_blink_pointer();
     needs_redraw = true;
     return;
   }
@@ -1472,7 +1472,7 @@ void Editor::handle_mouse(void *event_ptr)
       mouse_selecting = false;
       mouse_drag_started = false;
       request_lsp_definition();
-      restart_blink();
+      restart_blink_pointer();
       needs_redraw = true;
       return;
     }
@@ -1481,7 +1481,7 @@ void Editor::handle_mouse(void *event_ptr)
   if (bstate == 1)
   {
     focus_state = FOCUS_EDITOR;
-    restart_blink();
+    restart_blink_pointer();
     hide_lsp_completion();
     auto now = std::chrono::steady_clock::now();
     long long now_ms =
@@ -1592,7 +1592,7 @@ void Editor::handle_mouse(void *event_ptr)
   }
   else if (bstate == 2)
   {
-    restart_blink();
+    restart_blink_pointer();
     hide_lsp_completion();
 
     if (mouse_selecting)
@@ -1655,7 +1655,7 @@ void Editor::handle_mouse(void *event_ptr)
   }
   else if (bstate == 32)
   {
-    restart_blink();
+    restart_blink_pointer();
     hide_lsp_completion();
     if (mouse_selecting)
     {

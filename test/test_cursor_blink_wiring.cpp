@@ -144,6 +144,36 @@ TEST_CASE("A slower period blinks more slowly", "[jot]")
   REQUIRE(brisk.saw_hidden);
 }
 
+TEST_CASE("A pointer move blinks without the typing hold", "[jot]")
+{
+  Editor &e = probe_editor();
+  load_file(e);
+  e.config_set_for_test("cursor_blink_ms", "200");
+
+  // The pointer restart (what a click uses) shows the caret at its new home and
+  // keeps the ordinary rhythm. With no typing hold the first hidden half lands
+  // one period in (200 ms), where the keystroke restart would sit out its
+  // 700 ms hold first and only hide at ~900 ms.
+  e.reset_blink_phase_for_test();
+  const long long start_ms = now_ms();
+  long long first_hidden_ms = 0;
+  const auto deadline = std::chrono::steady_clock::now() + 1500ms;
+  while (std::chrono::steady_clock::now() < deadline)
+  {
+    e.render_frame_for_test();
+    if (!caret_shown(e))
+    {
+      first_hidden_ms = now_ms();
+      break;
+    }
+    std::this_thread::sleep_for(10ms);
+  }
+  REQUIRE(first_hidden_ms > 0);
+  const long long hidden_after_ms = first_hidden_ms - start_ms;
+  REQUIRE(hidden_after_ms >= 100);
+  REQUIRE(hidden_after_ms <= 600);
+}
+
 TEST_CASE("The half after an input pause is a whole one", "[jot]")
 {
   Editor &e = probe_editor();
