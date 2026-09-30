@@ -2,6 +2,7 @@
 #include "jot/lua/api.h"
 #include <algorithm>
 #include <cstddef>
+#include <memory>
 #ifdef JOT_TREESITTER
 #include <tree_sitter/api.h>
 #endif
@@ -10,7 +11,44 @@ namespace
 {
   constexpr std::size_t kMaxUndoHistory = 500;
 
-  State capture_state(const FileBuffer &buf)
+  // One line of a full snapshot: the previous state's copy of it when the text
+  // has not changed, so an untouched line costs a pointer instead of a copy.
+  // `prev` is the state the new one is about to sit on top of, or null when
+  // there is none.
+  //
+  // The lines only line up when `prev` is a full snapshot of the same buffer;
+  // when it is a window the indices mean different lines. That costs a hit
+  // rather than correctness, because a line is only ever shared when its text is
+  // the same, and the windowed capture below holds too few lines to be worth the
+  // same treatment.
+  SnapshotLine snapshot_line(const FileBuffer &buf, const State *prev, int index)
+  {
+    if (prev != nullptr && index < (int)prev->old_lines.size())
+    {
+      const SnapshotLine &shared = prev->old_lines[index];
+      if (shared && *shared == buf.line(index))
+      {
+        return shared;
+      }
+    }
+    return std::make_shared<const std::string>(buf.line(index));
+  }
+
+  // The text a snapshot restores, as a plain vector the buffer can take: the
+  // snapshot holds its lines by reference, so restoring is where they are
+  // copied out again.
+  std::vector<std::string> materialize_lines(const std::vector<SnapshotLine> &lines)
+  {
+    std::vector<std::string> out;
+    out.reserve(lines.size());
+    for (const SnapshotLine &line : lines)
+    {
+      out.push_back(line ? *line : std::string());
+    }
+    return out;
+  }
+
+  State capture_state(const FileBuffer &buf, const State *prev)
   {
     State s;
     const int total = (int)buf.line_count();
@@ -23,7 +61,7 @@ namespace
       s.old_lines.reserve(total);
       for (int i = 0; i < total; i++)
       {
-        s.old_lines.push_back(buf.line(i));
+        s.old_lines.push_back(snapshot_line(buf, prev, i));
       }
     }
     else
@@ -62,7 +100,7 @@ namespace
       s.old_lines.reserve(end - start);
       for (int i = start; i < end; i++)
       {
-        s.old_lines.push_back(buf.line(i));
+        s.old_lines.push_back(std::make_shared<const std::string>(buf.line(i)));
       }
     }
 
@@ -107,7 +145,15 @@ namespace
     }
     for (size_t i = 0; i < a.old_lines.size(); i++)
     {
-      if (a.old_lines[i] != b.old_lines[i])
+      const SnapshotLine &left = a.old_lines[i];
+      const SnapshotLine &right = b.old_lines[i];
+      // The same line object cannot differ; a shared line answers here, which
+      // is every line of a snapshot that only the edit touched.
+      if (left == right)
+      {
+        continue;
+      }
+      if (!left || !right || *left != *right)
       {
         return false;
       }
@@ -145,10 +191,7 @@ namespace
 
     if (prev.full_snapshot)
     {
-      std::vector<std::string> saved_lines;
-      saved_lines.reserve(prev.old_lines.size());
-      for (const auto &l : prev.old_lines)
-        saved_lines.push_back(l);
+      std::vector<std::string> saved_lines = materialize_lines(prev.old_lines);
       if (saved_lines.empty())
         saved_lines.push_back("");
 
@@ -185,7 +228,8 @@ namespace
         count = curr_total - start;
       }
 
-      buf.replace_lines(start, count, prev.old_lines);
+      const std::vector<std::string> window = materialize_lines(prev.old_lines);
+      buf.replace_lines(start, count, window);
     }
 
     buf.cursor = prev.cursor;
@@ -235,13 +279,15 @@ void Editor::save_state()
     }
   }
 
-  const State s = capture_state(buf);
+  // The snapshot shares its unchanged lines with the state it is pushed on
+  // top of, so it is taken against the live top of the stack.
+  State s = capture_state(buf, buf.undo_stack.empty() ? nullptr : &buf.undo_stack.top());
   if (!buf.undo_stack.empty() && same_state(buf, buf.undo_stack.top(), s))
   {
     return;
   }
 
-  buf.undo_stack.push(s);
+  buf.undo_stack.push(std::move(s));
   trim_stack(buf.undo_stack, kMaxUndoHistory);
   while (!buf.redo_stack.empty())
   {
@@ -257,7 +303,7 @@ void Editor::undo()
     return;
   }
 
-  State redo_delta = capture_state(buf);
+  State redo_delta = capture_state(buf, buf.redo_stack.empty() ? nullptr : &buf.redo_stack.top());
   buf.redo_stack.push(std::move(redo_delta));
   trim_stack(buf.redo_stack, kMaxUndoHistory);
 
@@ -297,7 +343,7 @@ void Editor::redo()
     return;
   }
 
-  State undo_delta = capture_state(buf);
+  State undo_delta = capture_state(buf, buf.undo_stack.empty() ? nullptr : &buf.undo_stack.top());
   buf.undo_stack.push(std::move(undo_delta));
   trim_stack(buf.undo_stack, kMaxUndoHistory);
 

@@ -20,6 +20,10 @@ class PreviewServer;
 #include "jot/lua/view/surfaces.h"
 #include "jot/lua/view/plugins.h"
 
+// SnapshotLine, the edit snapshots below (see model/buffer.h). Kept in its own
+// block so the view includes above keep the order they have to be read in.
+#include "jot/model/buffer.h"
+
 // Forward declaration
 class Editor;
 class EditorHostAPI;
@@ -75,9 +79,12 @@ private:
   // subscriber. Refs are unregistered on plugin reload/cleanup.
   std::map<std::string, std::vector<EventBusSubscriber>> event_subscribers_;
   int next_event_sub_id_ = 1;
-  // Per-buffer last-known text (only tracked while a BufChange listener is
+  // Per-buffer last-known lines (only tracked while a BufChange listener is
   // registered) so edit deltas can be computed without touching call sites.
-  std::unordered_map<std::string, std::string> edit_snapshots_;
+  // A snapshot (SnapshotLine, model/buffer.h) holds each unchanged line by
+  // reference, so it costs the lines an edit touched rather than a copy of the
+  // buffer joined into one string and split apart again on every keystroke.
+  std::unordered_map<std::string, std::vector<SnapshotLine>> edit_snapshots_;
   LuaEditDelta last_edit_;
   // Rapid events (BufChange, CursorMoved) fired several times inside one
   // event-loop drain are coalesced into a single Lua dispatch per event

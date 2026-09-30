@@ -54,11 +54,17 @@ struct GlobalMark
   int col = 0;
 };
 
+// One line held by an undo snapshot. A snapshot shares the lines it did not
+// change with the snapshot before it, so typing a character into a 2000-line
+// file puts that one line on the stack instead of a copy of every line in the
+// file (~190 KB per keystroke, and the history keeps 500 of them).
+using SnapshotLine = std::shared_ptr<const std::string>;
+
 struct State
 {
   bool full_snapshot = false;
   int start_line = 0;
-  std::vector<std::string> old_lines;
+  std::vector<SnapshotLine> old_lines;
   int old_total_lines = 0;
 
   Cursor cursor;

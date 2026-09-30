@@ -30,18 +30,47 @@ void LuaAPI::on_buffer_open(const std::string &f)
   fire_autocmd("BufOpen", f, -1);
   emit_buffer_event("buffer.open", f);
 }
-static void lua_split_edit_lines(const std::string &text, std::vector<std::string> &out)
+static const std::string &lua_empty_line()
 {
-  size_t start = 0;
-  for (size_t i = 0; i < text.size(); i++)
+  static const std::string empty;
+  return empty;
+}
+
+// A snapshot line, or a shared placeholder when one is missing: the matching
+// below reads both sides through the same accessor, so it never has to know
+// which side it is looking at.
+static const std::string &lua_line_or_empty(const SnapshotLine &line)
+{
+  return line ? *line : lua_empty_line();
+}
+
+// One side of a delta: a snapshot's shared lines, or the buffer's own lines.
+struct LuaDeltaSide
+{
+  const std::vector<SnapshotLine> *shared = nullptr;
+  const std::vector<std::string> *plain = nullptr;
+
+  std::size_t size() const
   {
-    if (text[i] == '\n')
-    {
-      out.push_back(text.substr(start, i - start));
-      start = i + 1;
-    }
+    return shared != nullptr ? shared->size() : plain->size();
   }
-  out.push_back(text.substr(start));
+
+  const std::string &at(std::size_t index) const
+  {
+    return shared != nullptr ? lua_line_or_empty((*shared)[index]) : (*plain)[index];
+  }
+};
+
+// Every line of a buffer as a snapshot, copied.
+static std::vector<SnapshotLine> lua_snapshot_lines(const std::vector<std::string> &lines)
+{
+  std::vector<SnapshotLine> out;
+  out.reserve(lines.size());
+  for (const std::string &line : lines)
+  {
+    out.push_back(std::make_shared<const std::string>(line));
+  }
+  return out;
 }
 
 static size_t lua_common_prefix_bytes(const std::string &a, const std::string &b)
@@ -64,18 +93,15 @@ static size_t lua_common_suffix_bytes(const std::string &a, const std::string &b
 
 // Joins lines[first..last] (inclusive). The first line loses its leading
 // cut_left bytes; the last line is truncated to its first end_col bytes.
-static std::string lua_join_edit_range(const std::vector<std::string> &lines,
-                                       size_t first,
-                                       size_t last,
-                                       size_t cut_left,
-                                       size_t end_col)
+static std::string lua_join_edit_range(
+    const LuaDeltaSide &lines, size_t first, size_t last, size_t cut_left, size_t end_col)
 {
   std::string out;
   if (first > last || first >= lines.size())
     return out;
   for (size_t i = first; i <= last && i < lines.size(); i++)
   {
-    const std::string &line = lines[i];
+    const std::string &line = lines.at(i);
     size_t from = 0;
     size_t to = line.size();
     if (i == first)
@@ -98,46 +124,71 @@ static std::string lua_join_edit_range(const std::vector<std::string> &lines,
 // using common-prefix/common-suffix line matching. Exact for single-line
 // typing/paste/delete edits and block inserts; approximations suffice for
 // anything more exotic (undo spans, merges).
-static LuaEditDelta compute_edit_delta(const std::string &prev, const std::string &now)
+//
+// The old side is the snapshot's shared lines and the new side is the buffer's
+// own, so the pass never joins the text into one string only to split it again:
+// that was an allocation and a copy per line of the file on every keystroke.
+// `updated` comes back holding the new state, sharing every line the edit did
+// not touch with `prev` instead of copying it.
+static LuaEditDelta compute_edit_delta(const std::vector<SnapshotLine> &prev,
+                                       const std::vector<std::string> &now,
+                                       std::vector<SnapshotLine> &updated)
 {
+  const LuaDeltaSide a{&prev, nullptr};
+  const LuaDeltaSide b{nullptr, &now};
   LuaEditDelta d;
-  if (prev == now)
-    return d;
-  std::vector<std::string> a, b;
-  lua_split_edit_lines(prev, a);
-  lua_split_edit_lines(now, b);
   size_t ai = 0, bi = 0;
-  while (ai < a.size() && bi < b.size() && a[ai] == b[bi])
+  while (ai < a.size() && bi < b.size() && a.at(ai) == b.at(bi))
   {
     ai++;
     bi++;
   }
   size_t aend = a.size(), bend = b.size();
-  while (aend > ai && bend > bi && a[aend - 1] == b[bend - 1])
+  while (aend > ai && bend > bi && a.at(aend - 1) == b.at(bend - 1))
   {
     aend--;
     bend--;
   }
+
+  // The new snapshot: the matched prefix and suffix are the very lines the
+  // previous one holds, so they are shared; only the changed range is copied.
+  updated.clear();
+  updated.reserve(b.size());
+  for (size_t i = 0; i < ai; i++)
+  {
+    updated.push_back(prev[i]);
+  }
+  for (size_t i = ai; i < bend; i++)
+  {
+    updated.push_back(std::make_shared<const std::string>(now[i]));
+  }
+  for (size_t i = aend; i < prev.size(); i++)
+  {
+    updated.push_back(prev[i]);
+  }
+
   if (ai == aend && bi == bend)
     return d;
 
-  const std::string &old_first = ai < a.size() ? a[ai] : std::string();
-  const std::string &new_first = bi < b.size() ? b[bi] : std::string();
+  const std::string &old_first = ai < a.size() ? a.at(ai) : lua_empty_line();
+  const std::string &new_first = bi < b.size() ? b.at(bi) : lua_empty_line();
   const size_t p = lua_common_prefix_bytes(old_first, new_first);
   const bool old_has = aend > ai;
   const bool new_has = bend > bi;
   size_t suffix = 0;
   if (old_has && new_has)
   {
-    suffix = lua_common_suffix_bytes(a[aend - 1], b[bend - 1]);
+    suffix = lua_common_suffix_bytes(a.at(aend - 1), b.at(bend - 1));
     // Single-line changes must not double-count the common middle.
     if (aend - ai == 1 && bend - bi == 1)
     {
-      suffix = std::min(suffix, std::min(a[ai].size(), b[bi].size()) - p);
+      suffix = std::min(suffix, std::min(a.at(ai).size(), b.at(bi).size()) - p);
     }
   }
-  const size_t old_end = old_has && a[aend - 1].size() >= suffix ? a[aend - 1].size() - suffix : 0;
-  const size_t new_end = new_has && b[bend - 1].size() >= suffix ? b[bend - 1].size() - suffix : 0;
+  const size_t old_end =
+      old_has && a.at(aend - 1).size() >= suffix ? a.at(aend - 1).size() - suffix : 0;
+  const size_t new_end =
+      new_has && b.at(bend - 1).size() >= suffix ? b.at(bend - 1).size() - suffix : 0;
 
   d.start_line = (int)bi + 1;
   d.start_col = (int)p + 1;
@@ -222,21 +273,19 @@ void LuaAPI::on_buffer_change(const std::string &f, const std::string &)
       FileBuffer &buf = editor->buffers[(size_t)index];
       if (!buf.is_lazy() && buf.line_count() <= 100000)
       {
-        std::string cur;
-        for (size_t i = 0; i < buf.lines.size(); i++)
-        {
-          if (i)
-            cur += '\n';
-          cur += buf.lines[i];
-        }
         // Unnamed buffers share an empty filepath; key them by index.
         const std::string key = f.empty() ? ("\x01" + std::to_string(index)) : f;
         auto it = edit_snapshots_.find(key);
         if (it != edit_snapshots_.end())
         {
-          last_edit_ = compute_edit_delta(it->second, cur);
+          std::vector<SnapshotLine> updated;
+          last_edit_ = compute_edit_delta(it->second, buf.lines, updated);
+          it->second = std::move(updated);
         }
-        edit_snapshots_[key] = std::move(cur);
+        else
+        {
+          edit_snapshots_[key] = lua_snapshot_lines(buf.lines);
+        }
         while (edit_snapshots_.size() > 256)
         {
           edit_snapshots_.erase(edit_snapshots_.begin());
