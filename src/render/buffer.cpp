@@ -44,6 +44,22 @@ namespace
     int width = 0;
   };
 
+  // True when `name` ends with any non-empty entry of `suffixes`. The colour
+  // preview's filetype lists match file-name suffixes, so "app.min.css" can be
+  // excluded by ".min.css" while plain ".css" still gets previews.
+  bool name_has_any_suffix(const std::string &name, const std::vector<std::string> &suffixes)
+  {
+    for (const auto &entry : suffixes)
+    {
+      if (!entry.empty() && name.size() >= entry.size()
+          && name.compare(name.size() - entry.size(), entry.size(), entry) == 0)
+      {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // One occurrence of the word under the caret, on the row being painted.
   struct WordHit
   {
@@ -327,10 +343,29 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
   std::vector<int> visual_cols;
 
   // Colour-preview gate for this pane's buffer, resolved once per frame rather
-  // than per line: the option list is re-read from config so a change applies
-  // immediately, and the extension comparison is what keeps e.g. lockfiles and
-  // minified bundles out of it.
+  // than per line: the option lists are re-read from config so a change applies
+  // immediately. Previews are a web-authoring affordance, so the default is an
+  // allow-list of markup and stylesheet filetypes -- a "#ffffff" in a C++
+  // comment or a log line is not a swatch anyone asked for. The exclusion list
+  // then carves minified bundles and lockfiles out of the allowed set, and an
+  // empty allow-list restores the old everywhere behaviour.
   bool colorizer_on = config.get_bool("colorizer", true);
+  if (colorizer_on)
+  {
+    const std::string name = std::filesystem::path(buf.filepath).filename().string();
+    const std::vector<std::string> allowed = config.get_list("colorizer_filetypes");
+    const std::vector<std::string> excluded = config.get_list("colorizer_exclude_filetypes");
+    // An unnamed buffer matches neither list, so it stays clean unless the
+    // allow-list is empty.
+    if (!allowed.empty() && !name_has_any_suffix(name, allowed))
+    {
+      colorizer_on = false;
+    }
+    else if (name_has_any_suffix(name, excluded))
+    {
+      colorizer_on = false;
+    }
+  }
   const jot_color::DisplayMode colorizer_mode =
       jot_color::parse_display_mode(config.get("colorizer_mode", "background"));
   // Every switch is read here, once per frame: that is what makes a settings
@@ -372,25 +407,6 @@ void Editor::render_buffer_content(const SplitPane &pane, int pane_index, int bu
     // Resolved references are baked into cached spans, so the cache must not
     // serve a line that was scanned against the previous definitions.
     colorizer_cache.clear();
-  }
-  if (colorizer_on && !buf.filepath.empty())
-  {
-    const std::vector<std::string> excluded = config.get_list("colorizer_exclude_filetypes");
-    if (!excluded.empty())
-    {
-      // Matched against the file name's *suffix*, so "app.min.css" can be
-      // excluded by ".min.css" while plain ".css" still gets previews.
-      const std::string name = std::filesystem::path(buf.filepath).filename().string();
-      for (const auto &entry : excluded)
-      {
-        if (!entry.empty() && name.size() >= entry.size()
-            && name.compare(name.size() - entry.size(), entry.size(), entry) == 0)
-        {
-          colorizer_on = false;
-          break;
-        }
-      }
-    }
   }
 
   // Per-row scratch, hoisted out of the row loop. Each of these used to be

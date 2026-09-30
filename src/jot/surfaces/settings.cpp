@@ -60,6 +60,7 @@ const KnownSetting kKnownSettings[] = {
     {"colorizer_css_vars", "Color preview: CSS variables", SettingsEntry::Type::Bool},
     {"colorizer_sass", "Color preview: Sass variables", SettingsEntry::Type::Bool},
     {"colorizer_only_in_strings", "Color preview: strings only", SettingsEntry::Type::Bool},
+    {"colorizer_filetypes", "Color preview: only in extensions", SettingsEntry::Type::String},
     {"colorizer_exclude_filetypes", "Color preview: skip extensions", SettingsEntry::Type::String},
     {"truecolor", "24-bit color (auto/on/off)", SettingsEntry::Type::String},
     {"completion_rich_labels", "Completion: rich labels", SettingsEntry::Type::Bool},

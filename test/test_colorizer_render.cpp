@@ -278,3 +278,57 @@ TEST_CASE("A text selection still wins over the preview", "[jot][colorizer]")
   render(e);
   REQUIRE(find_cell_with_bg(ui, 0xFF8800u) == nullptr);
 }
+
+TEST_CASE("The preview only runs in web filetypes", "[jot][colorizer]")
+{
+  Editor &e = probe_editor();
+  e.config_set_for_test("colorizer", "true");
+  e.config_set_for_test("colorizer_mode", "background");
+
+  // A colour literal in a source file is left alone: this is what stops a log
+  // line's "#ffffff" from lighting up.
+  load_text(e, "local c = \"#ff8800\"\n", ".lua");
+  render(e);
+  REQUIRE(find_cell_with_bg(e.ui_for_test(), 0xFF8800u) == nullptr);
+
+  // ...while every default web filetype gets the swatch.
+  for (const char *ext : {".html",
+                          ".htm",
+                          ".jsx",
+                          ".tsx",
+                          ".css",
+                          ".scss",
+                          ".sass",
+                          ".less",
+                          ".mdx",
+                          ".vue",
+                          ".svelte",
+                          ".astro",
+                          ".php"})
+  {
+    load_text(e, "a { color: #ff8800; }\n", ext);
+    render(e);
+    REQUIRE(find_cell_with_bg(e.ui_for_test(), 0xFF8800u) != nullptr);
+  }
+
+  // The list is live: replacing it moves the gate, and an empty value restores
+  // the old everywhere behaviour.
+  e.config_set_for_test("colorizer_filetypes", ".lua");
+  load_text(e, "local c = \"#ff8800\"\n", ".lua");
+  render(e);
+  REQUIRE(find_cell_with_bg(e.ui_for_test(), 0xFF8800u) != nullptr);
+
+  load_text(e, "a { color: #ff8800; }\n", ".css");
+  render(e);
+  REQUIRE(find_cell_with_bg(e.ui_for_test(), 0xFF8800u) == nullptr);
+
+  e.config_set_for_test("colorizer_filetypes", "");
+  load_text(e, "local c = \"#ff8800\"\n", ".lua");
+  render(e);
+  REQUIRE(find_cell_with_bg(e.ui_for_test(), 0xFF8800u) != nullptr);
+
+  // Leave the shared editor on the shipped default for the other cases.
+  e.config_set_for_test(
+      "colorizer_filetypes",
+      ".html,.htm,.jsx,.tsx,.css,.scss,.sass,.less,.mdx,.vue,.svelte,.astro,.php");
+}

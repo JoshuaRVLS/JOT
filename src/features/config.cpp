@@ -177,6 +177,12 @@ void Config::load_defaults()
   settings["colorizer_sass"] = "false";      // $name: value and $name references
   // Restrict matches to string/comment bytes (off = every byte, like upstream).
   settings["colorizer_only_in_strings"] = "false";
+  // Filetypes the preview runs in, as file-name suffixes. A hex literal in a
+  // C++ comment or an identifier like `red` in prose is not a swatch anyone
+  // asked for, so the default is the web-authoring set; an empty value
+  // restores the old everywhere behaviour.
+  settings["colorizer_filetypes"] =
+      ".html,.htm,.jsx,.tsx,.css,.scss,.sass,.less,.mdx,.vue,.svelte,.astro,.php";
   // Extensions to leave alone, e.g. ".min.css,.map".
   settings["colorizer_exclude_filetypes"] = "";
   // LSP completion rows: split the label into name / arguments / type and

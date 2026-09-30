@@ -261,6 +261,13 @@ is what gets shown.
 | `foreground` | The literal is drawn in the colour; the background is untouched. |
 | `virtualtext` | The text is left alone and a swatch is appended after the line. |
 
+The preview only runs in web-authoring filetypes - by default `.html`, `.htm`,
+`.jsx`, `.tsx`, `.css`, `.scss`, `.sass`, `.less`, `.mdx`, `.vue`, `.svelte`,
+`.astro` and `.php` - because a hex literal in a C++ comment or a log line is
+rarely a colour anyone wants painted. `colorizer_filetypes` replaces that list
+(file-name suffixes, like `colorizer_exclude_filetypes` below); an empty value
+restores previews everywhere.
+
 The preview is painted over the syntax colours but *under* the selection,
 search matches, diagnostics and the cursor, so it never hides what you are
 working on. It applies to the GUI and the terminal alike; the terminal needs a
@@ -1255,11 +1262,12 @@ Extensions category adds `wakatime=false`, `wakatime_api_key=` and
 `colorizer_hex_0x=false`, `colorizer_names=true`, `colorizer_tailwind=false`,
 `colorizer_xcolor=false`, `colorizer_functions=true`, `colorizer_xterm=false`,
 `colorizer_ls_colors=false`, `colorizer_css_vars=false`,
-`colorizer_sass=false`, `colorizer_only_in_strings=false` and
-`colorizer_exclude_filetypes=` (a comma separated list of file-name suffixes to
-skip, e.g. `.min.css,.map`), plus `truecolor=auto` for 24-bit output. LSP
-completion rows add `completion_rich_labels=true`, `completion_align_type=true`
-and `completion_dim_arguments=true`.
+`colorizer_sass=false`, `colorizer_only_in_strings=false`,
+`colorizer_filetypes=` (the file-name suffixes the preview runs in, the web set
+named above by default) and `colorizer_exclude_filetypes=` (a comma separated
+list of file-name suffixes to skip, e.g. `.min.css,.map`), plus `truecolor=auto`
+for 24-bit output. LSP completion rows add `completion_rich_labels=true`,
+`completion_align_type=true` and `completion_dim_arguments=true`.
 
 The markdown preview adds `markdown_preview_auto_start=false`,
 `markdown_preview_auto_close=true`, `markdown_preview_refresh_interval=100`,
