@@ -106,6 +106,18 @@ namespace
   {
     return haystack.find(needle) != std::string::npos;
   }
+
+  // Non-overlapping occurrences, for the "every X is also a Y" shape below.
+  size_t count(const std::string &haystack, const std::string &needle)
+  {
+    size_t n = 0;
+    for (size_t at = haystack.find(needle); at != std::string::npos;
+         at = haystack.find(needle, at + needle.size()))
+    {
+      n++;
+    }
+    return n;
+  }
 } // namespace
 
 TEST_CASE("Markdown headings get slug ids, source anchors and a nested TOC", "[markdown][lua]")
@@ -251,4 +263,35 @@ TEST_CASE("The preview page embeds the body and the live client", "[markdown][lu
   REQUIRE(has(page, "EventSource('/events')"));
   REQUIRE(has(page, "fetch('/sync'"));
   REQUIRE(has(page, "<title>Hello</title>"));
+}
+
+TEST_CASE("The preview page paints without waiting on the CDN", "[markdown][lua]")
+{
+  MdState state;
+  // Every CDN library on, so this covers all of head_tags and not just the
+  // default highlight.js pair.
+  for (const char *option :
+       {"highlightjs", "katex", "mermaid", "flowchart", "plantuml", "echarts", "vega"})
+  {
+    state.enable_option(option);
+  }
+  const std::string page = state.render("# Hello\n", "html");
+
+  // The document and its own sheet are inline, so the page is the whole preview
+  // even with no network at all.
+  REQUIRE(has(page, "<div id=\"content\"><h1 id=\"hello\""));
+  REQUIRE(has(page, "<style>"));
+
+  // The libraries are still shipped...
+  REQUIRE(has(page, "highlight.min.js"));
+  REQUIRE(has(page, "github-dark.min.css"));
+  REQUIRE(count(page, "src=\"https://") > 0);
+  REQUIRE(count(page, "<link rel=\"stylesheet\" href=\"https://") > 0);
+
+  // ...and not one of them can hold the first paint: the parser stops at a
+  // script with no async, so the body above would not exist yet, and a
+  // stylesheet with no media swap blocks the paint outright.
+  REQUIRE(count(page, "src=\"https://") == count(page, "<script async src=\"https://"));
+  REQUIRE(count(page, "<link rel=\"stylesheet\" href=\"https://")
+          == count(page, "media=\"print\" onload="));
 }

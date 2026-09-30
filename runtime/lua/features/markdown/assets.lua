@@ -355,14 +355,26 @@ M.CLIENT_JS = [[
 })();
 ]]
 
--- Head tags for the CDN libraries the enabled options need.
+-- Head tags for the CDN libraries the enabled options need. None of them is
+-- on the page's critical path: the template inlines the document and its own
+-- stylesheet, so there is nothing to show the reader until the network answers.
+-- A plain script here would stop the parser before the body even exists, which
+-- is what made the preview take as long to appear as the CDN took to reply.
 function M.head_tags(options, theme)
   local tags = {}
   local function script(url)
-    tags[#tags + 1] = string.format('<script src="%s"></script>', url)
+    -- async: no parser block, and no hold on DOMContentLoaded either. Every
+    -- one of these globals is used lazily by the page client (which guards for
+    -- it being absent), so their arrival order does not matter.
+    tags[#tags + 1] = string.format('<script async src="%s"></script>', url)
   end
   local function style(url)
-    tags[#tags + 1] = string.format('<link rel="stylesheet" href="%s">', url)
+    -- A stylesheet in the head blocks the first paint. It waits as print and
+    -- swaps itself in once it lands, so the page paints with the built-in
+    -- sheet and the theme follows when it arrives.
+    tags[#tags + 1] = string.format(
+        '<link rel="stylesheet" href="%s" media="print" onload="this.media=\'all\'">',
+        url)
   end
 
   if options.katex then
