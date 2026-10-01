@@ -161,6 +161,52 @@ namespace
     return true;
   }
 
+  // True when applying this state would put the buffer back exactly where it
+  // already is. The fields compared are the ones apply_state writes, so a true
+  // answer means the restore would be a no-op in every respect.
+  bool state_matches_buffer(const FileBuffer &buf, const State &s)
+  {
+    if (!(s.cursor == buf.cursor) || s.preferred_x != buf.preferred_x
+        || !(s.selection.start == buf.selection.start) || !(s.selection.end == buf.selection.end)
+        || s.selection.active != buf.selection.active
+        || s.extra_carets.size() != buf.extra_carets.size() || s.scroll_offset != buf.scroll_offset
+        || s.scroll_x != buf.scroll_x || s.modified != buf.modified
+        || s.is_placeholder != buf.is_placeholder)
+    {
+      return false;
+    }
+    for (std::size_t i = 0; i < s.extra_carets.size(); i++)
+    {
+      const Selection &a = s.extra_carets[i];
+      const Selection &b = buf.extra_carets[i];
+      if (!(a.start == b.start) || !(a.end == b.end) || a.active != b.active)
+      {
+        return false;
+      }
+    }
+    if (s.old_total_lines != (int)buf.line_count())
+    {
+      return false;
+    }
+
+    // A full snapshot holds every line; a windowed one only the rows around the
+    // carets, which is all applying it would replace.
+    const int from = s.full_snapshot ? 0 : s.start_line;
+    if (from < 0 || from + (int)s.old_lines.size() > (int)buf.line_count())
+    {
+      return false;
+    }
+    for (std::size_t i = 0; i < s.old_lines.size(); i++)
+    {
+      const std::string &line = buf.line(from + (int)i);
+      if (s.old_lines[i] ? *s.old_lines[i] != line : !line.empty())
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void trim_stack(std::stack<State> &stack, std::size_t max_items)
   {
     if (stack.size() <= max_items)
@@ -298,6 +344,20 @@ void Editor::save_state()
 void Editor::undo()
 {
   auto &buf = get_buffer();
+
+  // A command that ends up changing nothing still takes its snapshot before it
+  // runs (save_state cannot know the outcome), and that snapshot describes the
+  // buffer as it already is. Undoing onto such a state changes nothing at all,
+  // which reads as a dead keypress, so the states are dropped here and the
+  // press reaches the previous real edit. A state whose restore would move the
+  // caret, the selection or the view is a real step and is left alone.
+  // The redo stack needs no such pass: its states are captured from the live
+  // buffer by undo() itself, after this loop, so by construction they differ
+  // from what the restore leaves behind.
+  while (!buf.undo_stack.empty() && state_matches_buffer(buf, buf.undo_stack.top()))
+  {
+    buf.undo_stack.pop();
+  }
   if (buf.undo_stack.empty())
   {
     return;

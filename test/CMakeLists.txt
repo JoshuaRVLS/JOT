@@ -44,6 +44,7 @@ add_executable(jot_tests
   test_cpp_indent.cpp
   test_save_hygiene.cpp
   test_undo_redo_chords.cpp
+  test_undo_noop.cpp
   test_undo_memory.cpp
   test_lsp.cpp
   test_lsp_sync.cpp

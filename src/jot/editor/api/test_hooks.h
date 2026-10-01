@@ -70,6 +70,13 @@ public:
   {
     trim_trailing_whitespace();
   }
+  // "Format Document" from the palette. On a document with no tabs it expands
+  // nothing, which is the state a case needs to see undo skip (see
+  // format_undo_probe.py for the key path).
+  void format_document_for_test()
+  {
+    format_document();
+  }
   // Seeds the per-file inlay-hint cache directly (sorted on ingest like a
   // real server answer), so coordinate helpers can be unit-tested headless.
   void set_inlay_hints_for_test(const std::string &filepath, std::vector<LSPInlayHint> hints);
