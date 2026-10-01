@@ -6,6 +6,7 @@
 #include "tools/lsp/client.h"
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -84,7 +85,16 @@ private:
   // A snapshot (SnapshotLine, model/buffer.h) holds each unchanged line by
   // reference, so it costs the lines an edit touched rather than a copy of the
   // buffer joined into one string and split apart again on every keystroke.
-  std::unordered_map<std::string, std::vector<SnapshotLine>> edit_snapshots_;
+  // stamp is the clock reading of the edit that last refreshed the entry, so
+  // the line budget in on_buffer_change can drop the file a plugin has left
+  // alone the longest instead of whichever one the map happens to visit first.
+  struct EditSnapshot
+  {
+    std::vector<SnapshotLine> lines;
+    std::uint64_t stamp = 0;
+  };
+  std::unordered_map<std::string, EditSnapshot> edit_snapshots_;
+  std::uint64_t edit_snapshot_clock_ = 0;
   LuaEditDelta last_edit_;
   // Rapid events (BufChange, CursorMoved) fired several times inside one
   // event-loop drain are coalesced into a single Lua dispatch per event
@@ -258,6 +268,12 @@ public:
   // Test hook: point the Lua float renderer at a headless UI grid so
   // render_floats() can be exercised without a live terminal.
   void attach_test_ui(UI *ui);
+  // Test hook: total lines the per-file edit snapshots hold right now, so a
+  // case can pin the budget that keeps many open files from adding up.
+  std::size_t edit_snapshot_lines_for_test() const;
+  // Test hook: whether one file still holds a snapshot, so a case can pin which
+  // entries a budget sweep kept and which it dropped.
+  bool edit_snapshot_has_for_test(const std::string &filepath) const;
 
   // LSP hover UI: a Lua handler registered through jot.lsp.hover_ui renders
   // hover results with floats instead of the native popup. When the handler is

@@ -36,6 +36,15 @@ static const std::string &lua_empty_line()
   return empty;
 }
 
+namespace
+{
+  // Caps for the per-file edit snapshots behind BufChange deltas: each copies
+  // every line of its file, so what they hold is bounded by total lines as well
+  // as by file count. 200k lines is ~25 MB of copied text.
+  constexpr std::size_t kMaxEditSnapshotLines = 200000;
+  constexpr std::size_t kMaxEditSnapshotFiles = 256;
+} // namespace
+
 // A snapshot line, or a shared placeholder when one is missing: the matching
 // below reads both sides through the same accessor, so it never has to know
 // which side it is looking at.
@@ -276,19 +285,49 @@ void LuaAPI::on_buffer_change(const std::string &f, const std::string &)
         // Unnamed buffers share an empty filepath; key them by index.
         const std::string key = f.empty() ? ("\x01" + std::to_string(index)) : f;
         auto it = edit_snapshots_.find(key);
-        if (it != edit_snapshots_.end())
+        if (it == edit_snapshots_.end())
         {
-          std::vector<SnapshotLine> updated;
-          last_edit_ = compute_edit_delta(it->second, buf.lines, updated);
-          it->second = std::move(updated);
+          it = edit_snapshots_.emplace(key, EditSnapshot{}).first;
+          it->second.lines = lua_snapshot_lines(buf.lines);
         }
         else
         {
-          edit_snapshots_[key] = lua_snapshot_lines(buf.lines);
+          std::vector<SnapshotLine> updated;
+          last_edit_ = compute_edit_delta(it->second.lines, buf.lines, updated);
+          it->second.lines = std::move(updated);
         }
-        while (edit_snapshots_.size() > 256)
+        it->second.stamp = ++edit_snapshot_clock_;
+        // Bound what the snapshots hold in total, by lines and by file count: a
+        // handful of large open buffers would otherwise keep tens of MB alive
+        // for deltas a plugin may never read. The file that just changed is
+        // never the victim and, of the rest, the one left alone longest goes
+        // first, so the snapshot behind the next keystroke survives a sweep.
+        // A dropped snapshot is rebuilt from its buffer on that file's next
+        // edit, so the budget costs that one edit its delta, not its data.
+        std::size_t snapshot_lines = 0;
+        for (const auto &entry : edit_snapshots_)
         {
-          edit_snapshots_.erase(edit_snapshots_.begin());
+          snapshot_lines += entry.second.lines.size();
+        }
+        while ((snapshot_lines > kMaxEditSnapshotLines
+                || edit_snapshots_.size() > kMaxEditSnapshotFiles)
+               && edit_snapshots_.size() > 1)
+        {
+          auto victim = edit_snapshots_.begin();
+          for (auto candidate = edit_snapshots_.begin(); candidate != edit_snapshots_.end();
+               ++candidate)
+          {
+            if (candidate->first == key)
+            {
+              continue;
+            }
+            if (victim->first == key || candidate->second.stamp < victim->second.stamp)
+            {
+              victim = candidate;
+            }
+          }
+          snapshot_lines -= victim->second.lines.size();
+          edit_snapshots_.erase(victim);
         }
       }
     }
@@ -296,6 +335,20 @@ void LuaAPI::on_buffer_change(const std::string &f, const std::string &)
   fire_autocmd("BufChange", f, index);
   last_edit_ = LuaEditDelta{};
 }
+std::size_t LuaAPI::edit_snapshot_lines_for_test() const
+{
+  std::size_t total = 0;
+  for (const auto &entry : edit_snapshots_)
+  {
+    total += entry.second.lines.size();
+  }
+  return total;
+}
+bool LuaAPI::edit_snapshot_has_for_test(const std::string &filepath) const
+{
+  return edit_snapshots_.find(filepath) != edit_snapshots_.end();
+}
+
 void LuaAPI::on_buffer_save(const std::string &f)
 {
   if (editor)
