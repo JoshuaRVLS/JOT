@@ -545,6 +545,13 @@ public:
   {
     return bracket_depth_at_line_start(get_buffer(), line);
   }
+  // The syntax colors one buffer line resolves to, so a test can assert that a
+  // path which rewrites the buffer in place (the save-time trim) leaves
+  // highlighting where it was.
+  std::vector<std::pair<int, int>> line_syntax_colors_for_test(int line)
+  {
+    return get_line_syntax_colors(get_buffer(), line);
+  }
   // The Emmet entry point the snippet keymap calls from Tab (see
   // Editor::expand_emmet_abbreviation). Exposed for tests because the real
   // trigger goes through the Lua keymap, which the raw-key test path does not

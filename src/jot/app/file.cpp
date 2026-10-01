@@ -704,21 +704,40 @@ bool Editor::save_buffer_at(int index, bool announce)
   // is a line break, so the save drops it -- in the buffer as well as in the
   // bytes, so what is on screen is what landed on disk.
   int trimmed_lines = 0;
+  int first_trimmed = -1;
   if (config.get_bool("trim_trailing_whitespace_on_save", true)
       && !SaveHygiene::preserves_trailing_whitespace(buf.filepath))
   {
-    for (auto &line : buf.lines)
+    for (int i = 0; i < (int)buf.lines.size(); i++)
     {
+      auto &line = buf.lines[(size_t)i];
       if (!SaveHygiene::has_trailing_whitespace(line))
       {
         continue;
+      }
+      if (trimmed_lines == 0)
+      {
+        // Both hooks below snapshot the text that is about to change, the way
+        // every edit path takes them, so they belong before the first rewrite
+        // and only once. Without the first, the tree-sitter tree keeps
+        // describing the untrimmed lines while the byte offsets are rebuilt
+        // from the trimmed ones, so every highlight past a trimmed line comes
+        // from the wrong place - and save_state below cannot repair that, since
+        // it runs after the trim and snapshots the trimmed text itself.
+        first_trimmed = i;
+#ifdef JOT_TREESITTER
+        ts_begin_edit(buf);
+#endif
+        decoration_rebase_begin(buf);
       }
       line = SaveHygiene::trim_trailing_whitespace(line);
       trimmed_lines++;
     }
     if (trimmed_lines > 0)
     {
-      // The lines just got shorter under the carets that were past the trim.
+      // The content changed under the caches the renderer reads, and the lines
+      // got shorter under the carets that were past the trim.
+      buf.mark_edited(first_trimmed);
       save_state();
       const int cursor_line = std::clamp(buf.cursor.y, 0, (int)buf.line_count() - 1);
       buf.cursor.y = cursor_line;

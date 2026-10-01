@@ -208,6 +208,56 @@ TEST_CASE("Save: trailing whitespace leaves both the buffer and the file", "[jot
   std::remove(path.c_str());
 }
 
+TEST_CASE("Save: a trimmed line leaves the syntax highlighting where it was", "[jot][save]")
+{
+  Editor &e = saving_editor(true);
+  const std::string path = scratch_path("trim-syntax.cpp");
+  // Lines of two shapes, so a highlight shifted by a whole token lands on
+  // something the eye (and this case) can tell apart.
+  std::string text;
+  for (int i = 1; i <= 300; i++)
+  {
+    text += (i % 2 == 0) ? ("int value" + std::to_string(i) + " = " + std::to_string(i) + ";")
+                         : ("// note " + std::to_string(i) + " with words");
+    if (i == 1)
+    {
+      text += std::string(24, ' ');
+    }
+    text += '\n';
+  }
+  write_text(path, text);
+  e.load_file(path);
+
+  const int index = buffer_index_for(e, path);
+  REQUIRE(index >= 0);
+  if (!e.syntax_tree_ready_for_test())
+  {
+    SKIP("no tree-sitter grammar for C++ in this build");
+  }
+
+  REQUIRE(e.save_buffer_for_test(index, false));
+  const std::string saved = read_back(path);
+  REQUIRE(saved.find(";  ") == std::string::npos);
+
+  // Both sides of the comparison are first paints of the same bytes, so the
+  // per-line cache cannot paper over the difference: the buffer the save left
+  // behind, and a buffer opened from what the save wrote. The line is one of
+  // the declaration ones, whose first cells carry the type color and whose next
+  // word does not, so a shifted highlight is unmistakable.
+  const int probe_line = 199;
+  const std::vector<std::pair<int, int>> after_trim = e.line_syntax_colors_for_test(probe_line);
+  const std::string copy = scratch_path("trim-syntax-copy.cpp");
+  write_text(copy, saved);
+  e.load_file(copy);
+  const std::vector<std::pair<int, int>> fresh = e.line_syntax_colors_for_test(probe_line);
+
+  REQUIRE_FALSE(fresh.empty());
+  REQUIRE(fresh[0] != fresh[5]);
+  REQUIRE(after_trim == fresh);
+  std::remove(path.c_str());
+  std::remove(copy.c_str());
+}
+
 TEST_CASE("Save: the setting off leaves every space where it was", "[jot][save]")
 {
   Editor &e = saving_editor(false);
