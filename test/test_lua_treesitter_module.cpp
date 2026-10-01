@@ -220,3 +220,35 @@ TEST_CASE("Bundled Lua Tree-sitter module loads in deterministic layers")
   REQUIRE(lua_isfunction(L, -1));
   lua_close(L);
 }
+
+TEST_CASE("Bundled language registry does not claim plain .txt for vimdoc")
+{
+  // `.txt` is every plain-text note, and parsing arbitrary text with the
+  // vimdoc grammar churned a few hundred bytes per word of allocator memory
+  // (~22 MB on a 2000-line file). vimdoc is for vim help files, so the
+  // registry must map it to `.vimdoc` only and leave `.txt` unclaimed.
+  lua_State *L = luaL_newstate();
+  REQUIRE(L != nullptr);
+  luaL_openlibs(L);
+  const std::string script =
+      "local f,e=loadfile('" JOT_LUA_SOURCE_DIR "/treesitter/registry.lua'); "
+      "assert(f,e); local m=f(); "
+      "local vimdoc; local claims = {}; "
+      "for _, lang in ipairs(m.languages) do "
+      "  if lang.name == 'vimdoc' then vimdoc = lang end; "
+      "  for _, ext in ipairs(lang.extensions) do "
+      "    if ext == '.txt' then claims[#claims + 1] = lang.name end "
+      "  end "
+      "end "
+      "assert(vimdoc, 'vimdoc is missing from the registry'); "
+      "local has_vimdoc_ext = false; "
+      "for _, ext in ipairs(vimdoc.extensions) do "
+      "  if ext == '.vimdoc' then has_vimdoc_ext = true end "
+      "end "
+      "assert(has_vimdoc_ext, 'vimdoc lost its .vimdoc extension'); "
+      "assert(#claims == 0, 'still claims .txt: ' .. table.concat(claims, ','))";
+  int result = luaL_dostring(L, script.c_str());
+  INFO(lua_tostring(L, -1));
+  REQUIRE(result == LUA_OK);
+  lua_close(L);
+}

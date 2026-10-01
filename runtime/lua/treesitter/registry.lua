@@ -171,7 +171,12 @@ local data = {
   {"verilog", "https://github.com/tree-sitter/tree-sitter-verilog", {".v", ".vh"}},
   {"vhdl", "https://github.com/jpt13653903/tree-sitter-vhdl", {".vhd", ".vhdl"}},
   {"vim", "https://github.com/tree-sitter-grammars/tree-sitter-vim", {".vim"}},
-  {"vimdoc", "https://github.com/neovim/tree-sitter-vimdoc", {".txt"}},
+  -- `.txt` is deliberately absent: nvim-treesitter attaches vimdoc to the
+  -- `help` filetype, while mapping it to `.txt` parsed every plain-text note
+  -- with this grammar (hundreds of bytes of allocator churn per word, ~22 MB
+  -- on a 2000-line file) for a colour plain text never asked for. `.vimdoc`
+  -- keeps an explicit way in.
+  {"vimdoc", "https://github.com/neovim/tree-sitter-vimdoc", {".vimdoc"}},
   {"vue", "https://github.com/tree-sitter-grammars/tree-sitter-vue", {".vue"}},
   {"wgsl", "https://github.com/szebniok/tree-sitter-wgsl", {".wgsl"}},
   {"wit", "https://github.com/bytecodealliance/tree-sitter-wit", {".wit"}},
