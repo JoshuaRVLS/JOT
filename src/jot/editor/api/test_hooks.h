@@ -1056,3 +1056,26 @@ public:
     }
     return jump_history[(size_t)index].cursor.y;
   }
+  // Git status polling: how many refreshes actually parsed the porcelain
+  // output into the per-file map. A poll whose output digests to the map that
+  // is already installed must not move this, which is what the memory fix
+  // rests on (that parse is the allocation a huge repo made the largest in
+  // the process).
+  long long git_status_parse_count_for_test() const
+  {
+    return git_status_parse_count;
+  }
+  int git_untracked_count_for_test() const
+  {
+    return git_untracked_count;
+  }
+  // The poll the 1.5 s timer runs, inline so a test does not wait for it; and
+  // the repo drop the open-file / workspace paths make.
+  void refresh_git_status_for_test(bool force = true)
+  {
+    refresh_git_status(force);
+  }
+  void clear_git_status_for_test()
+  {
+    clear_git_status();
+  }

@@ -13,6 +13,8 @@
 #define GIT_RUN_H
 
 #include "tools/shell_util.h"
+#include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <sstream>
 #include <string>
@@ -85,6 +87,96 @@ namespace jot_git
   inline std::string capture(const std::string &root, const std::string &args)
   {
     return capture_ex(root, args).output;
+  }
+
+  // The 64-bit FNV-1a constants. The hash only ever answers "is this the same
+  // byte stream as last time", so it needs no cryptographic strength, just a
+  // cheap pass a 5 MB porcelain output can be streamed through.
+  constexpr unsigned long long kFnvOffset = 1469598103934665603ULL;
+  constexpr unsigned long long kFnvPrime = 1099511628211ULL;
+
+  inline unsigned long long fnv1a_seed(const std::string &text)
+  {
+    unsigned long long hash = kFnvOffset;
+    for (unsigned char byte : text)
+    {
+      hash ^= byte;
+      hash *= kFnvPrime;
+    }
+    return hash;
+  }
+
+  // What a command's stdout looked like, without keeping it: the running hash
+  // and the byte count. `bytes` is -1 until a run has actually happened.
+  struct OutputDigest
+  {
+    unsigned long long hash = 0;
+    long long bytes = -1;
+    int exit_code = 1;
+
+    bool ok() const
+    {
+      return exit_code == 0;
+    }
+  };
+
+  // Streams `command`'s stdout through the hash in fixed-size reads, so a
+  // command whose output is megabytes costs no megabytes of memory. `seed`
+  // lets a caller fold extra context (the repo root) into the digest.
+  inline OutputDigest digest_command(const std::string &command,
+                                     unsigned long long seed = kFnvOffset)
+  {
+    OutputDigest result;
+    FILE *pipe = shell_util::open_command_pipe(command, "r");
+    if (!pipe)
+    {
+      return result;
+    }
+    unsigned long long hash = seed;
+    long long bytes = 0;
+    char buf[4096];
+    size_t read = 0;
+    while ((read = std::fread(buf, 1, sizeof(buf), pipe)) > 0)
+    {
+      for (size_t i = 0; i < read; i++)
+      {
+        hash ^= (unsigned char)buf[i];
+        hash *= kFnvPrime;
+      }
+      bytes += (long long)read;
+    }
+    result.exit_code = shell_util::command_exit_code(shell_util::close_command_pipe(pipe));
+    result.hash = hash;
+    result.bytes = bytes;
+    return result;
+  }
+
+  // The digest of `git -C <root> <args...>`'s stdout. Seeded with the root so
+  // two repositories with byte-identical status text do not digest the same.
+  inline OutputDigest digest(const std::string &root, const std::string &args)
+  {
+    return digest_command("git -C " + shell_util::shell_quote(root) + " " + args
+                              + shell_util::null_redirect(),
+                          fnv1a_seed(root));
+  }
+
+  // What the last parsed `git status` was built from. `valid` is false until
+  // one parse has landed, which is also what invalidates the cache when the
+  // repo is cleared.
+  struct StatusSnapshot
+  {
+    unsigned long long hash = 0;
+    long long bytes = 0;
+    bool valid = false;
+  };
+
+  // True when `current` is the very output the snapshot's parsed map was built
+  // from, so re-parsing it into a path -> status map would only repeat the
+  // same large allocation for nothing.
+  inline bool status_snapshot_matches(const StatusSnapshot &snapshot, const OutputDigest &current)
+  {
+    return snapshot.valid && current.ok() && current.hash == snapshot.hash
+           && current.bytes == snapshot.bytes;
   }
 
   // Runs `git -C <root> <args...>`; true when the command exited 0.

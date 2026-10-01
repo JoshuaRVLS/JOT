@@ -80,6 +80,7 @@ add_executable(jot_tests
   test_lua_loader.cpp
   test_lua_toast.cpp
   test_git_panel.cpp
+  test_git_status_digest.cpp
   test_multicursor.cpp
   test_mouse_hover.cpp
   test_url_span.cpp

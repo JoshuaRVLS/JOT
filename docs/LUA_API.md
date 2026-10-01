@@ -379,7 +379,8 @@ Currently emitted native events:
 - `lsp.definition` - `{path, line, column, locations: [...]}`
 - `lsp.symbols` - `{path, symbols: [...]}`
 - `lsp.completion` - `{path, anchor_line, anchor_col, items: [...]}`
-- `git.refreshed` - the full repo snapshot (`root`, `branch`, all counts)
+- `git.refreshed` - the full repo snapshot (`root`, `branch`, all counts),
+  emitted when the poll finds it changed
 - `diagnostics.changed` - `{path, count, items: [...]}` per publish round
 - `buffer.open` / `buffer.save` / `buffer.close` - `{path}`
 - `theme.switched` - `{name}`

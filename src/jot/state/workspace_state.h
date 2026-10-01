@@ -5,6 +5,7 @@
 #include "jot/model/explorer.h" // FileNode, SidebarView, SidebarRenderCache
 #include "jot/model/session.h"  // ClosedBufferSnapshot
 #include "jot/workspace/git_panel_models.h" // jot_git_panel::State
+#include "jot/workspace/git_run.h"          // jot_git::StatusSnapshot
 #include <atomic>
 #include <map>
 #include <string>
@@ -82,6 +83,14 @@ struct WorkspaceState
   int git_conflict_count = 0;
   std::atomic<bool> git_refresh_pending_{false};
   std::unordered_map<std::string, std::string> git_file_status;
+  // The porcelain output `git_file_status` was parsed from. A poll that digests
+  // to the same output skips the parse entirely: the map is the biggest
+  // allocation in the process on a repo with tens of thousands of entries (the
+  // home directory can be one), and rebuilding it for an unchanged repo was
+  // what made memory climb poll after poll.
+  jot_git::StatusSnapshot git_status_snapshot;
+  // Parses applied to the map, for the headless test that pins the skip.
+  long long git_status_parse_count = 0;
   long long git_last_refresh_ms;
   // Git panel (right dock): lazygit-style files / branches / commits / stash
   // views. State and row lists live here so render + input share one model.

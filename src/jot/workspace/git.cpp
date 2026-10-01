@@ -70,6 +70,11 @@ namespace
     int renamed_count = 0;
     int conflict_count = 0;
     std::unordered_map<std::string, std::string> file_status;
+    // Digest of the porcelain output the poll compared against, and whether it
+    // was recognized as identical to the last parsed one (in which case nothing
+    // below the digest was read and `file_status` is empty).
+    jot_git::OutputDigest status_digest;
+    bool unchanged = false;
     bool success = false;
   };
 
@@ -79,7 +84,8 @@ namespace
            || xy == "UU" || xy.find('U') != std::string::npos;
   }
 
-  GitStatusResult run_git_commands(const std::string &repo_hint)
+  GitStatusResult run_git_commands(const std::string &repo_hint,
+                                   const jot_git::StatusSnapshot &previous)
   {
     GitStatusResult result;
 
@@ -91,6 +97,19 @@ namespace
 
     result.root = normalize_path(top);
     result.success = true;
+
+    // One streaming pass over the porcelain text, keeping no copy of it. When
+    // it digests to the output the current map already holds, the poll is done:
+    // re-parsing megabytes of status into tens of thousands of map entries
+    // would just rebuild what is already there. A status that changes between
+    // this pass and the capture below re-parses once more on the next poll,
+    // never skipped on stale text.
+    result.status_digest = jot_git::digest(result.root, "status --porcelain=v1 --branch");
+    if (jot_git::status_snapshot_matches(previous, result.status_digest))
+    {
+      result.unchanged = true;
+      return result;
+    }
 
     result.branch = jot_git::capture(result.root, "symbolic-ref --short HEAD");
     if (result.branch.empty())
@@ -204,6 +223,9 @@ void Editor::clear_git_status()
   git_renamed_count = 0;
   git_conflict_count = 0;
   git_file_status.clear();
+  // An empty repo has nothing to compare future polls against, so the next
+  // refresh parses its output instead of matching a stale snapshot.
+  git_status_snapshot = jot_git::StatusSnapshot();
   invalidate_sidebar_git_cache();
 }
 
@@ -509,11 +531,13 @@ void Editor::refresh_git_status(bool force)
   git_last_refresh_ms = now_ms;
   git_refresh_pending_ = true;
 
+  const jot_git::StatusSnapshot previous = git_status_snapshot;
+
   if (task_queue_)
   {
     task_queue_->submit_val<GitStatusResult>(
-        [repo_hint = std::move(repo_hint)]() -> GitStatusResult
-        { return run_git_commands(repo_hint); },
+        [repo_hint = std::move(repo_hint), previous]() -> GitStatusResult
+        { return run_git_commands(repo_hint, previous); },
         [this](GitStatusResult result)
         {
           git_refresh_pending_ = false;
@@ -522,6 +546,12 @@ void Editor::refresh_git_status(bool force)
           // running on the worker thread. Drop the result rather
           // than touching freed state.
           if (!running)
+            return;
+
+          // The repo's porcelain output is byte-for-byte the last parsed one:
+          // every count and the per-file map still describe it, so there is
+          // nothing to install and no event to emit.
+          if (result.unchanged)
             return;
 
           if (!result.success)
@@ -559,6 +589,9 @@ void Editor::refresh_git_status(bool force)
           git_renamed_count = result.renamed_count;
           git_conflict_count = result.conflict_count;
           git_file_status = std::move(result.file_status);
+          git_status_snapshot = {
+              result.status_digest.hash, result.status_digest.bytes, result.status_digest.ok()};
+          git_status_parse_count++;
           if (changed)
           {
             invalidate_sidebar_git_cache();
@@ -575,8 +608,13 @@ void Editor::refresh_git_status(bool force)
   }
   else
   {
-    GitStatusResult result = run_git_commands(repo_hint);
+    GitStatusResult result = run_git_commands(repo_hint, previous);
     git_refresh_pending_ = false;
+
+    if (result.unchanged)
+    {
+      return;
+    }
 
     if (!result.success)
     {
@@ -612,6 +650,9 @@ void Editor::refresh_git_status(bool force)
     git_renamed_count = result.renamed_count;
     git_conflict_count = result.conflict_count;
     git_file_status = std::move(result.file_status);
+    git_status_snapshot = {
+        result.status_digest.hash, result.status_digest.bytes, result.status_digest.ok()};
+    git_status_parse_count++;
     if (changed)
     {
       invalidate_sidebar_git_cache();
