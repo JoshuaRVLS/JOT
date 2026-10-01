@@ -9,13 +9,16 @@
 -- Alt+] t / Alt+[ t jump to the next/previous comment (the chord joins the
 -- Alt+]/Alt+[ jump family, but is registered here because :TodoNext/:TodoPrev
 -- are this feature's own commands).
--- :Todo lists them across the workspace; `keywords=TODO,FIX` filters it the way
--- upstream's `:TodoTelescope keywords=...` does.
+-- :Todo lists them across the workspace, each row inked in its comment's
+-- family colour; `keywords=TODO,FIX` filters it the way upstream's
+-- `:TodoTelescope keywords=...` does.
 --
--- The matched keyword wears a band in its family's colour and the text after
--- the colon takes the same ink, upstream's default "wide" highlight. The
--- colours are resolved from the live theme at paint time, so a colourscheme
--- switch re-inks the bands instead of leaving the old palette on screen.
+-- The matched keyword wears a chip in its family's colour and nothing else:
+-- the comment marker and the space before the word keep the comment's own ink.
+-- The colon is hidden (painted in the theme's own background ink, so it stays
+-- a real character), and the text after it takes the family ink. The colours
+-- are resolved from the live theme at paint time, so a colourscheme switch
+-- re-inks the chips instead of leaving the old palette on screen.
 --
 -- The comment gate uses jot.syntax.highlight, the regex fallback the renderer
 -- keeps for languages without a tree-sitter grammar, so a keyword is only
@@ -182,9 +185,9 @@ local function find_match(line, matcher)
   return start1, finish1, keyword
 end
 
--- Returns keyword, colour family, keyword start (0-based) and the band's end
--- (0-based, exclusive: through the colon, plus one plain byte when the line
--- has one there, the way upstream paints the space after the colon).
+-- Returns keyword, colour family, keyword start (0-based) and the colon's
+-- offset (0-based). The colon is not part of the band: it keeps the comment's
+-- own ink, so what is painted is the keyword alone.
 local function match_line(line, matcher, keywords)
   if not matcher or line == "" or #line > MAX_LINE_LEN then
     return nil
@@ -193,21 +196,13 @@ local function match_line(line, matcher, keywords)
   if not start1 then
     return nil
   end
-  local band_end = finish1
-  local next_byte = line:sub(finish1 + 1, finish1 + 1)
-  -- Only a single-byte character is folded in: extending one byte into a
-  -- multi-byte glyph would hand the renderer half a rune.
-  if next_byte ~= "" and next_byte:byte() < 128 then
-    band_end = band_end + 1
-  end
-  return keyword, keywords[keyword] or "default", start1 - 1, band_end
+  return keyword, keywords[keyword] or "default", start1 - 1, finish1 - 1
 end
 
 -- The byte offset the comment holding `col` starts at, or false when the line
 -- has spans and none of them is a comment there. nil means the editor cannot
 -- tell (no rules for the extension); callers fail open, as upstream does with
--- no tree-sitter parser. The comment's own start is returned because that is
--- where the band should begin: `int x; // TODO:` must not band the code.
+-- no tree-sitter parser.
 local function comment_start_at(ext, line, col)
   if ext == "" or type(jot.syntax) ~= "table" or type(jot.syntax.highlight) ~= "function" then
     return nil
@@ -288,7 +283,9 @@ end
 
 -- Colour family -> { fg = band ink, ink = text written on the band }, resolved
 -- from the live theme. A family whose group the theme does not name is left
--- out rather than painted with an invented colour.
+-- out rather than painted with an invented colour. The second value is the
+-- theme's own background: painting the colon in it hides the colon, while the
+-- character stays in the buffer (backspace still deletes it).
 local function family_accents()
   local normal = nil
   local accents = {}
@@ -304,7 +301,7 @@ local function family_accents()
       accents[family] = { fg = resolved.fg, ink = readable_ink(resolved.fg, normal) }
     end
   end
-  return accents
+  return accents, normal and normal.bg or nil
 end
 
 ---------------------------------------------------------------- decorations
@@ -332,33 +329,45 @@ local function keep(buffer, id)
 end
 
 -- Turns the lines of one buffer into decoration specs. Pure but for the comment
--- gate, which asks the syntax highlighter per matching line.
-local function scan_lines(lines, ext, keywords, matcher, accents)
+-- gate, which asks the syntax highlighter per matching line. `conceal` is the
+-- ink the colon is painted in (the theme's own background, so it disappears).
+local function scan_lines(lines, ext, keywords, matcher, accents, conceal)
   local specs = {}
   -- The accent a match carries into the following comment lines (upstream's
   -- multiline): set by a painted keyword, cleared when the run or the comment
   -- ends.
   local carried = nil
   for index, line in ipairs(lines) do
-    local keyword, family, start0, band_end = match_line(line, matcher, keywords)
+    local keyword, family, start0, colon0 = match_line(line, matcher, keywords)
     if keyword then
       local comment_start = comment_start_at(ext, line, start0)
       local accent = accents[family]
       if comment_start ~= false and accent then
-        local band_start = comment_start or start0
+        -- The chip is the keyword alone: no comment marker, no space before
+        -- the word and no colon (see the conceal below).
         specs[#specs + 1] = {
           row = index,
-          col = band_start + 1,
-          width = band_end - band_start,
+          col = start0 + 1,
+          width = colon0 - start0,
           bg = accent.fg,
           fg = accent.ink,
           priority = BAND_PRIORITY,
         }
-        if band_end < #line then
+        if conceal then
           specs[#specs + 1] = {
             row = index,
-            col = band_end + 1,
-            width = #line - band_end,
+            col = colon0 + 1,
+            width = 1,
+            fg = conceal,
+            priority = TEXT_PRIORITY,
+          }
+        end
+        local text_start = colon0 + 1
+        if text_start < #line then
+          specs[#specs + 1] = {
+            row = index,
+            col = text_start + 1,
+            width = #line - text_start,
             fg = accent.fg,
             priority = TEXT_PRIORITY,
           }
@@ -539,11 +548,13 @@ local function apply(info, force)
   retries = 0
 
   local keywords = configured_keywords()
+  local accents, conceal = family_accents()
   local specs = scan_lines(lines,
                            extension_of(path),
                            keywords,
                            compile_matcher(keywords),
-                           family_accents())
+                           accents,
+                           conceal)
   paths[buffer] = path
   seen[buffer] = true
   last_signature = sig
@@ -658,7 +669,7 @@ local function workspace_items(filter)
           -- only becomes a row when the real highlight pattern (and the
           -- comment gate) accepts it. This is also what keeps a TODO inside a
           -- string out of the list.
-          local hit, _, start0 = match_line(line, matcher, keywords)
+          local hit, family, start0 = match_line(line, matcher, keywords)
           if hit and comment_start_at(extension_of(result.path), line, start0) ~= false then
             local dedupe = tostring(result.path) .. ":" .. tostring(result.line)
             if not lines_seen[dedupe] then
@@ -669,6 +680,7 @@ local function workspace_items(filter)
                 line = tonumber(result.line) or 1,
                 column = start0 + 1,
                 text = line,
+                family = family,
               }
             end
           end
@@ -696,14 +708,20 @@ local function workspace_items(filter)
   return items
 end
 
--- A picker row carries the location in `value` and the readable line in
--- `label`, so the callback does not have to parse its own display text.
-local function picker_rows(items)
+-- A picker row carries the location in `value`, the readable line in `label`
+-- and the family colour in `fg` (the picker resolves it), so the list is
+-- colour-coded and the callback never parses its own display text. There is no
+-- `detail`: the row already names the file and line, and a repeated label on
+-- every row is noise.
+local function picker_rows(items, accents)
+  accents = accents or family_accents()
   local rows = {}
   for _, item in ipairs(items) do
+    local accent = item.family and accents[item.family]
     rows[#rows + 1] = {
       label = string.format("%s:%d  %s", item.relative, item.line, item.text),
       value = string.format("%s\t%d\t%d\t%s", item.path, item.line, item.column, item.relative),
+      fg = accent and accent.fg or nil,
     }
   end
   return rows

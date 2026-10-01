@@ -272,6 +272,7 @@ bool LuaAPI::emit_quick_pick(const QuickPickView &view)
                          lua_set_str_field(L, it, "detail", item.detail);
                          lua_set_str_field(L, it, "preview", item.preview);
                          lua_set_int_field(L, it, "severity", item.severity);
+                         lua_set_int_field(L, it, "fg", item.fg);
                          lua_rawseti(L, arr, (lua_Integer)i + 1);
                        }
                        lua_setfield(L, t, "items");

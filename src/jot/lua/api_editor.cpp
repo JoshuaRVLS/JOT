@@ -216,6 +216,7 @@ void LuaAPI::push_picker_items(lua_State *L)
     lua_push_int_field(L, "line", item.line >= 0 ? (long long)item.line + 1 : 0);
     lua_push_int_field(L, "column", item.col >= 0 ? (long long)item.col + 1 : 0);
     lua_push_int_field(L, "severity", item.severity);
+    lua_push_int_field(L, "fg", item.fg);
     lua_rawseti(L, -2, n++);
   }
 }

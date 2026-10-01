@@ -52,13 +52,20 @@ local function quick_pick(p)
     end
     local item = items[idx]
     local is_selected = idx - 1 == selected
-    local row_fg = is_selected and selection_fg or fg
+    -- A row that names its own ink keeps it while unselected, so a picker
+    -- whose rows carry a family (the todo list) is colour-coded at a glance.
+    -- The selected row stays on the theme's selection pair: the family inks
+    -- are too close to the selection background to stay readable on it.
+    local row_fg = is_selected and selection_fg
+      or ((item.fg and item.fg >= 0) and item.fg or fg)
     local row_bg = is_selected and selection_bg or bg
-    local prefix = is_selected and " ▎" or "  "
+    -- No accent bar: the selection background already marks the row, and the
+    -- bar only pushed the label one cell right on the row under the cursor.
+    local prefix = "  "
     local label = truncate(item.label or "", label_w)
     local spans = match_spans(label, query, is_selected and selection_fg or accent)
-    -- match_spans offsets are bytes into label; shift them past the prefix
-    -- (which is multibyte when selected: " ▎") so they point into the row.
+    -- match_spans offsets are bytes into label; shift them past the prefix so
+    -- they point into the row.
     for _, sp in ipairs(spans) do
       sp.start = sp.start + #prefix
     end

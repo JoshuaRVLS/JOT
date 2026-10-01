@@ -577,10 +577,10 @@ void HostIOAPI::show_plugin_picker(const std::string &title,
   for (const auto &row : editor.lua_api->plugin_picker_items(items_callback))
   {
     Editor::QuickPickItem item;
-    item.label = row.first;
-    item.value = row.second; // empty for plain string rows
-    item.detail = "Plugin";
-    item.preview = row.first;
+    item.label = row.label;
+    item.value = row.value;   // empty for plain string rows
+    item.detail = row.detail; // empty unless the row asks for a right-hand label
+    item.fg = row.fg;
     item.filepath.clear();
     item.line = 0;
     item.col = 0;

@@ -57,6 +57,7 @@ void Editor::render_quick_pick()
       v.detail = item.detail;
       v.preview = item.preview;
       v.severity = item.severity;
+      v.fg = item.fg;
       view.items.push_back(std::move(v));
     }
     if (lua_api->emit_quick_pick(view))
@@ -142,12 +143,6 @@ void Editor::render_quick_pick()
     int row_y = list_y + row;
     ui->fill_rect({x + 1, row_y, std::max(1, w - 2), 1}, " ", fg, bg);
 
-    // Accent bar on the selected row, matching the palette.
-    if (is_selected)
-    {
-      ui->draw_text(x + 1, row_y, "▎", theme.fg_selection, bg);
-    }
-
     int detail_w = w >= 72 ? std::max(16, w / 3) : 0;
     int label_w = std::max(8, w - detail_w - 5);
     std::string label = ui_truncate_cells(item.label, label_w - 2);
@@ -177,9 +172,13 @@ void Editor::render_quick_pick()
       }
     }
 
-    int text_x = x + 2 + (is_selected ? 1 : 0);
+    // A row that carries its own ink keeps it while unselected, so a picker
+    // whose rows name a family (the todo list) is colour-coded at a glance.
+    // The selected row stays on the theme's selection pair: the family inks
+    // are too close to the selection background to stay readable on it.
+    int label_fg = (!is_selected && item.fg >= 0) ? item.fg : fg;
     int match_fg = is_selected ? theme.fg_selection : theme.fg_keyword;
-    ui_draw_marked_text(*ui, text_x, row_y, label, match, fg, bg, match_fg);
+    ui_draw_marked_text(*ui, x + 2, row_y, label, match, label_fg, bg, match_fg);
     if (detail_w > 0 && !item.detail.empty())
     {
       ui->draw_text(x + w - detail_w - 1,

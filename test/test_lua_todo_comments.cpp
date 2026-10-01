@@ -3,12 +3,13 @@
 // The module is loaded into a raw Lua state whose jot.* API is stubbed with
 // recording functions, so no Editor or terminal is needed.
 //
-// Pins the upstream contract: the keyword has to sit on a word boundary and the
-// longest keyword wins (FIXME over FIX), the band only appears when the syntax
-// highlighter calls the hit a comment, it starts at the comment (so code before
-// `// TODO:` stays code), it ends past the colon and the byte after it, the text
-// after the band takes the family colour and the colour run carries into the
-// following comment lines, and the band's ink is whichever of the theme's
+// Pins the contract: the keyword has to sit on a word boundary and the longest
+// keyword wins (FIXME over FIX), the chip only appears when the syntax
+// highlighter calls the hit a comment, it is the keyword alone and never the
+// `//`, the space before the word or the colon, the colon is hidden by painting
+// it in the theme's own background ink while the character stays real, the text
+// after it takes the family colour and the colour run carries into the
+// following comment lines, and the chip's ink is whichever of the theme's
 // normal fg/bg contrasts most with it (upstream's maximize_contrast).
 #include <catch2/catch_test_macros.hpp>
 #include <map>
@@ -453,8 +454,8 @@ namespace
     bool hit = false;
     std::string keyword;
     std::string family;
-    int start0 = 0;
-    int band_end = 0;
+    int start0 = 0; // keyword start, 0-based
+    int colon0 = 0; // the colon's offset, 0-based
   };
 
   MatchResult call_match_line(lua_State *L, const std::string &line)
@@ -474,7 +475,7 @@ namespace
       out.keyword = lua_tostring(L, -4);
       out.family = lua_tostring(L, -3);
       out.start0 = (int)lua_tointeger(L, -2);
-      out.band_end = (int)lua_tointeger(L, -1);
+      out.colon0 = (int)lua_tointeger(L, -1);
     }
     lua_settop(L, base);
     return out;
@@ -482,10 +483,14 @@ namespace
 
   using Accents = std::map<std::string, std::pair<std::string, std::string>>; // fg, ink
 
+  // `conceal` is the ink the colon is painted in; the default is the dark
+  // normal background a family accent resolves to in these tests. An empty
+  // string sends nil, which is the no-conceal fallback.
   std::vector<DecoSpec> call_scan_lines(lua_State *L,
                                         const std::vector<std::string> &lines,
                                         const std::string &ext,
-                                        const Accents &accents)
+                                        const Accents &accents,
+                                        const std::string &conceal = "#07060e")
   {
     const int base = lua_gettop(L);
     int matcher = 0;
@@ -510,7 +515,11 @@ namespace
       lua_setfield(L, -2, "ink");
       lua_setfield(L, -2, entry.first.c_str());
     }
-    REQUIRE(lua_pcall(L, 5, 1, 0) == LUA_OK);
+    if (conceal.empty())
+      lua_pushnil(L);
+    else
+      lua_pushstring(L, conceal.c_str());
+    REQUIRE(lua_pcall(L, 6, 1, 0) == LUA_OK);
     std::vector<DecoSpec> specs = read_specs(L, -1);
     lua_settop(L, base);
     return specs;
@@ -561,15 +570,15 @@ TEST_CASE("Bundled todo comments prefers the longest keyword at a word boundary"
   REQUIRE_FALSE(call_match_line(L, "// TODO without a colon").hit);
   REQUIRE_FALSE(call_match_line(L, "").hit);
 
-  // The band reaches through the colon and the one plain byte after it, and
-  // stops before a multi-byte glyph instead of splitting it.
+  // The match reports the keyword start and the colon's offset, both 0-based:
+  // the band is drawn around the keyword, and the colon is left out of it.
   const MatchResult band = call_match_line(L, "// TODO: fix");
   REQUIRE(band.hit);
   REQUIRE(band.start0 == 3);
-  REQUIRE(band.band_end == 9); // 0-based, exclusive: 'T'..' ' inclusive
+  REQUIRE(band.colon0 == 7);
   const MatchResult unicode = call_match_line(L, "// TODO:\xc3\xa9");
   REQUIRE(unicode.hit);
-  REQUIRE(unicode.band_end == unicode.start0 + 5); // through the colon, no half rune
+  REQUIRE(unicode.colon0 == unicode.start0 + 4);
 
   lua_close(L);
 }
@@ -584,24 +593,37 @@ TEST_CASE("Bundled todo comments only bands inside comments")
       {"info", {"#7b98c2", "#07060e"}},
   };
 
-  // The band starts at the comment, not at the keyword: the code before the
-  // `//` stays code and only `// TODO: ` takes the family colour. The text
-  // after the band takes the family fg.
+  // The chip is the keyword alone: the `//` and the space before the word are
+  // untouched, the colon is hidden in the theme's background ink, and the text
+  // after it takes the family fg.
   const std::string code = "int x = 1; // TODO: fix it";
   g.spans[code] = {{11, (int)code.size() - 11, "comment"}};
   std::vector<DecoSpec> specs = call_scan_lines(L, {code}, ".c", accents);
-  REQUIRE(specs.size() == 2);
+  REQUIRE(specs.size() == 3);
   REQUIRE(specs[0].row == 1);
-  REQUIRE(specs[0].col == 12);
-  REQUIRE(specs[0].width == 9); // "// TODO: "
+  REQUIRE(specs[0].col == 15);
+  REQUIRE(specs[0].width == 4); // "TODO", the pad and the colon excluded
   REQUIRE(specs[0].bg == "#7b98c2");
   REQUIRE(specs[0].fg == "#07060e");
   REQUIRE(specs[0].priority == 8);
-  REQUIRE(specs[1].col == 21);
-  REQUIRE(specs[1].width == 6); // "fix it"
+  // The colon stays a real character - it is painted, not removed, so it can be
+  // backspaced and the paint goes away with it.
+  REQUIRE(specs[1].col == 19);
+  REQUIRE(specs[1].width == 1);
   REQUIRE(specs[1].bg.empty());
-  REQUIRE(specs[1].fg == "#7b98c2");
-  REQUIRE(specs[1].priority == 7);
+  REQUIRE(specs[1].fg == "#07060e");
+  REQUIRE(specs[2].col == 20);
+  REQUIRE(specs[2].width == 7); // " fix it", colon excluded
+  REQUIRE(specs[2].bg.empty());
+  REQUIRE(specs[2].fg == "#7b98c2");
+  REQUIRE(specs[2].priority == 7);
+
+  // A theme whose normal group carries no background leaves the colon as the
+  // comment paints it, rather than hiding it in an invented colour.
+  const std::vector<DecoSpec> unconcealed = call_scan_lines(L, {code}, ".c", accents, "");
+  REQUIRE(unconcealed.size() == 2);
+  REQUIRE(unconcealed[0].bg == "#7b98c2");
+  REQUIRE(unconcealed[1].col == 20);
 
   // A keyword inside a string is not a comment: the spans name the string and
   // no comment covers the hit, so nothing is painted. Nothing is looked for
@@ -612,19 +634,22 @@ TEST_CASE("Bundled todo comments only bands inside comments")
   REQUIRE(call_scan_lines(L, {quoted}, ".c", accents).empty());
 
   // A real comment later on the same line is banded when it is the hit the
-  // matcher lands on, and the band still starts at the comment.
+  // matcher lands on, and the chip is the keyword, not the string or the
+  // comment marker.
   const std::string mixed = "char *s = \"plain\"; // TODO: yes";
   g.spans[mixed] = {
       {10, 7, "string"},
       {19, (int)mixed.size() - 19, "comment"},
   };
   specs = call_scan_lines(L, {mixed}, ".c", accents);
-  REQUIRE(specs.size() == 2);
-  REQUIRE(specs[0].col == 20); // the comment, not the 23rd column of the keyword
-  REQUIRE(specs[0].width == 9);
+  REQUIRE(specs.size() == 3);
+  REQUIRE(specs[0].col == 23); // the keyword, not the comment
+  REQUIRE(specs[0].width == 4);
   REQUIRE(specs[0].bg == "#7b98c2");
-  REQUIRE(specs[1].col == 29);
-  REQUIRE(specs[1].width == 3);
+  REQUIRE(specs[1].col == 27); // the hidden colon
+  REQUIRE(specs[1].width == 1);
+  REQUIRE(specs[2].col == 28); // "yes" after the colon
+  REQUIRE(specs[2].width == 4);
 
   // The colour run carries into the following comment lines (upstream's
   // multiline) and dies with the comment.
@@ -635,31 +660,36 @@ TEST_CASE("Bundled todo comments only bands inside comments")
   };
   g.spans.erase(block[0]);
   specs = call_scan_lines(L, block, ".lua", accents);
-  REQUIRE(specs.size() == 3);
+  REQUIRE(specs.size() == 4);
   REQUIRE(specs[0].bg == "#7b98c2");
-  REQUIRE(specs[0].col == 1); // the comment, not the keyword
-  REQUIRE(specs[0].width == 9);
-  REQUIRE(specs[1].row == 1);
-  REQUIRE(specs[1].col == 10); // "first" after "-- TODO: "
-  REQUIRE(specs[1].width == 5);
-  REQUIRE(specs[1].fg == "#7b98c2");
-  REQUIRE(specs[1].bg.empty());
-  REQUIRE(specs[2].row == 2);
-  REQUIRE(specs[2].col == 1);
-  REQUIRE(specs[2].width == (int)block[1].size());
+  REQUIRE(specs[0].col == 4); // the keyword, not the comment
+  REQUIRE(specs[0].width == 4);
+  REQUIRE(specs[1].col == 8); // the hidden colon
+  REQUIRE(specs[1].width == 1);
+  REQUIRE(specs[2].row == 1);
+  REQUIRE(specs[2].col == 9); // "first" after "-- TODO: "
+  REQUIRE(specs[2].width == 6);
   REQUIRE(specs[2].fg == "#7b98c2");
   REQUIRE(specs[2].bg.empty());
+  REQUIRE(specs[3].row == 2);
+  REQUIRE(specs[3].col == 1);
+  REQUIRE(specs[3].width == (int)block[1].size());
+  REQUIRE(specs[3].fg == "#7b98c2");
+  REQUIRE(specs[3].bg.empty());
 
   // An extension the syntax fallback has no rules for fails open: the keyword
-  // is banded anyway, as upstream does without a parser. The band then starts
-  // at the keyword because there is no comment position to prefer.
+  // is banded anyway, as upstream does without a parser.
   g.no_rules = true;
   const std::string plain = "plain text TODO: anywhere";
   specs = call_scan_lines(L, {plain}, ".md", accents);
-  REQUIRE(specs.size() == 2);
-  REQUIRE(specs[0].col == 12);  // the keyword itself
-  REQUIRE(specs[0].width == 6); // "TODO: "
+  REQUIRE(specs.size() == 3);
+  REQUIRE(specs[0].col == 12); // the keyword
+  REQUIRE(specs[0].width == 4);
   REQUIRE(specs[0].bg == "#7b98c2");
+  REQUIRE(specs[1].col == 16); // the hidden colon
+  REQUIRE(specs[1].width == 1);
+  REQUIRE(specs[2].col == 17);
+  REQUIRE(specs[2].width == 9); // " anywhere"
   g.no_rules = false;
 
   lua_close(L);
@@ -694,27 +724,36 @@ TEST_CASE("Bundled todo comments resolves family colours from the theme and pain
 
   invoke_event(L, "BufOpen");
 
-  // Two comments, each a band plus the text after it. The band's ink is the
-  // theme's dark normal background on these mid-light diagnostic colours
-  // (maximize_contrast), and the family fg is the theme's group colour.
-  REQUIRE(g.specs.size() == 4);
+  // Two comments, each a chip, a hidden colon and the text after it. The
+  // band's ink is the theme's dark normal background on these mid-light
+  // diagnostic colours (maximize_contrast), and the family fg is the theme's
+  // group colour.
+  REQUIRE(g.specs.size() == 6);
   REQUIRE(g.specs[0].row == 1);
-  REQUIRE(g.specs[0].col == 12);
-  REQUIRE(g.specs[0].width == 9);
+  REQUIRE(g.specs[0].col == 15);
+  REQUIRE(g.specs[0].width == 4);
   REQUIRE(g.specs[0].bg == "#7b98c2"); // DiagnosticInfo
   REQUIRE(g.specs[0].fg == "#07060e");
   REQUIRE(g.specs[1].row == 1);
-  REQUIRE(g.specs[1].col == 21);
-  REQUIRE(g.specs[1].fg == "#7b98c2");
-  REQUIRE(g.specs[1].bg.empty());
-  REQUIRE(g.specs[2].row == 2);
-  REQUIRE(g.specs[2].col == 15);
-  REQUIRE(g.specs[2].width == 10);
-  REQUIRE(g.specs[2].bg == "#cc7f86"); // DiagnosticError (FIXME)
-  REQUIRE(g.specs[2].fg == "#07060e");
+  REQUIRE(g.specs[1].col == 19); // the hidden colon
+  REQUIRE(g.specs[1].width == 1);
+  REQUIRE(g.specs[1].fg == "#07060e");
+  REQUIRE(g.specs[2].row == 1);
+  REQUIRE(g.specs[2].col == 20);
+  REQUIRE(g.specs[2].fg == "#7b98c2");
+  REQUIRE(g.specs[2].bg.empty());
   REQUIRE(g.specs[3].row == 2);
-  REQUIRE(g.specs[3].col == 25);
-  REQUIRE(g.specs[3].fg == "#cc7f86");
+  REQUIRE(g.specs[3].col == 18);
+  REQUIRE(g.specs[3].width == 5);
+  REQUIRE(g.specs[3].bg == "#cc7f86"); // DiagnosticError (FIXME)
+  REQUIRE(g.specs[3].fg == "#07060e");
+  REQUIRE(g.specs[4].row == 2);
+  REQUIRE(g.specs[4].col == 23); // the hidden colon
+  REQUIRE(g.specs[4].width == 1);
+  REQUIRE(g.specs[4].fg == "#07060e");
+  REQUIRE(g.specs[5].row == 2);
+  REQUIRE(g.specs[5].col == 24);
+  REQUIRE(g.specs[5].fg == "#cc7f86");
 
   // A group the theme does not name is left unpainted rather than invented.
   g.specs.clear();
@@ -760,6 +799,10 @@ TEST_CASE("Bundled todo comments readable ink maximizes contrast")
 TEST_CASE("Bundled todo comments walks the workspace and formats picker rows")
 {
   g = StubState{};
+  g.theme = {
+      {"diagnostic_error", "#cc7f86"},
+      {"diagnostic_info", "#7b98c2"},
+  };
   lua_State *L = load_module();
 
   const std::string dup = "int x; // TODO: one";
@@ -781,11 +824,13 @@ TEST_CASE("Bundled todo comments walks the workspace and formats picker rows")
   REQUIRE(field_int(L, -1, "line") == 2);
   REQUIRE(field_int(L, -1, "column") == 11);
   REQUIRE(field_text(L, -1, "text") == dup);
+  REQUIRE(field_text(L, -1, "family") == "info"); // the row colour comes from here
   lua_pop(L, 1);
   lua_rawgeti(L, -1, 2);
   REQUIRE(field_text(L, -1, "relative") == "src/b.lua");
   REQUIRE(field_int(L, -1, "line") == 5);
   REQUIRE(field_int(L, -1, "column") == 4);
+  REQUIRE(field_text(L, -1, "family") == "error");
   lua_pop(L, 1);
   lua_pop(L, 1);
 
@@ -817,6 +862,14 @@ TEST_CASE("Bundled todo comments walks the workspace and formats picker rows")
   lua_rawgeti(L, -1, 1);
   REQUIRE(field_text(L, -1, "label") == "src/a.c:2  int x; // TODO: one");
   REQUIRE(field_text(L, -1, "value") == "src/a.c\t2\t11\tsrc/a.c");
+  // The row wears its family colour and repeats nothing: no detail text on
+  // every row and no label again in the footer.
+  REQUIRE(field_text(L, -1, "fg") == "#7b98c2");
+  REQUIRE(field_text(L, -1, "detail").empty());
+  REQUIRE(field_text(L, -1, "preview").empty());
+  lua_pop(L, 1);
+  lua_rawgeti(L, -1, 2);
+  REQUIRE(field_text(L, -1, "fg") == "#cc7f86");
   lua_pop(L, 2);
 
   // An empty result is reported, not shown as an empty picker.

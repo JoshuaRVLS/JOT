@@ -114,6 +114,18 @@ struct PluginAutocmd
   std::string callback;
 };
 
+// One row of a plugin picker (jot.ui.picker / jot.show_picker). `label` is what
+// the row shows and `value` what the select callback receives (empty when the
+// label stands for itself). `detail` is the right-aligned secondary text (""
+// for none) and `fg` the row's own ink (-1 = the picker's normal foreground).
+struct PluginPickerRow
+{
+  std::string label;
+  std::string value;
+  std::string detail;
+  int fg = -1;
+};
+
 struct PluginPanel
 {
   std::string name;

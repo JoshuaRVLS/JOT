@@ -337,10 +337,11 @@ public:
                         int buffer,
                         const LuaEditDelta *edit);
   std::vector<std::string> plugin_panel_lines(const std::string &name);
-  // Picker rows as (label, value) pairs: a plain string item carries an empty
-  // value, a table item may carry `value` so the row's display text and the
-  // string the select callback receives can differ.
-  std::vector<std::pair<std::string, std::string>> plugin_picker_items(const std::string &callback);
+  // Picker rows: a plain string item carries an empty value, a table item may
+  // carry `value` (what the select callback receives instead of the display
+  // text), `detail` (right-aligned secondary text) and `fg` (the row's own
+  // colour, a "#rrggbb" string or xterm index).
+  std::vector<PluginPickerRow> plugin_picker_items(const std::string &callback);
   bool run_plugin_callback(const std::string &callback, const std::string &arg = "");
   void
   register_command(const std::string &name, const std::string &callback, const std::string &detail);

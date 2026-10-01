@@ -466,6 +466,8 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   lua_newtable(L);
   lua_pushstring(L, "other.txt");
   lua_setfield(L, -2, "label");
+  lua_pushinteger(L, 173); // the row's own ink
+  lua_setfield(L, -2, "fg");
   lua_rawseti(L, -2, 2);
   lua_setfield(L, -2, "items");
   REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
@@ -476,6 +478,18 @@ TEST_CASE("Bundled Lua UI kit renders surfaces from Lua")
   REQUIRE(g.last_title.find("Files") != std::string::npos);
   REQUIRE(g.last_title.find("2/2") != std::string::npos);
   REQUIRE(g.last_footer == "preview text");
+
+  // Labels sit at the panel's inner edge under a two-space prefix, with no
+  // accent bar pushing the selected row right, and a row that names its own
+  // ink keeps it while unselected. The selected row stays on the selection
+  // pair (16 fg on 17 bg here).
+  REQUIRE(g.lines.size() >= 4); // query + divider + two items
+  REQUIRE(g.lines[2].rfind("  main.cpp", 0) == 0);
+  REQUIRE(g.lines[3].rfind("  other.txt", 0) == 0);
+  REQUIRE(g.lines[2].find("▎") == std::string::npos);
+  REQUIRE(g.lines[3].find("▎") == std::string::npos);
+  REQUIRE(g.spans_by_line[3].front().fg == 16);  // selection fg
+  REQUIRE(g.spans_by_line[4].front().fg == 173); // the row's own ink
 
   push_module_field(L, 1, "quick_pick");
   lua_pushnil(L);

@@ -42,6 +42,10 @@ struct QuickPickItem
   int line = 0;
   int col = 0;
   int severity = 0;
+  // The row's own ink, when the picker rows carry one (-1 = the picker's
+  // normal foreground). A picker whose rows name a family - the todo list -
+  // is colour-coded at a glance.
+  int fg = -1;
 };
 
 // One row of the cell-based settings menu (:settings / Ctrl+,): a config key

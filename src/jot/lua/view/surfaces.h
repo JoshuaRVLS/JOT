@@ -53,6 +53,7 @@ struct QuickPickItemView
   std::string detail;
   std::string preview;
   int severity = 0;
+  int fg = -1; // row ink, -1 = the picker's normal foreground
 };
 
 struct QuickPickView

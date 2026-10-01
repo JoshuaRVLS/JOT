@@ -298,23 +298,24 @@ deliberately does not, so a preview never depends on a file you cannot see.
 TODO-style comments wear the colour of what they mean (a port of
 [todo-comments.nvim](https://github.com/folke/todo-comments.nvim)):
 
-- The keyword and the colon get a background band in the family colour, and
-  the text after the colon is re-inked in the same colour, so a comment reads
-  `TODO`, `FIXME`, `HACK`, `WARN`, `PERF`, `NOTE` or `TEST` at a glance. The
-  band's own text uses whichever of the theme's text and background colours
-  contrasts most with it.
+- The keyword alone gets a background chip in the family colour, the colon is
+  hidden, and the text after the colon is re-inked in the same colour, so a
+  comment reads `TODO`, `FIXME`, `HACK`, `WARN`, `PERF`, `NOTE` or `TEST` at a
+  glance. The chip's own text uses whichever of the theme's text and background
+  colours contrasts most with it.
 - A comment run carries its colour onto the following comment lines, and only
   text the syntax highlighter calls a comment is painted - `TODO:` inside a
   string stays plain.
 - `Alt+] T` / `Alt+[ T` jump to the next/previous comment (the same family as
   function, class and diagnostic jumps).
 - `:Todo` lists every TODO-style comment across the workspace in the picker,
-  with file, line and the comment text; `:Todo keywords=TODO,FIX` narrows the
-  list to those keywords, and picking a row opens the file at the comment.
+  with file, line and the comment text, each row inked in its comment's family
+  colour; `:Todo keywords=TODO,FIX` narrows the list to those keywords, and
+  picking a row opens the file at the comment.
 
 The colours come from the live theme (`error`, `warning`, `info` and `hint`
 map to the diagnostic groups; a custom keyword joins the default family), so a
-colour-scheme switch re-inks the bands instead of leaving the old palette on
+colour-scheme switch re-inks the chips instead of leaving the old palette on
 screen. Upstream's keyword set is kept whole, including the aliases (`FIXME`,
 `ISSUE`, `XXX`, `OPTIM`, `INFO`, `PASSED`, …).
 

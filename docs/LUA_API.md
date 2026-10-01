@@ -243,8 +243,10 @@ jot.ui.picker("Symbols", function()
 end, function(label)
   -- The select callback receives the picked item; for a plain string item
   -- that is the label; a `{label = ..., value = ...}` row receives `value`
-  -- instead, so the display text and the payload stay apart. Match it back
-  -- to the symbol row and jump the cursor there.
+  -- instead, so the display text and the payload stay apart. A row may also
+  -- carry `detail` (right-aligned secondary text) and `fg` (its own ink as a
+  -- "#rrggbb" string or xterm index, painted while the row is not selected).
+  -- Match it back to the symbol row and jump the cursor there.
   for _, s in ipairs(jot.symbols.list()) do
     local prefix = ("%s\t%s"):format(s.name, s.kind)
     if label:sub(1, #prefix) == prefix then
@@ -658,7 +660,7 @@ While any quick pick (diagnostics, symbols, project search, or a Lua picker)
 is open, `jot.picker.active()` tells you so; `jot.picker.info()` returns
 `title`, `query`, `selected`, `visible`, `total`; `jot.picker.items()` lists
 the currently shown `{label, detail, preview, filepath, line, column,
-severity}` rows. `accept()` runs the selected item and `close()` dismisses
+severity, fg}` rows. `accept()` runs the selected item and `close()` dismisses
 the picker - useful for custom keymaps over native pickers.
 
 ### Syntax tokens
