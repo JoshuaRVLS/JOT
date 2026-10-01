@@ -117,6 +117,14 @@ void Editor::handle_terminal_event(const Event &ev)
     bool is_alt = ev.key.alt;
     int original_ch = ch;
 
+    // Modal prompts own their answer keys before editor chrome callbacks (for
+    // example the explorer's Lua `y` keymap) can consume them.
+    if (show_quit_prompt)
+    {
+      handle_input(ch, is_ctrl, is_shift, is_alt, original_ch);
+      return;
+    }
+
     if (lua_api && lua_api->float_input(ch, is_ctrl, is_shift, is_alt))
     {
       needs_redraw = true;
@@ -146,14 +154,6 @@ void Editor::handle_terminal_event(const Event &ev)
     if (toggle_terminal_shortcut)
     {
       toggle_integrated_terminal();
-      return;
-    }
-
-    // Quit confirmation is modal: resolve its answer before Lua keymaps (the
-    // explorer binds `y` to yank a path) or any focused surface can consume it.
-    if (show_quit_prompt)
-    {
-      handle_input(ch, is_ctrl, is_shift, is_alt, original_ch);
       return;
     }
 

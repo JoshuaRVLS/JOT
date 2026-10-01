@@ -211,37 +211,40 @@ TEST_CASE("Quit prompt: the panel asks with its keys, over a dimmed editor", "[j
   REQUIRE(buffer_row_found);
 }
 
-TEST_CASE("Quit prompt: Y confirms while the explorer has focus", "[jot][prompt]")
+TEST_CASE("Quit prompt: Y confirms after Ctrl+Q from the explorer", "[jot][prompt]")
 {
   seed_config_home();
   Editor e;
   e.set_home_menu_visible(false);
   load_buffer(e, "focused_y.cpp");
-  e.focus_sidebar_for_test();
-  e.open_quit_prompt_for_test();
+  e.insert_string_for_test("dirty");
+  e.toggle_sidebar_for_test();
+  REQUIRE(e.focus_state_for_test() == FOCUS_SIDEBAR);
 
-  // The explorer used to consume plain keys before the quit prompt handler, so
-  // this Y toggled tree filtering instead of confirming the modal.
+  // This is the real Ctrl+Q route: it opens the modal through the editor
+  // dispatcher, after which Y must not become the explorer's yank key.
+  e.terminal_key_for_test('q', true);
+  REQUIRE(e.quit_prompt_visible_for_test());
   e.terminal_key_for_test('y');
 
-  // Confirming quits the editor; the prompt flag need not clear before the run
-  // loop observes `running=false`.
-  REQUIRE_FALSE(e.editor_running_for_test());
+  REQUIRE_FALSE(e.quit_prompt_visible_for_test());
 }
 
-TEST_CASE("Quit prompt: N cancels while the explorer has focus", "[jot][prompt]")
+TEST_CASE("Quit prompt: N cancels after Ctrl+Q from the explorer", "[jot][prompt]")
 {
   seed_config_home();
   Editor e;
   e.set_home_menu_visible(false);
   load_buffer(e, "focused_n.cpp");
-  e.focus_sidebar_for_test();
-  e.open_quit_prompt_for_test();
+  e.insert_string_for_test("dirty");
+  e.toggle_sidebar_for_test();
+  REQUIRE(e.focus_state_for_test() == FOCUS_SIDEBAR);
 
+  e.terminal_key_for_test('q', true);
+  REQUIRE(e.quit_prompt_visible_for_test());
   e.terminal_key_for_test('n');
 
   REQUIRE_FALSE(e.quit_prompt_visible_for_test());
-  REQUIRE(e.editor_running_for_test());
   REQUIRE(e.focus_state_for_test() == FOCUS_SIDEBAR);
 }
 

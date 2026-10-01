@@ -15,6 +15,25 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
   note_editing_activity(false);
   clear_debugger_breakpoint_hover();
 
+  // A quit confirmation owns every answer key, regardless of which surface had
+  // focus when Ctrl+Q opened it.
+  if (show_quit_prompt)
+  {
+    if (ch == 'y' || ch == 'Y' || ch == '\n' || ch == 13)
+    {
+      show_quit_prompt = false;
+      needs_redraw = true;
+      running = false;
+    }
+    else if (ch == 'n' || ch == 'N' || ch == 27)
+    {
+      show_quit_prompt = false;
+      needs_redraw = true;
+      set_message("Quit cancelled");
+    }
+    return;
+  }
+
   // Terminals encode Ctrl+` inconsistently. Accept common variants:
   // - explicit Ctrl modifier + '`'/'~' (and fallback Ctrl+\ for layouts where
   //   backtick is hard to emit)
@@ -443,23 +462,6 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
     handle_rename_prompt(ch);
     return;
   }
-  // The quit prompt is modal just like Save As and Rename: resolve it before
-  // the focused explorer, dock, or editor gets the answer key.
-  if (show_quit_prompt)
-  {
-    if (ch == 'y' || ch == 'Y' || ch == '\n' || ch == 13)
-    {
-      running = false;
-    }
-    else if (ch == 'n' || ch == 'N' || ch == 27)
-    {
-      show_quit_prompt = false;
-      needs_redraw = true;
-      set_message("Quit cancelled");
-    }
-    return;
-  }
-
   if (show_sidebar && focus_state == FOCUS_SIDEBAR)
   {
     if (ch == 27)
@@ -490,21 +492,6 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
     focus_state = FOCUS_EDITOR;
     ui->invalidate();
     needs_redraw = true;
-    return;
-  }
-
-  if (show_quit_prompt)
-  {
-    if (ch == 'y' || ch == 'Y' || ch == '\n')
-    {
-      running = false;
-    }
-    else if (ch == 'n' || ch == 'N' || ch == 27)
-    {
-      show_quit_prompt = false;
-      needs_redraw = true;
-      set_message("Quit cancelled");
-    }
     return;
   }
 
