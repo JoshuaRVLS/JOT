@@ -152,6 +152,18 @@ public:
   // decode_key_event -> handle_input sequence the terminal and GUI backends use,
   // so a binding's routing can be tested without a terminal.
   void raw_key_for_test(int raw_ch);
+  // Feeds a key through terminal_events.cpp (Lua float/keymaps before the C++
+  // dispatcher), exactly where the explorer's `y` binding intercepts the key.
+  void terminal_key_for_test(int ch, bool ctrl = false, bool shift = false, bool alt = false)
+  {
+    Event ev{};
+    ev.type = EVENT_KEY;
+    ev.key.key = ch;
+    ev.key.ctrl = ctrl;
+    ev.key.shift = shift;
+    ev.key.alt = alt;
+    handle_terminal_event(ev);
+  }
   bool sidebar_auto_hidden_for_test() const
   {
     return sidebar_hidden_for_width_;

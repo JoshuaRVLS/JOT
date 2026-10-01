@@ -443,6 +443,22 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
     handle_rename_prompt(ch);
     return;
   }
+  // The quit prompt is modal just like Save As and Rename: resolve it before
+  // the focused explorer, dock, or editor gets the answer key.
+  if (show_quit_prompt)
+  {
+    if (ch == 'y' || ch == 'Y' || ch == '\n' || ch == 13)
+    {
+      running = false;
+    }
+    else if (ch == 'n' || ch == 'N' || ch == 27)
+    {
+      show_quit_prompt = false;
+      needs_redraw = true;
+      set_message("Quit cancelled");
+    }
+    return;
+  }
 
   if (show_sidebar && focus_state == FOCUS_SIDEBAR)
   {

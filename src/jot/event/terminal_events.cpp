@@ -149,6 +149,14 @@ void Editor::handle_terminal_event(const Event &ev)
       return;
     }
 
+    // Quit confirmation is modal: resolve its answer before Lua keymaps (the
+    // explorer binds `y` to yank a path) or any focused surface can consume it.
+    if (show_quit_prompt)
+    {
+      handle_input(ch, is_ctrl, is_shift, is_alt, original_ch);
+      return;
+    }
+
     // The floating terminal owns the keys while its box is up: it is above the
     // dock both on screen and here.
     if (show_floating_terminal)

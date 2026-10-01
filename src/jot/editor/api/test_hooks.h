@@ -878,6 +878,19 @@ public:
   {
     return (int)focus_state;
   }
+  void focus_sidebar_for_test()
+  {
+    show_sidebar = true;
+    focus_state = FOCUS_SIDEBAR;
+  }
+  void editor_input_for_test(int ch, bool ctrl = false, bool shift = false, bool alt = false)
+  {
+    handle_input(ch, ctrl, shift, alt, ch);
+  }
+  bool editor_running_for_test() const
+  {
+    return running;
+  }
   bool terminal_focused_for_test()
   {
     IntegratedTerminal *term = get_integrated_terminal();
