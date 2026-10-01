@@ -5,7 +5,9 @@
 --     expands), with an exact fallback to the editor's own Tab behavior via
 --     `jot.edit.tab` / `jot.edit.shift_tab`, and a hand-off to the LSP
 --     completion popup when one is open (the Lua keymap shadows the native
---     accept-on-Tab otherwise).
+--     accept-on-Tab otherwise). The hand-off comes last of the three: a trigger,
+--     an abbreviation and a session's next stop are all things the caret's own
+--     text asked for, and a popup row is the generic answer to any of them.
 --   * the choice keys - registered only while a session is live, so Ctrl+E is
 --     not stolen from the file picker during normal editing.
 local session = require("jot_snip.session")
@@ -33,11 +35,6 @@ local function tab()
       return
     end
   end
-  if completion_visible() then
-    if jot.lsp.accept_completion() then
-      return
-    end
-  end
   if expand.expand() then
     return
   end
@@ -45,11 +42,18 @@ local function tab()
     return
   end
   -- Emmet comes after the triggers, so a user snippet that matches wins, and
-  -- before the editor's own Tab, which is what a refused abbreviation falls
-  -- back to (jot.emmet.expand() answers false for anything that does not
-  -- parse, so prose and code are left alone).
+  -- before the popup hand-off: the abbreviation's last word is a completion row
+  -- often enough (`li` in `ul>li` was one), and the Tab went to that row instead
+  -- of the tree. A refused abbreviation answers false (anything that does not
+  -- parse, so prose and code are left alone), which leaves the popup its turn
+  -- below: that is how `<div` + Tab completes the tag.
   if jot.emmet.expand() then
     return
+  end
+  if completion_visible() then
+    if jot.lsp.accept_completion() then
+      return
+    end
   end
   -- Not a snippet: exactly the editor's own Tab.
   jot.edit.tab()

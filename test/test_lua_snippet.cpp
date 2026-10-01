@@ -84,6 +84,32 @@ namespace
       lsp = { register_snippet_handler = function(fn) test_snippet_handler = fn end },
     }
 
+    -- The Tab routing (runtime/lua/features/snippet/keymaps.lua): which of the
+    -- snippet trigger, Emmet, the completion popup and the editor's own Tab took
+    -- the key, and what the stubs answer about the first three being available.
+    local tab_handler = nil
+    local routing = { accept = 0, editor_tab = 0, emmet = 0, trigger = 0 }
+    local emmet_expands, trigger_expands, completion_visible = false, false, false
+    jot.keymap = {
+      set = function(key, fn) if key == "Tab" then tab_handler = fn end end,
+      remove = function() end,
+    }
+    jot.edit = {
+      tab = function() routing.editor_tab = routing.editor_tab + 1 end,
+      shift_tab = function() end,
+    }
+    jot.emmet = {
+      expand = function()
+        routing.emmet = routing.emmet + 1
+        return emmet_expands
+      end,
+    }
+    jot.lsp.accept_completion = function()
+      routing.accept = routing.accept + 1
+      return true
+    end
+    jot.lsp.completions = function() return { visible = completion_visible } end
+
     local order = { "config", "doc", "env", "nodes", "parser",
                     "store", "json", "session", "expand", "lsp" }
     for _, name in ipairs(order) do
@@ -100,6 +126,38 @@ namespace
       expand = package.loaded["jot_snip.expand"],
       lsp = package.loaded["jot_snip.lsp"],
     }
+
+    -- The bundled keymap module, loaded against the stubs above so the Tab
+    -- binding it registers can be driven without an editor. It captures its
+    -- `jot_snip.expand` at load time, so it is loaded against a stub of that one
+    -- module: the routing cases only ask which path takes the key, and the
+    -- engine's own expansion is covered by the cases above.
+    local real_expand_module = package.loaded["jot_snip.expand"]
+    package.loaded["jot_snip.expand"] = {
+      expand = function()
+        routing.trigger = routing.trigger + 1
+        return trigger_expands
+      end,
+      expand_or_jump = function() return false end,
+    }
+    snip.keymaps = assert(loadfile(dir .. "keymaps.lua"))()
+    package.loaded["jot_snip.expand"] = real_expand_module
+    snip.keymaps.install()
+
+    function test_press_tab()
+      if tab_handler == nil then
+        return false
+      end
+      tab_handler()
+      return true
+    end
+    function test_set_routing(popup_visible, emmet, trigger)
+      completion_visible = popup_visible and true or false
+      emmet_expands = emmet and true or false
+      trigger_expands = trigger and true or false
+      routing.accept, routing.editor_tab, routing.emmet, routing.trigger = 0, 0, 0, 0
+    end
+    function test_count(name) return routing[name] or -1 end
 
     function test_set_text(text)
       lines = {}
@@ -329,8 +387,83 @@ namespace
       lua_pop(L, 1);
       return out;
     }
+
+    // Sets what the stubs answer about the three paths below the Tab binding,
+    // and clears their call counts.
+    void set_routing(bool popup_visible, bool emmet_expands, bool trigger_expands)
+    {
+      lua_getglobal(L, "test_set_routing");
+      lua_pushboolean(L, popup_visible);
+      lua_pushboolean(L, emmet_expands);
+      lua_pushboolean(L, trigger_expands);
+      if (lua_pcall(L, 3, 0, 0) != LUA_OK)
+        FAIL("set_routing failed: " << lua_tostring(L, -1));
+    }
+
+    void press_tab()
+    {
+      lua_getglobal(L, "test_press_tab");
+      if (lua_pcall(L, 0, 0, 0) != LUA_OK)
+        FAIL("press_tab failed: " << lua_tostring(L, -1));
+    }
+
+    // How many times a path ran: "trigger", "emmet", "accept", "editor_tab".
+    int count(const char *name)
+    {
+      lua_getglobal(L, "test_count");
+      lua_pushstring(L, name);
+      if (lua_pcall(L, 1, 1, 0) != LUA_OK)
+        FAIL("count failed: " << lua_tostring(L, -1));
+      const int value = (int)lua_tointeger(L, -1);
+      lua_pop(L, 1);
+      return value;
+    }
   };
 } // namespace
+
+// The Tab binding's routing (runtime/lua/features/snippet/keymaps.lua). The
+// popup hand-off used to come first, which spent the Tab on a tag row whose text
+// the abbreviation was in the middle of: `ul>li` was completed into
+// `ul><li></li>` instead of expanded, because `li` is a row of the tag list. The
+// cases pin the order that replaced it -- the user's triggers and Emmet before
+// the popup -- and that a refusal still leaves the popup its turn.
+TEST_CASE("Snippet keymap: the abbreviation outranks the completion row", "[snippet][lua]")
+{
+  SnipState state;
+  state.set_routing(true, true, false);
+  state.press_tab();
+  REQUIRE(state.count("emmet") == 1);
+  REQUIRE(state.count("accept") == 0);
+  REQUIRE(state.count("editor_tab") == 0);
+}
+
+TEST_CASE("Snippet keymap: a user trigger outranks the completion row", "[snippet][lua]")
+{
+  SnipState state;
+  state.set_routing(true, false, true);
+  state.press_tab();
+  REQUIRE(state.count("trigger") == 1);
+  REQUIRE(state.count("accept") == 0);
+  REQUIRE(state.count("emmet") == 0);
+}
+
+TEST_CASE("Snippet keymap: a refused abbreviation still hands the popup the Tab", "[snippet][lua]")
+{
+  SnipState state;
+  state.set_routing(true, false, false);
+  state.press_tab();
+  REQUIRE(state.count("accept") == 1);
+  REQUIRE(state.count("editor_tab") == 0);
+}
+
+TEST_CASE("Snippet keymap: with nothing to expand the Tab is the editor's own", "[snippet][lua]")
+{
+  SnipState state;
+  state.set_routing(false, false, false);
+  state.press_tab();
+  REQUIRE(state.count("editor_tab") == 1);
+  REQUIRE(state.count("accept") == 0);
+}
 
 TEST_CASE("Snippet parser renders tabstop defaults and mirrors", "[snippet][lua]")
 {

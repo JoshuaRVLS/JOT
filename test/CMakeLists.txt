@@ -110,6 +110,7 @@ add_executable(jot_tests
   test_completion_ghost.cpp
   test_overlay_placement.cpp
   test_completion_selection.cpp
+  test_tag_completion.cpp
   test_gui_fit.cpp
   test_gui_scroll_math.cpp
   test_resize_sync.cpp

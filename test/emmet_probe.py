@@ -75,6 +75,19 @@ def main() -> int:
     if "<ul>" not in view or "</ul>" not in view:
         failures.append("the expansion is not wrapped in its own element")
 
+    # ── Scene 2b: a child that is also a tag name ────────────────────────────
+    # The tag list is armed by the letters of an abbreviation, and `li` is one of
+    # its rows: with the popup hand-off ahead of the expander, Tab accepted the
+    # row and wrote `ul><li></li>` instead of the tree.
+    path = write_file(root, "tree.html")
+    screen = run(binary, path, root, "/tmp/jot_emmet_probe_cfg2b", b"ul>li\t")
+    view = screen.text()
+    print("scene 2b: ul>li + Tab")
+    if "<ul>" not in view or "</ul>" not in view or view.count("<li></li>") != 1:
+        failures.append("a child that is also a tag name was not expanded into its parent")
+    if "ul>" in view.replace("<ul>", "").replace("</ul>", ""):
+        failures.append("the abbreviation was left in the buffer")
+
     # ── Scene 3: a bare element takes its implied attributes ─────────────────
     path = write_file(root, "link.html")
     screen = run(binary, path, root, "/tmp/jot_emmet_probe_cfg3", b"a\t")

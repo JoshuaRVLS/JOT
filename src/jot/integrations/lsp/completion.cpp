@@ -844,6 +844,11 @@ void Editor::request_lsp_completion(bool manual, char trigger_character)
     return;
   }
 
+  // Whether the builtin tag list belongs at the caret's site: the word right
+  // after a `<`, decided below. A manual request asks for the list on purpose,
+  // so it is offered it wherever the caret is.
+  bool tag_list_at_site = manual;
+
   if (!manual)
   {
     if (!(std::isalnum((unsigned char)trigger_character) || trigger_character == '_'
@@ -860,6 +865,12 @@ void Editor::request_lsp_completion(bool manual, char trigger_character)
       prefix_len++;
       i--;
     }
+    // A tag name is the word right after the `<` that opens the tag, and that
+    // word is the only thing the builtin tag list is a completion of (see the
+    // seeding below): a word anywhere else on the line is an attribute value, a
+    // closing tag's name, or text, and a whole element written over it is not
+    // what the Tab meant.
+    tag_list_at_site = i > 0 && buf.line(buf.cursor.y)[i - 1] == '<';
     bool html_file = lsp_internal::is_html_filepath(buf.filepath);
     bool script_file = lsp_internal::is_script_lsp_filepath(buf.filepath);
     bool style_file = lsp_internal::is_style_lsp_filepath(buf.filepath);
@@ -880,18 +891,19 @@ void Editor::request_lsp_completion(bool manual, char trigger_character)
   bool has_builtin_html = false;
 
   // The list a web file starts from, before any server answers: the tags
-  // (markup only) plus the workspace's own class names and custom properties.
-  // It is seeded only where no server is expected -- a markup or style sheet
-  // file -- because for a JavaScript/TypeScript buffer a server does answer and
-  // clearing the previous response out from under the popup would blink it
-  // empty on every request. When a server does answer for one of these files,
-  // the response path appends the index to its items the same way it appends
-  // the tags (lifecycle.cpp).
+  // (markup only, and only while a tag name is being typed -- see
+  // tag_list_at_site above) plus the workspace's own class names and custom
+  // properties. It is seeded only where no server is expected -- a markup or
+  // style sheet file -- because for a JavaScript/TypeScript buffer a server does
+  // answer and clearing the previous response out from under the popup would
+  // blink it empty on every request. When a server does answer for one of these
+  // files, the response path appends the index to its items the same way it
+  // appends the tags (lifecycle.cpp).
   if (lsp_internal::is_html_filepath(buf.filepath)
       || lsp_internal::is_style_lsp_filepath(buf.filepath))
   {
     lsp_completion_all_items.clear();
-    if (lsp_internal::is_html_filepath(buf.filepath))
+    if (lsp_internal::is_html_filepath(buf.filepath) && tag_list_at_site)
     {
       lsp_internal::append_html_builtin_completions(lsp_completion_all_items);
     }
@@ -999,6 +1011,7 @@ bool Editor::apply_selected_lsp_completion()
   int start = cursor;
   int end = cursor;
 
+  bool site_from_editor = false;
   if (item.has_text_edit_range && item.edit_start_line == buf.cursor.y
       && item.edit_end_line == buf.cursor.y)
   {
@@ -1008,6 +1021,7 @@ bool Editor::apply_selected_lsp_completion()
   else if (lsp_completion_replace_start.y == buf.cursor.y)
   {
     start = std::clamp(lsp_completion_replace_start.x, 0, cursor);
+    site_from_editor = true;
   }
   else
   {
@@ -1015,6 +1029,18 @@ bool Editor::apply_selected_lsp_completion()
     {
       start--;
     }
+    site_from_editor = true;
+  }
+
+  // A row that brings its own tag takes the tag the author has already opened
+  // with it. The tag list is offered for a `<` being typed, but the site above is
+  // the word after it -- `<` is not an identifier character -- so accepting a row
+  // used to write the opening `<` twice (`<` + Tab wrote `<<a href=""></a>`). A
+  // server's own text edit names the range it replaces, so it is left alone.
+  if (site_from_editor && !text.empty() && text[0] == '<' && start > 0
+      && line_ref[(size_t)start - 1] == '<')
+  {
+    start--;
   }
 
   // Where the item is about to be written, and how many lines the document had

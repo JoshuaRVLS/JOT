@@ -703,6 +703,19 @@ public:
   {
     return lsp_completion_visible;
   }
+  // Asks for completions the way a typed key does, so a case can pin what is
+  // offered where (the builtin tag list is only for a tag name, the word right
+  // after the `<` that opens the tag).
+  void request_lsp_completion_for_test(char trigger_character)
+  {
+    request_lsp_completion(false, trigger_character);
+  }
+  // Accepts the selected row the way the Tab key does (the Lua binding and the
+  // native path both land here), returning whether anything was written.
+  bool apply_selected_lsp_completion_for_test()
+  {
+    return apply_selected_lsp_completion();
+  }
   // What the insert path does on every keystroke before the frame paints: the
   // held items are filtered against the word the caret now sits in.
   void refresh_lsp_completion_for_test()
