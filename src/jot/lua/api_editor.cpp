@@ -18,8 +18,10 @@ using namespace jot_lua;
 namespace fs = std::filesystem;
 
 #include "tools/symbols/index.h"
+#include "tools/workspace/search.h"
 #include "ui/components.h"
 #include "ui/text.h"
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -83,6 +85,31 @@ void LuaAPI::push_workspace_path(lua_State *L)
     return;
   }
   lua_pushstring(L, editor->root_dir.c_str());
+}
+
+void LuaAPI::push_workspace_search(lua_State *L)
+{
+  lua_newtable(L);
+  if (!editor)
+    return;
+  const std::string query = luaL_optstring(L, 1, "");
+  // The walk reads whole files, so the result count is capped: a feature
+  // asking for "everything" gets a ceiling instead of a hang.
+  const int limit = std::clamp((int)luaL_optinteger(L, 2, 200), 1, 1000);
+  const std::string root = editor->root_dir.empty() ? "." : editor->root_dir;
+  std::vector<WorkspaceSearchResult> results =
+      WorkspaceSearch::search(root, query, 1024 * 1024, limit);
+  int n = 1;
+  for (const WorkspaceSearchResult &result : results)
+  {
+    lua_newtable(L);
+    lua_push_str_field(L, "path", result.path);
+    lua_push_str_field(L, "relative_path", result.relative_path);
+    lua_push_str_field(L, "text", result.line_text);
+    lua_push_int_field(L, "line", (long long)result.line + 1);
+    lua_push_int_field(L, "column", (long long)result.column + 1);
+    lua_rawseti(L, -2, n++);
+  }
 }
 
 void LuaAPI::push_recent_files(lua_State *L)

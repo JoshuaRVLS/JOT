@@ -73,6 +73,11 @@ namespace lua_bind
     api(L).push_theme_current(L);
     return 1;
   }
+  int l_theme_get(lua_State *L)
+  {
+    api(L).push_theme_color(L, luaL_optstring(L, 1, ""));
+    return 1;
+  }
   int l_theme_palette(lua_State *L)
   {
     api(L).push_theme_palette(L);

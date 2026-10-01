@@ -46,6 +46,7 @@ namespace lua_bind
   int l_capabilities(lua_State *L);
   int l_theme_list(lua_State *L);
   int l_theme_apply(lua_State *L);
+  int l_theme_get(lua_State *L);
   int l_command(lua_State *L);
   int l_picker(lua_State *L);
   int l_panel_show(lua_State *L);
@@ -190,6 +191,7 @@ namespace lua_bind
   int l_buf_apply_edit(lua_State *L);
   int l_file_list(lua_State *L);
   int l_file_read(lua_State *L);
+  int l_workspace_search(lua_State *L);
   int l_editor_default_tab(lua_State *L);
   int l_editor_default_shift_tab(lua_State *L);
   int l_lsp_register_snippet_handler(lua_State *L);

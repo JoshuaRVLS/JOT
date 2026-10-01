@@ -197,6 +197,8 @@ void LuaAPI::reload_plugins()
     jot_lua::load_bundled_lua_file(static_cast<lua_State *>(lua_state),
                                    "features/decorations.lua",
                                    "Decorations");
+    jot_lua::load_bundled_lua_file(
+        static_cast<lua_State *>(lua_state), "features/todo_comments.lua", "TodoComments");
   }
   fire_autocmd("PluginReload");
   if (editor)

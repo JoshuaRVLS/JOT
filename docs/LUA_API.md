@@ -41,10 +41,10 @@ jot.file         current_file, open, save, save_buffer, close, new,
                  open_workspace, recent
 jot.pane         layout, list, split_horizontal, split_vertical,
                  focus_next, focus_previous, resize
-jot.workspace    open, path, recent, execute
+jot.workspace    open, path, recent, execute, search
 jot.symbols      list
 jot.config       get, get_number, get_bool, set, unset, has, keys, path
-jot.theme        list, apply, current, set_color, palette
+jot.theme        list, apply, current, set_color, palette, get
 jot.diagnostics  get
 jot.marks        set, get, jump, del, list
 jot.status       register, unregister
@@ -241,8 +241,10 @@ jot.ui.picker("Symbols", function()
   end
   return items
 end, function(label)
-  -- The select callback receives the picked item string; match it back to
-  -- the symbol row and jump the cursor there.
+  -- The select callback receives the picked item; for a plain string item
+  -- that is the label; a `{label = ..., value = ...}` row receives `value`
+  -- instead, so the display text and the payload stay apart. Match it back
+  -- to the symbol row and jump the cursor there.
   for _, s in ipairs(jot.symbols.list()) do
     local prefix = ("%s\t%s"):format(s.name, s.kind)
     if label:sub(1, #prefix) == prefix then
@@ -310,6 +312,14 @@ if id > 0 then jot.terminal.write("make -j\r", id) end
 `jot.workspace.recent()` lists recently opened workspaces and
 `jot.file.recent()` lists recently edited files, so custom "jump back" and
 home-screen features are pure Lua.
+
+`jot.workspace.search(query[, limit])` walks the workspace for the same
+case-insensitive substring match `:grep` uses (skipping `.git`, `node_modules`
+and build directories) and returns `{path, relative_path, text, line, column}`
+rows - 1-based positions of the first hit on each line, `text` the line itself,
+up to `limit` rows (default 200, capped at 1000). It reads whole files, so a
+feature that wants a broad walk (a TODO list, a custom grep UI) asks for the
+ceiling it can live with.
 
 ### LSP clients and popups
 
@@ -508,6 +518,20 @@ end)
 ```
 
 ### Theme palette
+
+`jot.theme.get(name)` resolves one theme slot or group name - `keyword`,
+`normal`, `diagnostic_error`, a tree-sitter capture name, and so on - to
+`{fg, bg}` as 24-bit `"#rrggbb"` strings, or `nil` when the theme does not
+name it. The lookup accepts the same spellings decorations do (lowercase,
+leading `@` stripped, dotted prefixes fall back to their parent), so feature
+code can read the live palette for a single group; a half the group does not
+set is omitted. A feature that wants to re-ink itself on a colour-scheme
+switch subscribes to `theme.switched` and calls this again.
+
+```lua
+local info = jot.theme.get("diagnostic_info")
+if info then jot.status.register("info", { fg = info.fg, text = " ready " }) end
+```
 
 `jot.theme.palette()` returns the current theme's full slot table - every
 syntax and UI slot as `{fg, bg}` (e.g. `default`, `keyword`, `function`,

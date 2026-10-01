@@ -197,6 +197,8 @@ const KnownSetting kKnownSettings[] = {
     {"toast.margin", "Toast margin", SettingsEntry::Type::Int},
     {"toast.max_visible", "Toast max visible", SettingsEntry::Type::Int},
     {"toast.max_width", "Toast max width", SettingsEntry::Type::Int},
+    {"todo_comments", "Highlight TODO/FIXME comments", SettingsEntry::Type::Bool},
+    {"todo_comments_keywords", "TODO comments: extra keywords", SettingsEntry::Type::String},
     {"treesitter_language_overrides",
      "Tree-sitter language overrides",
      SettingsEntry::Type::String},
@@ -316,8 +318,9 @@ const char *const kAppearanceKeys[] = {
 const char *const kAppearanceFamilies[] = {"smooth_scroll_"};
 const char *const kColorPreviewKeys[] = {"colorizer", "colorizer_mode"};
 const char *const kColorPreviewFamilies[] = {"colorizer_"};
-const char *const kCodeIntelFamilies[] = {"completion_", "cpp_",         "decorations_",
-                                         "diagnostics_",  "lsp_",         "treesitter_"};
+const char *const kCodeIntelKeys[] = {"todo_comments"};
+const char *const kCodeIntelFamilies[] = {
+    "completion_", "cpp_", "decorations_", "diagnostics_", "lsp_", "todo_comments_", "treesitter_"};
 const char *const kAssistantFamilies[] = {"ai_"};
 const char *const kPanesKeys[] = {
     "debugger_height",      "explorer_width",    "idle_fps",          "image_viewer_backend",
@@ -356,7 +359,11 @@ const SettingSection kSections[] = {
      count_of(kColorPreviewKeys),
      kColorPreviewFamilies,
      count_of(kColorPreviewFamilies)},
-    {"Code intelligence", nullptr, 0, kCodeIntelFamilies, count_of(kCodeIntelFamilies)},
+    {"Code intelligence",
+     kCodeIntelKeys,
+     count_of(kCodeIntelKeys),
+     kCodeIntelFamilies,
+     count_of(kCodeIntelFamilies)},
     {"AI assistant", nullptr, 0, kAssistantFamilies, count_of(kAssistantFamilies)},
     {"Panes & layout", kPanesKeys, count_of(kPanesKeys), nullptr, 0},
     {"Markdown preview",

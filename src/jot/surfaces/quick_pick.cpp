@@ -260,7 +260,9 @@ void Editor::accept_quick_pick()
   if (quick_pick_kind == QUICK_PICK_PLUGIN)
   {
     std::string callback = plugin_quick_pick_select_callback;
-    std::string value = item.label;
+    // A row may carry its payload in `value` (a location the Lua side has to
+    // resolve); a plain string row is its own value.
+    std::string value = item.value.empty() ? item.label : item.value;
     close_quick_pick();
     if (lua_api && !callback.empty())
     {

@@ -126,6 +126,9 @@ local jumps = {
   { "c", ":nextclass", ":prevclass", "class" },
   { "d", ":diagnext", ":diagprev", "diagnostic" },
 }
+-- The TODO-comment jump (`Alt+] t` / `Alt+[ t`) joins this family from its own
+-- feature: features/todo_comments.lua owns both the command and the chord, so
+-- the grammar above stays commands the native list can name.
 jot.keymap.set("Alt+]", "", "Next")
 jot.keymap.set("Alt+[", "", "Previous")
 for _, jump in ipairs(jumps) do

@@ -77,6 +77,11 @@ namespace lua_bind
     highlighter.set_language(ext);
     const auto colors = highlighter.get_colors(text);
     lua_newtable(L);
+    // A comment-gated caller has to tell "no rules for this extension" from
+    // "no token on this line": the first fails open (the editor cannot judge),
+    // the second closed. An empty table alone cannot say which it is.
+    lua_pushboolean(L, highlighter.has_rules());
+    lua_setfield(L, -2, "rules");
     if (!highlighter.has_rules())
     {
       return 1;

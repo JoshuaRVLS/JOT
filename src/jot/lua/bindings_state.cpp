@@ -67,6 +67,11 @@ namespace lua_bind
     api(L).push_workspace_path(L);
     return 1;
   }
+  int l_workspace_search(lua_State *L)
+  {
+    api(L).push_workspace_search(L);
+    return 1;
+  }
   int l_recent_files(lua_State *L)
   {
     api(L).push_recent_files(L);

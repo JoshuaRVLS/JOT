@@ -239,6 +239,11 @@ void Config::load_defaults()
   settings["decorations_inline_diagnostics"] = "true";
   // End-of-line diagnostic message next to the squiggle (features/decorations.lua).
   settings["diagnostics_virtual_text"] = "true";
+  // TODO/FIXME comment bands plus the jump and workspace-list commands
+  // (features/todo_comments.lua). Extra keywords are comma separated and join
+  // the default family (upstream's `merge_keywords`).
+  settings["todo_comments"] = "true";
+  settings["todo_comments_keywords"] = "";
   // Dim C/C++ branches the preprocessor would skip, and the symbols that
   // count as defined when deciding (features/cpp_inactive.lua).
   settings["cpp_dim_inactive"] = "true";

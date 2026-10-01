@@ -293,6 +293,36 @@ Note that a definition in another file is not followed: `@import`-ed or Sass
 rendered. Upstream follows imports with a file watcher per import; jot
 deliberately does not, so a preview never depends on a file you cannot see.
 
+### TODO comments
+
+TODO-style comments wear the colour of what they mean (a port of
+[todo-comments.nvim](https://github.com/folke/todo-comments.nvim)):
+
+- The keyword and the colon get a background band in the family colour, and
+  the text after the colon is re-inked in the same colour, so a comment reads
+  `TODO`, `FIXME`, `HACK`, `WARN`, `PERF`, `NOTE` or `TEST` at a glance. The
+  band's own text uses whichever of the theme's text and background colours
+  contrasts most with it.
+- A comment run carries its colour onto the following comment lines, and only
+  text the syntax highlighter calls a comment is painted - `TODO:` inside a
+  string stays plain.
+- `Alt+] T` / `Alt+[ T` jump to the next/previous comment (the same family as
+  function, class and diagnostic jumps).
+- `:Todo` lists every TODO-style comment across the workspace in the picker,
+  with file, line and the comment text; `:Todo keywords=TODO,FIX` narrows the
+  list to those keywords, and picking a row opens the file at the comment.
+
+The colours come from the live theme (`error`, `warning`, `info` and `hint`
+map to the diagnostic groups; a custom keyword joins the default family), so a
+colour-scheme switch re-inks the bands instead of leaving the old palette on
+screen. Upstream's keyword set is kept whole, including the aliases (`FIXME`,
+`ISSUE`, `XXX`, `OPTIM`, `INFO`, `PASSED`, …).
+
+`todo_comments=true` (the default) keeps the highlighting on - set it to
+`false` to turn it off. `todo_comments_keywords` (comma separated) adds
+keywords of your own, each taking the default family colour, the way upstream's
+`merge_keywords` does.
+
 ### LSP
 
 - One language server per language per workspace root, driven natively from
@@ -908,7 +938,7 @@ so the grammar is learnt once:
 | `Alt+D A F`, `Alt+D I A` | Delete around a function, inside an argument |
 | `Alt+Y A C`, `Alt+Y W` | Yank around a class, yank the word |
 | `Alt+V` | Selection: `E` expand, `C` shrink, `K` keep primary, `R` rotate, `A`/`B` cursor above/below, `L` split lines, `M` match all occurrences, `S` the object menu, `Shift+S` the current statement |
-| `Alt+]` / `Alt+[` | Next / previous: `F` function, `C` class, `D` diagnostic (`Alt+E` remains an alias) |
+| `Alt+]` / `Alt+[` | Next / previous: `F` function, `C` class, `D` diagnostic (`Alt+E` remains an alias), `T` TODO comment |
 | `Alt+C` | Code: `D` definition, `C` declaration, `T` type definition, `I` implementation, `H` switch header/source, `R` references, `N` rename, `A` code actions, `S` symbols, `W` workspace symbols, `K` documentation |
 | `Alt+X` | Clear inside: `S` the string, `B` the brackets (then type the replacement) |
 
@@ -1158,7 +1188,7 @@ it -- the buffer stays fully visible while you type.
 `:outline` `:line` `:goto` `:format` `:trim` `:upper` `:lower`
 `:sortlines|desc|reverselines|uniquelines|shufflelines|joinlines` `:dupe`
 `:replace*` `:surround` `:fold*` `:incnum` `:decnum` `:copypath` `:copyname`
-`:datetime` `:stats`
+`:datetime` `:stats` `:Todo [keywords=TODO,FIX]` `:TodoNext` `:TodoPrev`
 
 **LSP:** `:lspinstall` `:lspremove` `:lspstatus` `:hover` `:definition`
 `:gd` `:lspback` `:lsprename <name>` `:lsprefs` `:lspactions` `:declaration`
@@ -1254,8 +1284,9 @@ Built-in defaults include `explorer_width=25`, `minimap_width=15`,
 (the C++ declaration/definition checks), `terminal_height=10`,
 `terminal_float_width=85` and `terminal_float_height=75` (the floating
 terminal's box, a percentage of the active pane's text rows each),
-`debugger_height=12`, `status_clock=true`, and `status_coding_time=true`. The
-Extensions category adds `wakatime=false`, `wakatime_api_key=` and
+`debugger_height=12`, `status_clock=true`, `status_coding_time=true`, and
+`todo_comments=true` with `todo_comments_keywords=` (the TODO comment bands).
+The Extensions category adds `wakatime=false`, `wakatime_api_key=` and
 `wakatime_api_url=`. The colour preview adds `colorizer=true`,
 `colorizer_mode=background`, `colorizer_hex=true`, `colorizer_hex_alpha=false`,
 `colorizer_hex_qml=false`, `colorizer_hex_no_hash=false`,

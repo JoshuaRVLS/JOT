@@ -11,7 +11,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <unordered_map>
 
 namespace
 {
@@ -19,52 +18,66 @@ namespace
   // write-side slot chain in api_theme.cpp (set_theme_color) for the groups
   // decorations actually use; unknown names return false and callers fall
   // back to their explicit fg/bg or the theme defaults.
+  //
+  // A plain array rather than a static map: a static Editor's destructor fires
+  // autocmds, and a Lua handler as young as jot.theme.get can resolve a slot
+  // from there - after a function-local static map would already have been
+  // destroyed.
+  struct ThemeSlotEntry
+  {
+    const char *name;
+    int Theme::*fg;
+    int Theme::*bg;
+  };
+
+  constexpr ThemeSlotEntry kThemeSlots[] = {
+      {"normal", &Theme::fg_default, &Theme::bg_default},
+      {"default", &Theme::fg_default, &Theme::bg_default},
+      {"comment", &Theme::fg_comment, &Theme::bg_comment},
+      {"keyword", &Theme::fg_keyword, &Theme::bg_keyword},
+      {"string", &Theme::fg_string, &Theme::bg_string},
+      {"number", &Theme::fg_number, &Theme::bg_number},
+      {"function", &Theme::fg_function, &Theme::bg_function},
+      {"type", &Theme::fg_type, &Theme::bg_type},
+      {"variable", &Theme::fg_variable, &Theme::bg_variable},
+      {"constant", &Theme::fg_constant, &Theme::bg_constant},
+      {"builtin", &Theme::fg_builtin, &Theme::bg_builtin},
+      {"operator", &Theme::fg_operator, &Theme::bg_operator},
+      {"punctuation", &Theme::fg_punctuation, &Theme::bg_punctuation},
+      {"diagnostic_error", &Theme::fg_diagnostic_error, &Theme::bg_diagnostic_error},
+      {"diagnostic_warning", &Theme::fg_diagnostic_warning, &Theme::bg_diagnostic_warning},
+      {"diagnostic_info", &Theme::fg_diagnostic_info, nullptr},
+      {"diagnostic_hint", &Theme::fg_diagnostic_hint, nullptr},
+      {"search_match", &Theme::fg_search_match, &Theme::bg_search_match},
+      {"selection", &Theme::fg_selection, &Theme::bg_selection},
+      {"cursor_line", &Theme::fg_cursor_line_num, &Theme::bg_cursor_line},
+      {"search_current", &Theme::fg_search_current, &Theme::bg_search_current},
+      {"bracket_match", &Theme::fg_bracket_match, &Theme::bg_bracket_match},
+      {"word_highlight", &Theme::fg_word_highlight, &Theme::bg_word_highlight},
+      {"word_highlight_strong", &Theme::fg_word_highlight_strong, &Theme::bg_word_highlight_strong},
+      {"status", &Theme::fg_status, &Theme::bg_status},
+      {"status_error", &Theme::fg_status_error, nullptr},
+      {"status_warning", &Theme::fg_status_warning, nullptr},
+      {"status_info", &Theme::fg_status_info, nullptr},
+      {"status_muted", &Theme::fg_status_muted, &Theme::bg_status_muted},
+      {"line_num", &Theme::fg_line_num, &Theme::bg_line_num},
+      {"command", &Theme::fg_command, &Theme::bg_command},
+      {"panel_border", &Theme::fg_panel_border, &Theme::bg_panel_border},
+      {"active_border", &Theme::fg_active_border, &Theme::bg_active_border},
+  };
+
   bool theme_slot(const Theme &theme, const std::string &name, int &fg, int &bg)
   {
-    static const std::unordered_map<std::string, std::pair<int Theme::*, int Theme::*>> slots = {
-        {"normal", {&Theme::fg_default, &Theme::bg_default}},
-        {"default", {&Theme::fg_default, &Theme::bg_default}},
-        {"comment", {&Theme::fg_comment, &Theme::bg_comment}},
-        {"keyword", {&Theme::fg_keyword, &Theme::bg_keyword}},
-        {"string", {&Theme::fg_string, &Theme::bg_string}},
-        {"number", {&Theme::fg_number, &Theme::bg_number}},
-        {"function", {&Theme::fg_function, &Theme::bg_function}},
-        {"type", {&Theme::fg_type, &Theme::bg_type}},
-        {"variable", {&Theme::fg_variable, &Theme::bg_variable}},
-        {"constant", {&Theme::fg_constant, &Theme::bg_constant}},
-        {"builtin", {&Theme::fg_builtin, &Theme::bg_builtin}},
-        {"operator", {&Theme::fg_operator, &Theme::bg_operator}},
-        {"punctuation", {&Theme::fg_punctuation, &Theme::bg_punctuation}},
-        {"diagnostic_error", {&Theme::fg_diagnostic_error, &Theme::bg_diagnostic_error}},
-        {"diagnostic_warning", {&Theme::fg_diagnostic_warning, &Theme::bg_diagnostic_warning}},
-        {"diagnostic_info", {&Theme::fg_diagnostic_info, nullptr}},
-        {"diagnostic_hint", {&Theme::fg_diagnostic_hint, nullptr}},
-        {"search_match", {&Theme::fg_search_match, &Theme::bg_search_match}},
-        {"selection", {&Theme::fg_selection, &Theme::bg_selection}},
-        {"cursor_line", {&Theme::fg_cursor_line_num, &Theme::bg_cursor_line}},
-        {"search_current", {&Theme::fg_search_current, &Theme::bg_search_current}},
-        {"bracket_match", {&Theme::fg_bracket_match, &Theme::bg_bracket_match}},
-        {"word_highlight", {&Theme::fg_word_highlight, &Theme::bg_word_highlight}},
-        {"word_highlight_strong",
-         {&Theme::fg_word_highlight_strong, &Theme::bg_word_highlight_strong}},
-        {"status", {&Theme::fg_status, &Theme::bg_status}},
-        {"status_error", {&Theme::fg_status_error, nullptr}},
-        {"status_warning", {&Theme::fg_status_warning, nullptr}},
-        {"status_info", {&Theme::fg_status_info, nullptr}},
-        {"status_muted", {&Theme::fg_status_muted, &Theme::bg_status_muted}},
-        {"line_num", {&Theme::fg_line_num, &Theme::bg_line_num}},
-        {"command", {&Theme::fg_command, &Theme::bg_command}},
-        {"panel_border", {&Theme::fg_panel_border, &Theme::bg_panel_border}},
-        {"active_border", {&Theme::fg_active_border, &Theme::bg_active_border}},
-    };
-    auto it = slots.find(name);
-    if (it == slots.end())
+    for (const ThemeSlotEntry &slot : kThemeSlots)
     {
-      return false;
+      if (name == slot.name)
+      {
+        fg = slot.fg ? theme.*(slot.fg) : -1;
+        bg = slot.bg ? theme.*(slot.bg) : -1;
+        return true;
+      }
     }
-    fg = it->second.first ? theme.*(it->second.first) : -1;
-    bg = it->second.second ? theme.*(it->second.second) : -1;
-    return true;
+    return false;
   }
 } // namespace
 

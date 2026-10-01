@@ -337,7 +337,10 @@ public:
                         int buffer,
                         const LuaEditDelta *edit);
   std::vector<std::string> plugin_panel_lines(const std::string &name);
-  std::vector<std::string> plugin_picker_items(const std::string &callback);
+  // Picker rows as (label, value) pairs: a plain string item carries an empty
+  // value, a table item may carry `value` so the row's display text and the
+  // string the select callback receives can differ.
+  std::vector<std::pair<std::string, std::string>> plugin_picker_items(const std::string &callback);
   bool run_plugin_callback(const std::string &callback, const std::string &arg = "");
   void
   register_command(const std::string &name, const std::string &callback, const std::string &detail);
@@ -380,6 +383,9 @@ public:
   void push_config_path(lua_State *L);
   void push_editor_info(lua_State *L);
   void push_theme_current(lua_State *L);
+  // Resolved colours of a decoration highlight group as 24-bit hex (the
+  // read-side twin of set_theme_color; unknown names push nil).
+  void push_theme_color(lua_State *L, const std::string &name);
   void push_git_info(lua_State *L);
   void push_git_status(lua_State *L);
   void git_stage_from_lua(lua_State *L);
@@ -411,6 +417,10 @@ public:
   void terminal_activate_from_lua(lua_State *L);
   void terminal_spawn_from_lua(lua_State *L);
   void push_workspace_path(lua_State *L);
+  // Literal case-insensitive text search across the workspace root, the same
+  // walk :grep uses. Results carry 1-based line/column like every other Lua
+  // coordinate.
+  void push_workspace_search(lua_State *L);
   void push_recent_files(lua_State *L);
   void push_recent_workspaces(lua_State *L);
   void push_lsp_clients(lua_State *L);

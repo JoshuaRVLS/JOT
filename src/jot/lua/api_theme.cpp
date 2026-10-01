@@ -2,7 +2,14 @@
 #include "jot/lua/api.h"
 #include "ui/xterm_palette.h"
 
+extern "C"
+{
+#include <lauxlib.h>
+#include <lua.h>
+}
+
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -178,6 +185,44 @@ std::vector<std::string> LuaAPI::list_themes()
         if (e.path().extension() == ".json")
           out.push_back(e.path().stem().string());
   return out;
+}
+
+void LuaAPI::push_theme_color(lua_State *L, const std::string &name)
+{
+  if (!editor)
+  {
+    lua_pushnil(L);
+    return;
+  }
+  int fg = -1;
+  int bg = -1;
+  if (!editor->theme_group_color(name, fg, bg))
+  {
+    lua_pushnil(L);
+    return;
+  }
+  // Always hand back 24-bit hex, even for a theme that stores an xterm index:
+  // a feature that has to reason about the colour (picking a readable ink over
+  // a band, say) needs the bytes, and palette_rgb is the table the renderer
+  // itself paints with. A half the group does not set is left out, not faked.
+  auto push_half = [&](const char *key, int value)
+  {
+    if (value < 0)
+    {
+      return;
+    }
+    unsigned char r = 0;
+    unsigned char g = 0;
+    unsigned char b = 0;
+    jot_ui::palette_rgb(value, r, g, b);
+    char hex[8];
+    std::snprintf(hex, sizeof(hex), "#%02x%02x%02x", (unsigned)r, (unsigned)g, (unsigned)b);
+    lua_pushstring(L, hex);
+    lua_setfield(L, -2, key);
+  };
+  lua_newtable(L);
+  push_half("fg", fg);
+  push_half("bg", bg);
 }
 
 void LuaAPI::set_theme_color(std::string name, int fg, int bg)

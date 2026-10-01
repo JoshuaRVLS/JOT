@@ -228,6 +228,7 @@ bool LuaAPI::init()
           a.set_theme_color(luaL_optstring(s, 1, ""), fg, bg);
           return 0;
         });
+  field(L, "get", l_theme_get);
   lua_setfield(L, -2, "theme");
   lua_newtable(L);
   field(L, "highlight", l_syntax_highlight);
@@ -434,6 +435,7 @@ bool LuaAPI::init()
   field(L, "open", l_open_workspace);
   field(L, "path", l_workspace_path);
   field(L, "recent", l_recent_workspaces);
+  field(L, "search", l_workspace_search);
   lua_setfield(L, -2, "workspace");
   lua_newtable(L);
   field(L, "execute", l_command);
@@ -707,6 +709,9 @@ bool LuaAPI::init()
   // Dims the untaken branches of C/C++ conditionals (features/cpp_inactive.lua).
   // Loaded here for the same reason as the decorations above.
   jot_lua::load_bundled_lua_file(L, "features/cpp_inactive.lua", "CppInactive");
+  // TODO/FIXME comment bands and jumps (features/todo_comments.lua). Loaded
+  // here for the same reason as the decorations above.
+  jot_lua::load_bundled_lua_file(L, "features/todo_comments.lua", "TodoComments");
   // Built-in editor keybinds (features/keymaps.lua). Loaded after plugins so
   // user keymaps registered first take precedence; the Lua registrations
   // shadow the matching hardcoded fallbacks in the modeless input path.

@@ -73,6 +73,7 @@ add_executable(jot_tests
   test_home_open.cpp
   test_home_surface.cpp
   test_lua_decorations.cpp
+  test_lua_todo_comments.cpp
   test_lua_loader.cpp
   test_lua_toast.cpp
   test_git_panel.cpp
