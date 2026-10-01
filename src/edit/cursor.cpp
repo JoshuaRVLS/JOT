@@ -115,6 +115,30 @@ void Editor::clamp_cursor(int buffer_id)
                                            std::max(0, std::min(line_len, buf.cursor.x)));
 }
 
+void Editor::clamp_carets(FileBuffer &buf)
+{
+  if (buf.line_count() == 0)
+  {
+    return;
+  }
+  const int last_line = (int)buf.line_count() - 1;
+  // ui_clamp_to_utf8_boundary already answers 0 for a negative column and the
+  // line's length for one past its end, so a caret in the middle of a UTF-8
+  // sequence comes back to a boundary as well.
+  auto clamp_point = [&](Cursor &point)
+  {
+    point.y = std::max(0, std::min(last_line, point.y));
+    point.x = ui_clamp_to_utf8_boundary(buf.line(point.y), point.x);
+  };
+  clamp_point(buf.cursor);
+  buf.preferred_x = buf.cursor.x;
+  for (auto &caret : buf.extra_carets)
+  {
+    clamp_point(caret.start);
+    clamp_point(caret.end);
+  }
+}
+
 void Editor::ensure_cursor_visible(bool adjust_horizontal)
 {
   if (panes.empty())

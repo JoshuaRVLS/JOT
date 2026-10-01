@@ -1,5 +1,7 @@
 #include "editor.h"
 #include "text_features.h"
+#include <utility>
+#include <vector>
 
 void Editor::format_document()
 {
@@ -30,31 +32,43 @@ void Editor::format_document()
 void Editor::trim_trailing_whitespace()
 {
   auto &buf = get_buffer();
-  save_state();
 
-  int changed = 0;
-  for (size_t i = 0; i < buf.line_count(); i++)
+  // What would change is collected before anything is written: a trim that
+  // finds nothing is not an edit, and a save_state taken for it would push an
+  // undo step that undoes nothing (the next undo would appear to do nothing
+  // while it consumed the step).
+  std::vector<std::pair<int, std::string>> trimmed_lines;
+  for (int i = 0; i < (int)buf.line_count(); i++)
   {
-    auto &line = buf.line_mut(i);
-    std::string trimmed = EditorFeatures::trim_right(line);
-    if (trimmed != line)
+    std::string trimmed = EditorFeatures::trim_right(buf.line(i));
+    if (trimmed != buf.line(i))
     {
-      line = trimmed;
-      changed++;
+      trimmed_lines.push_back({i, std::move(trimmed)});
     }
   }
 
-  if (changed > 0)
-  {
-    buf.modified = true;
-    message = "Trimmed trailing whitespace on " + std::to_string(changed) + " line(s)";
-  }
-  else
+  if (trimmed_lines.empty())
   {
     message = "No trailing whitespace found";
+    needs_redraw = true;
+    return;
   }
+
+  save_state();
+  for (const auto &entry : trimmed_lines)
+  {
+    buf.line_mut(entry.first) = entry.second;
+  }
+  // Every trimmed line is shorter than it was, so a caret that sat in the
+  // whitespace would be left past the end of its line -- and the insert paths
+  // index the line with the caret's column.
+  clamp_carets(buf);
+
+  const int changed = (int)trimmed_lines.size();
+  buf.modified = true;
   needs_redraw = true;
-  if (changed > 0 && !buf.filepath.empty())
+  message = "Trimmed trailing whitespace on " + std::to_string(changed) + " line(s)";
+  if (!buf.filepath.empty())
     notify_lsp_change(buf.filepath);
 }
 

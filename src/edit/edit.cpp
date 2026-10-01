@@ -280,6 +280,11 @@ bool Editor::insert_char(char c)
     return false;
   }
 
+  // The caret's column can outlive the line under it (a trim, an LSP edit or a
+  // plugin may have shortened the line since) and insert() is out of range for
+  // a position past the end, so the column comes back onto the line first.
+  clamp_carets(buf);
+
   bool inserted_html_closing_tag = false;
 
   if (c == '\t')
@@ -402,6 +407,9 @@ void Editor::insert_string(const std::string &str)
   std::string text = ui_normalize_nfc(str);
   if (buf.extra_carets.empty())
   {
+    // See insert_char: a column past the end of the caret's line would make
+    // insert() throw.
+    clamp_carets(buf);
     buf.line_mut(buf.cursor.y).insert(buf.cursor.x, text);
     buf.cursor.x += text.length();
   }

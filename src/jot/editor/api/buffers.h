@@ -23,6 +23,11 @@ private:
   void redo();
 
   void clamp_cursor(int buffer_id);
+  // Pulls every caret of `buf` back onto its line. The commands that shorten
+  // lines under the carets (a trim, an external formatter, an LSP edit) call
+  // it once the text changed: a column past the end of its line is not a
+  // position the insert paths can index with.
+  void clamp_carets(FileBuffer &buf);
   void move_word_forward(bool extend_selection = false);
   void move_word_backward(bool extend_selection = false);
   void move_to_line_smart_start(bool extend_selection = false);

@@ -18,6 +18,7 @@ add_executable(jot_tests
   test_cpp_definitions.cpp
   test_cpp_flags.cpp
   test_cursor.cpp
+  test_caret_bounds.cpp
   test_cursor_blink.cpp
   test_cursor_blink_wiring.cpp
   test_cursor_colors.cpp

@@ -739,19 +739,7 @@ bool Editor::save_buffer_at(int index, bool announce)
       // got shorter under the carets that were past the trim.
       buf.mark_edited(first_trimmed);
       save_state();
-      const int cursor_line = std::clamp(buf.cursor.y, 0, (int)buf.line_count() - 1);
-      buf.cursor.y = cursor_line;
-      buf.cursor.x = std::min(buf.cursor.x, (int)buf.line(cursor_line).size());
-      buf.preferred_x = buf.cursor.x;
-      for (auto &caret : buf.extra_carets)
-      {
-        for (Cursor *point : {&caret.start, &caret.end})
-        {
-          const int line = std::clamp(point->y, 0, (int)buf.line_count() - 1);
-          point->y = line;
-          point->x = std::min(point->x, (int)buf.line(line).size());
-        }
-      }
+      clamp_carets(buf);
     }
   }
 

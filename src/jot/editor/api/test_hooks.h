@@ -63,6 +63,13 @@ public:
   {
     new_line();
   }
+  // The palette's "Trim Trailing Whitespace" command (see trim_caret_probe.py
+  // for the key path), so a case can pin the caret and the undo step it leaves
+  // behind without a terminal.
+  void trim_trailing_whitespace_for_test()
+  {
+    trim_trailing_whitespace();
+  }
   // Seeds the per-file inlay-hint cache directly (sorted on ingest like a
   // real server answer), so coordinate helpers can be unit-tested headless.
   void set_inlay_hints_for_test(const std::string &filepath, std::vector<LSPInlayHint> hints);
