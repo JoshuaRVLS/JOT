@@ -331,13 +331,36 @@ end
 -- Turns the lines of one buffer into decoration specs. Pure but for the comment
 -- gate, which asks the syntax highlighter per matching line. `conceal` is the
 -- ink the colon is painted in (the theme's own background, so it disappears).
+--
+-- `lines` is an array of strings (the unit tests) or an iterator returning
+-- `index, text` (the editor's own scan): both yield the same specs, and the
+-- iterator is what keeps a huge buffer from living in a Lua table while it is
+-- scanned.
 local function scan_lines(lines, ext, keywords, matcher, accents, conceal)
   local specs = {}
   -- The accent a match carries into the following comment lines (upstream's
   -- multiline): set by a painted keyword, cleared when the run or the comment
   -- ends.
   local carried = nil
-  for index, line in ipairs(lines) do
+  local next_line
+  if type(lines) == "function" then
+    next_line = lines
+  else
+    local at = 0
+    next_line = function()
+      at = at + 1
+      local line = lines[at]
+      if line == nil then
+        return nil
+      end
+      return at, line
+    end
+  end
+  while true do
+    local index, line = next_line()
+    if index == nil then
+      break
+    end
     local keyword, family, start0, colon0 = match_line(line, matcher, keywords)
     if keyword then
       local comment_start = comment_start_at(ext, line, start0)
@@ -396,8 +419,6 @@ end
 -- jot.buffer.get_line is 1-based and takes the buffer. The buffer text is
 -- empty while a file is still being opened (BufOpen fires before the text is
 -- in), so the caller falls back to reading the file from disk.
--- jot.buffer.get_text reads the whole buffer in one crossing, but only when it
--- is the buffer on screen; the per-line fallback costs one crossing per line.
 local function current_id()
   local ok, value = pcall(jot.buffer.current)
   if not ok or value == nil then
@@ -432,42 +453,54 @@ local function current_path()
   return ""
 end
 
-local function whole_buffer_text(buffer)
-  if type(jot.buffer.get_text) ~= "function" or current_id() ~= buffer then
-    return nil
-  end
-  local ok, text = pcall(jot.buffer.get_text)
-  if not ok or type(text) ~= "string" or text == "" then
-    return nil
-  end
-  return text
-end
-
-local function split_lines(text)
-  local lines = {}
-  for line in (text .. "\n"):gmatch("([^\n]*)\n") do
-    lines[#lines + 1] = line
-  end
-  return lines
-end
-
-local function buffer_lines(buffer)
-  local whole = whole_buffer_text(buffer)
-  if whole then
-    local lines = split_lines(whole)
-    if #lines > 0 then
-      return lines
+-- The lines of one text as an iterator returning `index, line`. The scan used
+-- to hand every line to scan_lines as an array, so the buffer lived twice in
+-- Lua for the whole pass: the joined text plus one string per line. A 200k-line
+-- buffer therefore cost tens of MB on every open and every edit. One line is
+-- alive at a time here instead.
+local function text_line_iter(text)
+  local at = 1
+  local index = 0
+  return function()
+    if at > #text then
+      return nil
     end
+    local nl = text:find("\n", at, true)
+    local line
+    if nl then
+      line = text:sub(at, nl - 1)
+      at = nl + 1
+    else
+      line = text:sub(at)
+      at = #text + 1
+    end
+    index = index + 1
+    return index, line
   end
-  local lines = {}
-  for index = 1, 200000 do
+end
+
+-- The same iterator over the buffer's own lines, one per-line read at a time.
+-- Line 1 is read up front so a buffer whose load is still racing the open (line
+-- 1 nil) can be told apart from an empty one, and handed back already primed:
+-- the probe is a read the scan would have paid for anyway.
+local function buffer_line_iter(buffer)
+  local first = jot.buffer.get_line(1, buffer)
+  if first == nil then
+    return nil
+  end
+  local primed = tostring(first)
+  local index = 0
+  return function()
+    index = index + 1
+    if index == 1 then
+      return 1, primed
+    end
     local text = jot.buffer.get_line(index, buffer)
     if text == nil then
-      break
+      return nil
     end
-    lines[#lines + 1] = tostring(text)
+    return index, tostring(text)
   end
-  return lines
 end
 
 ------------------------------------------------------------ the pending jump
@@ -530,18 +563,16 @@ local function apply(info, force)
     last_signature = sig
     return
   end
-  local lines = buffer_lines(buffer)
-  if #lines == 0 then
+  local lines = buffer_line_iter(buffer)
+  if not lines and path ~= "" then
     -- BufOpen raced the load: read the file so the first paint still shows the
     -- comments, and retry shortly for the buffer's own text.
-    if path ~= "" then
-      local ok, text = pcall(jot.file.read, path)
-      if ok and type(text) == "string" and text ~= "" then
-        lines = split_lines(text)
-      end
+    local ok, text = pcall(jot.file.read, path)
+    if ok and type(text) == "string" and text ~= "" then
+      lines = text_line_iter(text)
     end
   end
-  if #lines == 0 then
+  if not lines then
     retry()
     return
   end
@@ -604,8 +635,7 @@ local function jump(direction)
   if not buffer then
     return false
   end
-  local lines = buffer_lines(buffer)
-  if #lines == 0 then
+  if jot.buffer.get_line(1, buffer) == nil then
     return false
   end
   local ext = extension_of(current_path())
@@ -615,15 +645,21 @@ local function jump(direction)
   if not ok or type(row) ~= "number" then
     row = 1
   end
-  local first = direction > 0 and row + 1 or row - 1
-  local last = direction > 0 and #lines or 1
-  for index = first, last, direction do
-    local line = lines[index] or ""
+  -- Reads one line at a time, in the jump's direction, until the buffer runs
+  -- out: the walk never needs the whole buffer in memory.
+  local index = direction > 0 and row + 1 or row - 1
+  while index >= 1 do
+    local text = jot.buffer.get_line(index, buffer)
+    if text == nil then
+      break
+    end
+    local line = tostring(text)
     local keyword, _, start0 = match_line(line, matcher, keywords)
     if keyword and comment_start_at(ext, line, start0) ~= false then
       jot.cursor.set(index, start0 + 1)
       return true
     end
+    index = index + direction
   end
   jot.notify("No more todo comments to jump to")
   return false

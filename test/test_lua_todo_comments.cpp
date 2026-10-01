@@ -70,6 +70,8 @@ namespace
     int cursor_col = 1;
     std::vector<std::string> notices;
     std::vector<SearchHit> search_hits;
+    int get_text_calls = 0;
+    int get_line_calls = 0;
   };
 
   StubState g;
@@ -227,13 +229,17 @@ namespace
 
   int stub_buffer_get_text(lua_State *L)
   {
+    g.get_text_calls++;
     lua_pushstring(L, g.text.c_str());
     return 1;
   }
 
   int stub_buffer_get_line(lua_State *L)
   {
+    g.get_line_calls++;
     const lua_Integer index = luaL_checkinteger(L, 1);
+    // The buffer's own split: a trailing newline ends the last line and does
+    // not leave an empty one behind (the reader uses std::getline).
     std::vector<std::string> lines;
     size_t at = 0;
     while (true)
@@ -245,6 +251,8 @@ namespace
       if (end == std::string::npos)
         break;
       at = end + 1;
+      if (at >= g.text.size())
+        break;
     }
     if (index < 1 || (size_t)index > lines.size())
       lua_pushnil(L);
@@ -486,21 +494,54 @@ namespace
   // `conceal` is the ink the colon is painted in; the default is the dark
   // normal background a family accent resolves to in these tests. An empty
   // string sends nil, which is the no-conceal fallback.
+  // A closure over an index upvalue, the shape the editor's own scan uses in
+  // place of a table of every line.
+  int iter_lines(lua_State *L)
+  {
+    const int at = (int)lua_tointeger(L, lua_upvalueindex(1));
+    const auto *lines = (const std::vector<std::string> *)lua_touserdata(L, lua_upvalueindex(2));
+    if (at >= (int)lines->size())
+    {
+      lua_pushnil(L);
+      return 1;
+    }
+    lua_pushinteger(L, at + 1);
+    lua_replace(L, lua_upvalueindex(1));
+    lua_pushinteger(L, at + 1);
+    lua_pushstring(L, (*lines)[(size_t)at].c_str());
+    return 2;
+  }
+
+  void push_lines_iter(lua_State *L, const std::vector<std::string> &lines)
+  {
+    lua_pushinteger(L, 0);
+    lua_pushlightuserdata(L, (void *)&lines);
+    lua_pushcclosure(L, iter_lines, 2);
+  }
+
   std::vector<DecoSpec> call_scan_lines(lua_State *L,
                                         const std::vector<std::string> &lines,
                                         const std::string &ext,
                                         const Accents &accents,
-                                        const std::string &conceal = "#07060e")
+                                        const std::string &conceal = "#07060e",
+                                        bool as_iterator = false)
   {
     const int base = lua_gettop(L);
     int matcher = 0;
     const int keywords = push_keywords_and_matcher(L, matcher);
     push_module_fn(L, "scan_lines");
-    lua_newtable(L);
-    for (size_t i = 0; i < lines.size(); i++)
+    if (as_iterator)
     {
-      lua_pushstring(L, lines[i].c_str());
-      lua_rawseti(L, -2, (int)i + 1);
+      push_lines_iter(L, lines);
+    }
+    else
+    {
+      lua_newtable(L);
+      for (size_t i = 0; i < lines.size(); i++)
+      {
+        lua_pushstring(L, lines[i].c_str());
+        lua_rawseti(L, -2, (int)i + 1);
+      }
     }
     lua_pushstring(L, ext.c_str());
     lua_pushvalue(L, keywords);
@@ -763,6 +804,44 @@ TEST_CASE("Bundled todo comments resolves family colours from the theme and pain
   L = load_module();
   invoke_event(L, "BufOpen");
   REQUIRE(g.specs.empty());
+
+  lua_close(L);
+}
+
+TEST_CASE("Bundled todo comments scans a buffer line by line, never as one table")
+{
+  // The scan used to build a Lua table holding every line of the buffer (one
+  // string per line) on every open and every edit, so a 200k-line buffer cost
+  // tens of MB. It reads lines one at a time now, and this pins the contract:
+  // no whole-buffer crossing, one read per line, and the same specs whether
+  // scan_lines is handed an array or the editor's iterator.
+  g = StubState{};
+  g.text = "local a = 1\n-- TODO: later\nlocal b = 2\n";
+  g.path = "/tmp/probe.lua";
+  g.theme = {{"diagnostic_info", "#7b98c2"}};
+  lua_State *L = load_module();
+
+  invoke_event(L, "BufOpen");
+
+  REQUIRE(g.get_text_calls == 0);
+  REQUIRE(g.get_line_calls == 4); // line-1 probe, lines 2 and 3, the nil end
+  REQUIRE(g.specs.size() == 3);
+
+  const Accents accents = {{"info", {"#7b98c2", "#07060e"}}};
+  const std::vector<std::string> lines = {"// TODO: same", "local x = 1"};
+  const std::vector<DecoSpec> from_table = call_scan_lines(L, lines, ".lua", accents);
+  const std::vector<DecoSpec> from_iter =
+      call_scan_lines(L, lines, ".lua", accents, "#07060e", true);
+  REQUIRE(from_iter.size() == from_table.size());
+  REQUIRE(from_iter.size() == 3);
+  for (size_t i = 0; i < from_iter.size(); i++)
+  {
+    REQUIRE(from_iter[i].row == from_table[i].row);
+    REQUIRE(from_iter[i].col == from_table[i].col);
+    REQUIRE(from_iter[i].width == from_table[i].width);
+    REQUIRE(from_iter[i].fg == from_table[i].fg);
+    REQUIRE(from_iter[i].bg == from_table[i].bg);
+  }
 
   lua_close(L);
 }
