@@ -472,6 +472,28 @@ TEST_CASE("Rainbow brackets can be switched off", "[jot]")
   REQUIRE(join(bracket_color_fingerprint(e, first_row)).empty());
 }
 
+TEST_CASE("Sidebar root selection works by mouse and keyboard and survives refresh", "[jot]")
+{
+  const auto owned = fresh_editor();
+  Editor &e = *owned;
+  e.set_home_menu_visible(false);
+  e.open_workspace(scratch_workspace(), false);
+  e.render_for_test();
+  e.mouse_event_for_test(8, 0, 1);
+  REQUIRE(e.sidebar_root_selected_for_test());
+  e.editor_input_for_test('R');
+  REQUIRE(e.sidebar_root_selected_for_test());
+  e.editor_input_for_test('j');
+  REQUIRE_FALSE(e.sidebar_root_selected_for_test());
+  e.editor_input_for_test('k');
+  REQUIRE(e.sidebar_root_selected_for_test());
+  e.editor_input_for_test('j');
+  e.editor_input_for_test(1012);
+  REQUIRE(e.sidebar_root_selected_for_test());
+  e.editor_input_for_test('a');
+  REQUIRE(e.command_palette_query_for_test() == "mkfile ");
+}
+
 TEST_CASE("The sidebar comes back when the window fits again", "[jot]")
 {
   Editor &e = probe_editor();
@@ -485,7 +507,10 @@ TEST_CASE("The sidebar comes back when the window fits again", "[jot]")
   REQUIRE(e.sidebar_visible_for_test());
 
   // Too narrow: the explorer is dropped so the code keeps a usable width.
-  e.apply_resize_for_test(20, 20);
+  e.apply_resize_for_test(48, 24);
+  e.render_for_test();
+  REQUIRE_FALSE(e.sidebar_visible_for_test());
+  REQUIRE(e.pane_for_test().w >= 40);
   e.render_for_test();
   REQUIRE_FALSE(e.sidebar_visible_for_test());
   REQUIRE(e.sidebar_auto_hidden_for_test());

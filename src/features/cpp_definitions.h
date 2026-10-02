@@ -1,6 +1,7 @@
 #ifndef JOT_FEATURES_CPP_DEFINITIONS_H
 #define JOT_FEATURES_CPP_DEFINITIONS_H
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -8,8 +9,10 @@
 // workspace's headers and sources for function declarations and definitions, then
 // pair them up so that
 //
-//   * a function declared in a header with no definition anywhere becomes a
-//     "missing implementation" diagnostic, and
+//   * a function declared with no definition anywhere becomes a
+//     "missing implementation" diagnostic -- underlined on the leading half of
+//     the name, so it lands on the unresolved symbol and not on the whole
+//     signature -- and
 //   * a signature implemented more than once becomes a "multiple definitions"
 //     one (the linker's classic `multiple definition of f`), except a file-scope
 //     `main`, which a folder of standalone programs repeats on purpose -- and
@@ -41,6 +44,12 @@ namespace CppDefinitions
     int col = 0;     // 0-based
     int end_line = 0;
     int end_col = 0; // 0-based, one past the closing paren
+    // The declared name on its own (no `ns::` in front of it), which is what a
+    // missing-body finding is marked on.
+    int name_line = 0;
+    int name_col = 0;
+    int name_end_line = 0;
+    int name_end_col = 0; // 0-based, one past the name's last character
 
     std::string scope;          // "ns::Class", empty at file scope
     std::string name;           // last component: "f", "~Widget", "Widget", "operator bool"
@@ -111,7 +120,7 @@ namespace CppDefinitions
   };
 
   // Path predicates: which files hold C++ signatures, and which of those are
-  // headers (only header declarations are reported to be missing).
+  // headers (a header is what a second translation unit would include).
   bool is_header_file(const std::string &path);
   bool is_source_file(const std::string &path);
   bool is_parseable_file(const std::string &path);
@@ -120,12 +129,18 @@ namespace CppDefinitions
   // a test can run whole workspaces through it from memory.
   std::vector<FunctionRecord> parse_file(const std::string &path, const std::string &text);
 
+  // Include finding positions as well as match keys so moving a declaration
+  // refreshes its squiggle, while editing only a body's text avoids another walk.
+  std::string signature_of(const std::string &path, const std::string &text);
+
   // Pairs the records of a workspace up and reports what is missing or repeated.
   std::vector<Issue> analyze(const std::vector<FunctionRecord> &records, ScanStats *stats = nullptr);
 
-  // Walks `root` for headers and sources, parses them and analyzes the lot: the
-  // whole job, and what the editor runs on its worker thread.
-  ScanResult scan_workspace(const std::string &root, const ScanLimits &limits = ScanLimits{});
+  // Unsaved workspace text replaces disk text so declarations need not be saved
+  // before they can produce findings; the same scan limits apply to both.
+  ScanResult scan_workspace(const std::string &root,
+                            const ScanLimits &limits = ScanLimits{},
+                            const std::map<std::string, std::string> &unsaved = {});
 }
 
 #endif // JOT_FEATURES_CPP_DEFINITIONS_H

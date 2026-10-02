@@ -68,6 +68,7 @@ void Editor::load_file_tree(const std::string &path)
     }
   }
   const int old_scroll = file_tree_scroll;
+  const bool root_selected = file_tree_selected == -1;
 
   file_tree.clear();
   std::error_code ec;
@@ -122,7 +123,7 @@ void Editor::load_file_tree(const std::string &path)
 
   std::vector<FileNode *> refreshed_flat;
   flatten_nodes_mut(file_tree, refreshed_flat);
-  file_tree_selected = 0;
+  file_tree_selected = root_selected ? -1 : 0;
   if (!old_selected_path.empty())
   {
     for (int i = 0; i < (int)refreshed_flat.size(); i++)
@@ -139,7 +140,7 @@ void Editor::load_file_tree(const std::string &path)
   file_tree_scroll = std::clamp(old_scroll, 0, max_scroll);
   if (file_tree_selected < file_tree_scroll)
   {
-    file_tree_scroll = file_tree_selected;
+    file_tree_scroll = std::max(0, file_tree_selected);
   }
   else if (file_tree_selected >= file_tree_scroll + view_h)
   {

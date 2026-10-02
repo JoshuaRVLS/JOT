@@ -29,9 +29,9 @@ one deep tint of it, so a file reads as ink with many quiet places for the eye
 to land.
 
 The chrome is deliberately compact and darker still: sidebar `#0b0a14`, status
-line and tabline `#0c0b16`, floats `#0e0d19`, the selected row `#161329`, each a
+line and tabline `#0c0b16`, floats `#0e0d19`, the selected row `#38304d`, each a
 few steps off the editor's own ground. The frame recedes into the page and the
-border colour (`#1c1930`) reads as a rule rather than a box. The rose is the one
+border colour (`#695d7c`) remains visible against the near-black ground without adding outer boxes. The rose is the one
 saturated colour in the scheme, and it is spent where a hand goes: the active
 pane border, the cursor, the cursor line number, the focused terminal tab and
 the search hit.

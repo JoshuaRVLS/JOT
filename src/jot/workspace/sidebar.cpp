@@ -344,12 +344,12 @@ void Editor::handle_sidebar_input(int ch)
     clamp_scroll();
   };
 
-  file_tree_selected = std::clamp(file_tree_selected, 0, std::max(0, (int)flat.size() - 1));
+  file_tree_selected = std::clamp(file_tree_selected, -1, std::max(-1, (int)flat.size() - 1));
   clamp_scroll();
 
   if (ch == 1008 || ch == 'k')
   { // Up
-    if (file_tree_selected > 0)
+    if (file_tree_selected >= 0)
     {
       file_tree_selected--;
       ensure_selected_visible();
@@ -371,7 +371,7 @@ void Editor::handle_sidebar_input(int ch)
 
   if (ch == 1015)
   { // Page Up
-    file_tree_selected = std::max(0, file_tree_selected - view_h);
+    file_tree_selected = std::max(-1, file_tree_selected - view_h);
     ensure_selected_visible();
     needs_redraw = true;
     return;
@@ -387,7 +387,7 @@ void Editor::handle_sidebar_input(int ch)
 
   if (ch == 1012)
   { // Home
-    file_tree_selected = 0;
+    file_tree_selected = -1;
     ensure_selected_visible();
     needs_redraw = true;
     return;
@@ -555,6 +555,12 @@ void Editor::handle_sidebar_input(int ch)
         invalidate_sidebar_tree_cache();
         needs_redraw = true;
       }
+      else if (node->depth == 0)
+      {
+        file_tree_selected = -1;
+        file_tree_scroll = 0;
+        needs_redraw = true;
+      }
       else if (node->depth > 0)
       {
         int target_depth = node->depth - 1;
@@ -637,7 +643,7 @@ void Editor::handle_sidebar_input(int ch)
         base = fs::path(node->path).parent_path().string();
       }
     }
-    std::string rel = to_workspace_relative(base);
+    std::string rel = base == root_dir ? "" : to_workspace_relative(base);
     if (!rel.empty() && rel != "." && rel.back() != '/' && rel.back() != '\\')
     {
       rel += "/";
@@ -672,7 +678,7 @@ void Editor::handle_sidebar_input(int ch)
         base = fs::path(node->path).parent_path().string();
       }
     }
-    std::string rel = to_workspace_relative(base);
+    std::string rel = base == root_dir ? "" : to_workspace_relative(base);
     if (!rel.empty() && rel != "." && rel.back() != '/' && rel.back() != '\\')
     {
       rel += "/";
@@ -913,6 +919,16 @@ void Editor::handle_sidebar_mouse(int x, int y, bool is_click, bool is_double_cl
       }
       needs_redraw = true;
     }
+    return;
+  }
+
+  // The root has no FileNode: -1 selects its fixed header without opening a child.
+  if (rel_y == 0)
+  {
+    file_tree_selected = -1;
+    file_tree_scroll = 0;
+    focus_state = FOCUS_SIDEBAR;
+    needs_redraw = true;
     return;
   }
 

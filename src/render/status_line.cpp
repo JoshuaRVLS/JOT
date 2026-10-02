@@ -489,7 +489,7 @@ void Editor::render_status_line()
       // client keeps retrying, so this is the resting state of a dead Discord.
       text = " Discord Disconnected ";
     }
-    left_segments.push_back({text, fg, bg, false, true, 45, "\U000F066F", discord_icon_fg()});
+    left_segments.push_back({text, fg, bg, false, true, 10, "\U000F066F", discord_icon_fg()});
   }
 
   // Lua-registered status segments (see jot.status.register). They render on
@@ -575,7 +575,7 @@ void Editor::render_status_line()
   else
   {
     left_segments.push_back(
-        {status_context_label, theme.fg_status_muted, theme.bg_status, false, true, 20});
+        {status_context_label, theme.fg_status_muted, theme.bg_status, false, true, 50});
   }
 
   // Hand the raw model to a Lua UI handler when one is registered; it owns
@@ -613,7 +613,28 @@ void Editor::render_status_line()
   }
 
   const int min_gap = content_w >= 40 ? 2 : 1;
-  status_drop_optional_to_fit(right_segments, std::max(0, content_w / 2));
+  // Both sides share one budget; social chrome must yield before language tooling.
+  while (status_layout_width(left_segments) + status_layout_width(right_segments) + min_gap
+         > content_w)
+  {
+    std::vector<StatusSegment> *owner = nullptr;
+    size_t index = 0;
+    for (auto *segments : {&left_segments, &right_segments})
+    {
+      for (size_t i = 0; i < segments->size(); ++i)
+      {
+        if ((*segments)[i].optional
+            && (!owner || (*segments)[i].priority < (*owner)[index].priority))
+        {
+          owner = segments;
+          index = i;
+        }
+      }
+    }
+    if (!owner)
+      break;
+    owner->erase(owner->begin() + index);
+  }
   int right_w = status_layout_width(right_segments);
   int left_budget = std::max(0, content_w - right_w - (right_w > 0 ? min_gap : 0));
   status_drop_optional_to_fit(left_segments, left_budget);

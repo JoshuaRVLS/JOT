@@ -4,7 +4,7 @@
 // One signature is one key (scope, name, canonical parameters, cv/ref suffix),
 // so the work is grouping by it and asking two questions:
 //
-//   * does a declaration in a header have a body anywhere in the workspace, and
+//   * does a declaration have a body anywhere in the workspace, and
 //   * does a signature have more than one body the linker would see?
 //
 // The rules for "a body that counts" are the ones C++ itself applies: `= 0` and
@@ -165,6 +165,15 @@ namespace CppDefinitions
     ScanStats stats;
     std::vector<Issue> issues;
 
+    std::set<std::string> program_files;
+    for (const FunctionRecord &record : records)
+    {
+      if (record.definition && is_program_entry(record))
+      {
+        program_files.insert(record.file);
+      }
+    }
+
     std::map<std::string, std::vector<const FunctionRecord *>> by_key;
     std::map<std::string, std::vector<const FunctionRecord *>> by_name;
     for (const FunctionRecord &record : records)
@@ -211,15 +220,24 @@ namespace CppDefinitions
         satisfied = true;
       }
 
-      // Missing implementations: a declaration in a header with no body anywhere
-      // in the workspace.
-      if (!satisfied)
+      // Missing implementations: a declaration with no body anywhere in the
+      // workspace, from a header or from a source file of its own.
       {
         for (const FunctionRecord *decl : declarations)
         {
-          if (!decl->is_header)
+          // Separate programs cannot provide each other's implementations, even
+          // when their helper signatures happen to be identical.
+          const bool local_program = !decl->is_header && program_files.count(decl->file) != 0;
+          const auto can_implement = [&](const FunctionRecord *candidate)
           {
-            continue; // a declaration in a source file is that file's business
+            return !local_program || candidate->file == decl->file
+                   || (!candidate->is_header && program_files.count(candidate->file) == 0)
+                   || (candidate->is_header && candidate->inline_function);
+          };
+          if ((!local_program && satisfied)
+              || std::any_of(definitions.begin(), definitions.end(), can_implement))
+          {
+            continue;
           }
           const FunctionRecord *other_scope = nullptr;
           const FunctionRecord *other_params = nullptr;
@@ -235,7 +253,8 @@ namespace CppDefinitions
           {
             for (const FunctionRecord *candidate : same_name->second)
             {
-              if (candidate == decl || (!candidate->definition && !candidate->deleted_or_default))
+              if (candidate == decl || !can_implement(candidate)
+                  || (!candidate->definition && !candidate->deleted_or_default))
               {
                 continue;
               }
@@ -277,6 +296,13 @@ namespace CppDefinitions
           }
           else
           {
+            // Mark the leading half of the declared function name, rather than
+            // the full signature: the name is the unresolved symbol to act on.
+            issue.line = decl->name_line;
+            issue.col = decl->name_col;
+            issue.end_line = decl->name_end_line;
+            issue.end_col =
+                decl->name_col + std::max(1, (decl->name_end_col - decl->name_col + 1) / 2);
             // A template body may live in a file that is not scanned, and a
             // conditional declaration may not be compiled at all: both are hints.
             issue.severity = (decl->template_function || decl->conditional) ? 3 : 2;
@@ -337,7 +363,6 @@ namespace CppDefinitions
       // unaffected either way, since two bodies in one file really are a
       // redefinition.
       std::set<std::string> source_files;
-      std::set<std::string> program_files;
       for (const FunctionRecord &record : records)
       {
         if (record.is_header)
@@ -345,10 +370,6 @@ namespace CppDefinitions
           continue;
         }
         source_files.insert(record.file);
-        if (record.definition && is_program_entry(record))
-        {
-          program_files.insert(record.file);
-        }
       }
       bool standalone_programs = !source_files.empty();
       for (const std::string &file : source_files)
@@ -453,7 +474,51 @@ namespace CppDefinitions
     return issues;
   }
 
-  ScanResult scan_workspace(const std::string &root, const ScanLimits &limits)
+  std::string signature_of(const std::string &path, const std::string &text)
+  {
+    // Ignore body text so ordinary expression edits do not trigger a workspace walk.
+    const std::vector<FunctionRecord> records = parse_file(path, text);
+    unsigned long long hash = 14695981039346656037ULL; // FNV-1a
+    const auto fold = [&hash](const std::string &value)
+    {
+      for (const char c : value)
+      {
+        hash ^= (unsigned char)c;
+        hash *= 1099511628211ULL;
+      }
+      hash ^= 0x1f; // a separator, so "ab"+"c" and "a"+"bc" differ
+      hash *= 1099511628211ULL;
+    };
+    for (const FunctionRecord &record : records)
+    {
+      fold(record.key);
+      fold(record.display);
+      // Moving a declaration must move its squiggle, even when its key stays unchanged.
+      fold(std::to_string(record.line) + ":" + std::to_string(record.col));
+      fold(std::to_string(record.name_line) + ":" + std::to_string(record.name_col));
+      fold(std::to_string(record.name_end_line) + ":" + std::to_string(record.name_end_col));
+      const bool flags[] = {record.definition,
+                            record.deleted_or_default,
+                            record.pure_virtual,
+                            record.template_function,
+                            record.conditional,
+                            record.inline_function,
+                            record.internal_linkage,
+                            record.in_class_definition,
+                            record.is_header};
+      std::string flag_text;
+      for (const bool flag : flags)
+      {
+        flag_text += flag ? '1' : '0';
+      }
+      fold(flag_text);
+    }
+    return std::to_string(records.size()) + ":" + std::to_string(hash);
+  }
+
+  ScanResult scan_workspace(const std::string &root,
+                            const ScanLimits &limits,
+                            const std::map<std::string, std::string> &unsaved)
   {
     const auto started = std::chrono::steady_clock::now();
     ScanResult result;
@@ -488,27 +553,64 @@ namespace CppDefinitions
       }
       paths.push_back(entry.path().string());
     }
+    // Normalize overlay paths so editor text replaces the disk entry instead
+    // of adding a second copy; new unsaved files belong to the scan too.
+    std::map<std::string, std::string> overlay;
+    const std::string root_prefix =
+        root_path == root_path.root_path() ? root_path.string() : root_path.string() + "/";
+    for (const auto &entry : unsaved)
+    {
+      std::error_code path_ec;
+      const std::string path =
+          fs::absolute(fs::path(entry.first), path_ec).lexically_normal().string();
+      if (!path_ec && path.rfind(root_prefix, 0) == 0 && is_parseable_file(path)
+          && (long long)entry.second.size() <= limits.max_file_bytes)
+      {
+        overlay[path] = entry.second;
+      }
+    }
+    for (const auto &entry : overlay)
+    {
+      if (entry.first.rfind(root_prefix, 0) != 0)
+      {
+        continue; // outside this workspace: another root's buffer
+      }
+      if (std::find(paths.begin(), paths.end(), entry.first) == paths.end()
+          && (int)paths.size() < limits.max_files)
+      {
+        paths.push_back(entry.first);
+      }
+    }
     std::sort(paths.begin(), paths.end()); // a stable diagnostics order
 
     std::vector<FunctionRecord> records;
     for (const std::string &path : paths)
     {
-      std::error_code size_ec;
-      const std::uintmax_t size = fs::file_size(path, size_ec);
-      if (size_ec || (long long)size > limits.max_file_bytes)
-      {
-        continue;
-      }
       if (limits.max_total_bytes > 0 && result.stats.bytes_read > limits.max_total_bytes)
       {
         break;
       }
-      std::ifstream file(path, std::ios::binary);
-      if (!file.is_open())
+      const auto edited = overlay.find(path);
+      std::string text;
+      if (edited != overlay.end())
       {
-        continue;
+        text = edited->second;
       }
-      std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+      else
+      {
+        std::error_code size_ec;
+        const std::uintmax_t size = fs::file_size(path, size_ec);
+        if (size_ec || (long long)size > limits.max_file_bytes)
+        {
+          continue;
+        }
+        std::ifstream file(path, std::ios::binary);
+        if (!file.is_open())
+        {
+          continue;
+        }
+        text.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+      }
       if (text.find('\0') != std::string::npos)
       {
         continue; // not text

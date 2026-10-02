@@ -8,7 +8,7 @@
 #include <vector>
 
 // The C++ definition checks and the diagnostics they leave behind: a
-// declaration in a header with no body in the workspace, and a signature
+// declaration with no body in the workspace, and a signature
 // implemented more than once (see features/cpp_definitions.h).
 //
 // The scan runs on a worker thread (jot/app/cpp_definitions.cpp), so what lives
@@ -43,6 +43,10 @@ struct CppDefsState
   // a workspace switch (or after a newer scan) is dropped rather than published.
   unsigned long long cpp_defs_scan_epoch = 0;
   std::string cpp_defs_scan_root;
+  // Revision checks avoid parsing idle buffers; signature checks avoid workspace
+  // walks for body-only edits that leave every finding unchanged.
+  std::string cpp_defs_dirty_signature;
+  std::string cpp_defs_dirty_revision;
   CppDefinitions::ScanStats cpp_defs_stats;
   long long cpp_defs_last_scan_ms = 0;
 };

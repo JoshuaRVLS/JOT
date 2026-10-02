@@ -740,10 +740,12 @@ public:
   }
   // The C++ definition checks normally run on the worker thread; a case runs the
   // same job on the calling thread and lands it through the same apply path, so
-  // what it asserts is what a real scan publishes.
+  // what it asserts is what a real scan publishes. The unsaved buffers' text
+  // goes with it, exactly as the worker's own call does.
   void run_cpp_definitions_scan_for_test()
   {
-    apply_cpp_definitions(CppDefinitions::scan_workspace(root_dir));
+    apply_cpp_definitions(CppDefinitions::scan_workspace(
+        root_dir, CppDefinitions::ScanLimits(), cpp_definitions_unsaved_texts()));
   }
   int cpp_definitions_missing_for_test() const
   {
@@ -756,6 +758,12 @@ public:
   int cpp_definitions_files_for_test() const
   {
     return cpp_defs_stats.files_scanned;
+  }
+  // What the poll timer asks with: whether the unsaved C/C++ buffers now hold
+  // signatures the last scan could not have seen.
+  bool cpp_definitions_dirty_changed_for_test()
+  {
+    return cpp_definitions_dirty_changed();
   }
   std::string cpp_definitions_summary_for_test() const
   {

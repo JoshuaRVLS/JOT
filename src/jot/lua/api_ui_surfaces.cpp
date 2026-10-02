@@ -873,6 +873,7 @@ bool LuaAPI::emit_sidebar(const SidebarPanelView &view)
                        lua_set_int_field(L, t, "header_x", view.header_x);
                        lua_set_int_field(L, t, "header_y", view.header_y);
                        lua_set_int_field(L, t, "header_fg", view.header_fg);
+                       lua_set_int_field(L, t, "header_bg", view.header_bg);
                        lua_set_str_field(L, t, "footer", view.footer);
                        lua_set_int_field(L, t, "footer_x", view.footer_x);
                        lua_set_int_field(L, t, "footer_y", view.footer_y);

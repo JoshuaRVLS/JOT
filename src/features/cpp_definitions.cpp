@@ -775,6 +775,8 @@ namespace CppDefinitions
     {
       size_t begin = 0;
       size_t end = 0;
+      size_t component_begin = 0; // the name alone, without any scope qualification
+      size_t component_end = 0;
       std::string scope; // "ns::Box" (template arguments stripped)
       std::string name;  // "put", "~Widget", "Widget", "operator bool", "f<int>"
     };
@@ -872,6 +874,8 @@ namespace CppDefinitions
       span.begin = begin;
       span.end = open;
       const size_t name_begin = last_colon == std::string::npos ? begin : last_colon + 1;
+      span.component_begin = name_begin;
+      span.component_end = open;
       span.name = join_tokens(s, name_begin, open);
       if (last_colon != std::string::npos)
       {
@@ -927,6 +931,10 @@ namespace CppDefinitions
 
       size_t name_begin = 0;
       size_t name_end = 0;
+      // The name's own token range, where name_begin/name_end still hold the
+      // whole span including any `ns::` in front of it.
+      size_t name_component_begin = 0;
+      size_t name_component_end = 0;
       std::string scope;
       std::string name;
       size_t params_open = 0;
@@ -1460,6 +1468,8 @@ namespace CppDefinitions
       }
       sig.name_begin = span->begin;
       sig.name_end = span->end;
+      sig.name_component_begin = span->component_begin;
+      sig.name_component_end = span->component_end;
       sig.scope = span->scope;
       sig.name = span->name;
 
@@ -1845,6 +1855,11 @@ namespace CppDefinitions
       record.col = statement_tokens[sig.name_begin].col;
       record.end_line = statement_tokens[sig.params_close].line;
       record.end_col = statement_tokens[sig.params_close].col + 1;
+      record.name_line = statement_tokens[sig.name_component_begin].line;
+      record.name_col = statement_tokens[sig.name_component_begin].col;
+      record.name_end_line = statement_tokens[sig.name_component_end - 1].line;
+      const Token &name_end = statement_tokens[sig.name_component_end - 1];
+      record.name_end_col = name_end.col + (int)name_end.text.size();
       record.scope = scope;
       record.name = sig.name;
       record.params = sig.params;

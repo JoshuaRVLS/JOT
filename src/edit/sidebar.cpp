@@ -820,9 +820,17 @@ void Editor::render_sidebar()
     view.header = truncate_cells(header_label, header_w - 2);
     view.header_x = content_x + 1;
     view.header_y = y;
-    view.header_fg = theme.fg_sidebar_directory;
-    ui->draw_text(
-        content_x + 1, y, view.header, theme.fg_sidebar_directory, theme.bg_sidebar, true);
+    const bool root_selected = file_tree_selected == -1;
+    const bool focused = focus_state == FOCUS_SIDEBAR;
+    view.header_fg =
+        root_selected ? (focused ? theme.fg_sidebar_selected : theme.fg_sidebar_selected_inactive)
+                      : theme.fg_sidebar_directory;
+    view.header_bg =
+        root_selected ? (focused ? theme.bg_sidebar_selected : theme.bg_sidebar_selected_inactive)
+                      : theme.bg_sidebar;
+    ui->fill_rect(
+        {content_x, y, std::max(0, content_w - 1), 1}, " ", view.header_fg, view.header_bg);
+    ui->draw_text(content_x + 1, y, view.header, view.header_fg, view.header_bg, true);
   }
 
   int tree_y = y + 1;

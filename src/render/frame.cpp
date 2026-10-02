@@ -130,7 +130,8 @@ void Editor::render()
   // hide the explorer for the rest of the session.
   if (ui && !zen_mode)
   {
-    const bool too_narrow = ui->get_render_width() < min_sidebar_width() + 12;
+    // Reserve a readable code area, not merely enough cells to draw a pane.
+    const bool too_narrow = ui->get_render_width() < effective_sidebar_width() + 40;
     if (show_sidebar && too_narrow)
     {
       show_sidebar = false;

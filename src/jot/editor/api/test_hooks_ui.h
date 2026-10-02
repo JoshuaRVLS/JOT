@@ -140,6 +140,14 @@ public:
   {
     apply_resize(cols, rows);
   }
+  bool sidebar_root_selected_for_test() const
+  {
+    return file_tree_selected == -1;
+  }
+  std::string command_palette_query_for_test() const
+  {
+    return command_palette_query;
+  }
   bool sidebar_visible_for_test() const
   {
     return show_sidebar;

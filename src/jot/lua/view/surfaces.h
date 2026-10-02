@@ -461,6 +461,7 @@ struct SidebarPanelView
   int rail_explorer_row = -1, rail_git_row = -1; // active rail rows, -1 = none
   std::string header;
   int header_x = 0, header_y = 0, header_fg = 0;
+  int header_bg = -1;
   std::string footer;
   int footer_x = 0, footer_y = 0, footer_fg = 0;
   std::vector<SidebarPanelRowView> rows;

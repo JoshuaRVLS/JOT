@@ -449,14 +449,15 @@ Install helpers also cover Rust, Go, Lua, and Bash.
 
 - A workspace-wide scan pairs every function declaration with its bodies, so
   the two mistakes a compiler only reports at link time show up while editing:
-  a function declared in a header with no implementation anywhere becomes a
-  warning, and a signature implemented more than once becomes an error (the
-  linker's `multiple definition of f`). A folder of standalone programs is
+  a function declared -- in a header or in a source file of its own -- with no
+  implementation anywhere becomes a warning, and a signature implemented more
+  than once becomes an error (the linker's `multiple definition of f`). A folder
+  of standalone programs is
   exempt from the repeated-body error: when every source file holds its own
   `main`, the files are compiled one at a time and no two of them share a link,
   so the helpers they repeat are not the linker's error to report.
-- Runs on the worker thread when a workspace is opened and after every save, or
-  on demand with `:cppcheck` -- which also focuses the Problems list, announces
+- Runs on the worker thread when a workspace is opened, after every save, and
+  when unsaved declarations change (without requiring a save), or on demand with `:cppcheck` -- which also focuses the Problems list, announces
   what it counted, and lands the caret on the next finding. `:cppcheck next` and
   `:cppcheck prev` step through the findings from the caret, opening each file as
   they go and wrapping at either end; issued while a scan is still running they
@@ -470,8 +471,9 @@ Install helpers also cover Rust, Go, Lua, and Bash.
 - Findings publish as diagnostics in the same per-file store the language
   servers feed, so the Problems dock, the explorer's per-file badges, the
   workspace diagnostics picker (`:diagnostics`), the inline decorations and the
-  gutter all show them with no extra wiring. A declaration's row sits on the
-  declaration itself, so the header is where you fix it.
+  gutter all show them with no extra wiring. A missing body's row sits on the
+  leading half of the declared name, so the squiggle lands on the unresolved
+  symbol rather than on the whole signature.
 - The rules are C++'s own: `= 0`, `= delete` and `= default` need no body, and
   a class-body, `inline`, `constexpr`, template or `static`/anonymous-namespace
   body is allowed to repeat (a `static` one is private to its file). The same

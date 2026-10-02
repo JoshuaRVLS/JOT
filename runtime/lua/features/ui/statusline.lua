@@ -101,7 +101,21 @@ local function status_line(p)
     end
   end
 
-  drop_to_fit(right, math.max(0, math.floor(w / 2)))
+  -- Drop optional chrome across both sides before sacrificing editing context.
+  while block_width(left) + block_width(right) + 2 > w do
+    local list, index
+    for _, candidate in ipairs({ left, right }) do
+      for i, segment in ipairs(candidate) do
+        if segment.optional and (not index or segment.priority < list[index].priority) then
+          list, index = candidate, i
+        end
+      end
+    end
+    if not index then
+      break
+    end
+    table.remove(list, index)
+  end
   local right_w = block_width(right)
   local min_gap = w >= 40 and 2 or 1
   local left_budget = math.max(0, w - right_w - (right_w > 0 and min_gap or 0))

@@ -86,6 +86,61 @@ TEST_CASE("C++ definitions: a header declaration with no body is reported", "[jo
   REQUIRE(issues[0].col == 5);
   REQUIRE(issue_for(issues, "\"reset()\"") != nullptr);
   REQUIRE(issue_for(issues, "\"count() const\"") != nullptr);
+  REQUIRE(issues[0].end_line == 0);
+  REQUIRE(issues[0].end_col == 8); // leading half of reset
+}
+
+TEST_CASE("C++ definitions: source declarations without a body are reported at half the name",
+          "[jot]")
+{
+  const std::vector<Issue> issues =
+      check({{"linkedlist.c", "#include <stdio.h>\nvoid render();\n"}});
+  REQUIRE(issues.size() == 1);
+  REQUIRE(issues[0].severity == kWarning);
+  REQUIRE(issues[0].line == 1);
+  REQUIRE(issues[0].col == 5);
+  REQUIRE(issues[0].end_line == 1);
+  REQUIRE(issues[0].end_col == 8);
+  REQUIRE(issues[0].message.find("No definition found") != std::string::npos);
+}
+
+TEST_CASE("C++ definitions: a source declaration is satisfied by a workspace definition", "[jot]")
+{
+  const std::vector<Issue> issues =
+      check({{"linkedlist.c", "void render();\n"}, {"render.c", "void render() {}\n"}});
+  REQUIRE(issues.empty());
+}
+
+TEST_CASE("C++ definitions: another standalone program cannot implement triangle's render", "[jot]")
+{
+  const auto issues = check(
+      {{"game/triangle.c", "#include <stdio.h>\n\nvoid render();\n\nint main() { return 0; }\n"},
+       {"game/pacman.c", "void render();\nint main() { render(); }\nvoid render() {}\n"}});
+  REQUIRE(issues.size() == 1);
+  REQUIRE(issues[0].file == "game/triangle.c");
+  REQUIRE(issues[0].line == 2);
+  REQUIRE(issues[0].col == 5);
+  REQUIRE(issues[0].end_col == 8);
+  REQUIRE(issues[0].message.find("No definition found") != std::string::npos);
+
+  REQUIRE(
+      check({{"triangle.c", "void render();\nint main() {}\n"}, {"render.c", "void render() {}\n"}})
+          .empty());
+  REQUIRE(check({{"triangle.c", "void render();\nint main() {}\nvoid render() {}\n"},
+                 {"pacman.c", "int main() {}\nvoid render() {}\n"}})
+              .empty());
+}
+
+TEST_CASE("C++ definitions: qualified missing declarations underline the final name component",
+          "[jot]")
+{
+  const std::vector<Issue> issues =
+      check({{"widget.hpp", "namespace app { void render_widget(int value); }\n"}});
+  REQUIRE(issues.size() == 1);
+  REQUIRE(issues[0].line == 0);
+  REQUIRE(issues[0].col == 21);
+  REQUIRE(issues[0].end_line == 0);
+  REQUIRE(issues[0].end_col == 28); // "render_", the leading half of render_widget
 }
 
 TEST_CASE("C++ definitions: parameter names do not have to match", "[jot]")
@@ -623,6 +678,123 @@ TEST_CASE("C++ definitions: next and previous walk the findings", "[jot]")
   REQUIRE(at() == "widget.hpp:3:5");
   REQUIRE(e.cpp_definitions_jump_for_test(-1));
   REQUIRE(at() == "widget.cpp:3:5");
+}
+
+// The signature is what decides whether an unsaved buffer is worth a scan, so
+// what it must not see is an edit that no finding can move between, and what it
+// must see is every one that can.
+TEST_CASE("C++ definitions: a signature moves for a declaration and not for a body's text", "[jot]")
+{
+  const std::string base = "#include <stdio.h>\nvoid render();\nint main() { return 0; }\n";
+  const std::string start = CppDefinitions::signature_of("a.c", base);
+  REQUIRE(start == CppDefinitions::signature_of("a.c", base));
+
+  // Everything inside a body, and everything around one, is the parser's
+  // business but not a finding's.
+  const std::string edited_body = "#include <stdio.h>\nvoid render();\n"
+                                  "int main() { int total = 0; return total; }\n";
+  REQUIRE(CppDefinitions::signature_of("a.c", edited_body) == start);
+  REQUIRE(CppDefinitions::signature_of("a.c", "\n" + base) != start);
+
+  // A declaration appearing, and a body arriving for it, are the two moves the
+  // checks exist for.
+  REQUIRE(CppDefinitions::signature_of("a.c", "int main() { return 0; }\n") != start);
+  REQUIRE(CppDefinitions::signature_of("a.c",
+                                       "#include <stdio.h>\nvoid render() {}\n"
+                                       "int main() { return 0; }\n")
+          != start);
+
+  // Which file it is decides which rule applies to it, so the path is part of
+  // it: the same text in a header is a declaration another file may implement.
+  REQUIRE(CppDefinitions::signature_of("a.hpp", base) != start);
+}
+
+TEST_CASE("C++ definitions: an unsaved buffer's text is what the scan reads", "[jot]")
+{
+  char dir[] = "/tmp/jot_cpp_defs_unsaved_XXXXXX";
+  REQUIRE(mkdtemp(dir) != nullptr);
+  const fs::path root = fs::path(dir);
+  {
+    std::ofstream out(root / "linkedlist.c");
+    out << "#include <stdio.h>\n\nint main() {}\n";
+  }
+
+  // On disk there is nothing to report: the walk sees a program with a body and
+  // no declarations.
+  CppDefinitions::ScanResult result = CppDefinitions::scan_workspace(root.string());
+  REQUIRE(result.stats.files_scanned == 1);
+  REQUIRE(result.issues.empty());
+
+  // The editor's text says otherwise, and it is what a scan has to be handed:
+  // the walk reads the file the last time it was written.
+  std::map<std::string, std::string> unsaved;
+  unsaved[(root / "linkedlist.c").string()] =
+      "#include <stdio.h>\n\nvoid render();\n\nint main() {}\n";
+  result = CppDefinitions::scan_workspace(root.string(), CppDefinitions::ScanLimits(), unsaved);
+  REQUIRE(result.issues.size() == 1);
+  REQUIRE(result.issues[0].file == (root / "linkedlist.c").string());
+  REQUIRE(result.issues[0].line == 2);
+  REQUIRE(result.issues[0].col == 5);
+  REQUIRE(result.issues[0].end_col == 8); // "ren", the leading half of render
+
+  // A buffer whose file the walk never reached -- written into existence -- is
+  // part of the workspace all the same, and one outside it is not.
+  unsaved.clear();
+  unsaved[(root / "fresh.c").string()] = "void fresh();\n";
+  result = CppDefinitions::scan_workspace(root.string(), CppDefinitions::ScanLimits(), unsaved);
+  REQUIRE(result.issues.size() == 1);
+  REQUIRE(result.issues[0].file == (root / "fresh.c").string());
+
+  unsaved.clear();
+  unsaved["/elsewhere/other.c"] = "void elsewhere();\n";
+  result = CppDefinitions::scan_workspace(root.string(), CppDefinitions::ScanLimits(), unsaved);
+  REQUIRE(result.issues.empty());
+}
+
+TEST_CASE("C++ definitions: a declaration typed and not saved is reported", "[jot]")
+{
+  seed_config_home();
+  char dir[] = "/tmp/jot_cpp_defs_dirty_XXXXXX";
+  REQUIRE(mkdtemp(dir) != nullptr);
+  const fs::path root = fs::path(dir);
+  {
+    std::ofstream out(root / "linkedlist.c");
+    out << "#include <stdio.h>\n\nint main() {}\n";
+  }
+
+  Editor e;
+  e.set_home_menu_visible(false);
+  e.open_workspace(root.string(), false);
+  e.load_file((root / "linkedlist.c").string());
+  e.run_cpp_definitions_scan_for_test();
+  REQUIRE(e.cpp_definitions_missing_for_test() == 0);
+  REQUIRE(e.cpp_definitions_dirty_changed_for_test() == false);
+
+  // The declaration lands in the buffer, not on disk: the checks read the
+  // workspace from disk, so only the unsaved-text path can see it.
+  e.host().core.set_buffer_content("#include <stdio.h>\n\nvoid render();\n\nint main() {}\n");
+  REQUIRE(e.cpp_definitions_dirty_changed_for_test() == true);
+  // The poll asked once: a second ask with nothing typed is not a new question.
+  REQUIRE(e.cpp_definitions_dirty_changed_for_test() == false);
+  e.run_cpp_definitions_scan_for_test();
+  REQUIRE(e.cpp_definitions_missing_for_test() == 1);
+  e.age_lsp_typing_for_test((root / "linkedlist.c").string(), 5001);
+  e.paint_held_lsp_diagnostics_for_test();
+  REQUIRE(e.diagnostics_count_for_test((root / "linkedlist.c").string()) == 1);
+
+  // Typing inside the body is not a signature change, so it asks for nothing.
+  e.host().core.set_buffer_content("#include <stdio.h>\n\nvoid render();\n\n"
+                                   "int main() { return 0; }\n");
+  REQUIRE(e.cpp_definitions_dirty_changed_for_test() == false);
+
+  // A body arriving for it clears the finding, again without a save.
+  e.host().core.set_buffer_content("#include <stdio.h>\n\nvoid render() {}\n\nint main() {}\n");
+  REQUIRE(e.cpp_definitions_dirty_changed_for_test() == true);
+  e.run_cpp_definitions_scan_for_test();
+  REQUIRE(e.cpp_definitions_missing_for_test() == 0);
+  e.age_lsp_typing_for_test((root / "linkedlist.c").string(), 5001);
+  e.paint_held_lsp_diagnostics_for_test();
+  REQUIRE(e.diagnostics_count_for_test((root / "linkedlist.c").string()) == 0);
 }
 
 // The scan runs over this project's own sources on every open and save, so a

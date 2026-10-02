@@ -349,6 +349,20 @@ void Editor::run()
   }
   if (!safe_mode)
   {
+    // Unsaved declarations need findings too; unchanged buffers and body-only
+    // edits must not repeatedly walk the workspace.
+    event_loop_.set_timer(600,
+                          true,
+                          [this]
+                          {
+                            if (cpp_definitions_dirty_changed())
+                            {
+                              request_cpp_definitions_scan(false);
+                            }
+                          });
+  }
+  if (!safe_mode)
+  {
     event_loop_.set_timer(1000, true, [this] { poll_file_tree_changes(); });
   }
   if (!safe_mode)

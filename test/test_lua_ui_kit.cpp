@@ -1558,6 +1558,40 @@ static int stub_memory_120m(lua_State *L)
   return 1;
 }
 
+TEST_CASE("Status line drops social chrome before LSP across both sides")
+{
+  g = StubState{};
+  lua_State *L = luaL_newstate();
+  REQUIRE(L != nullptr);
+  luaL_openlibs(L);
+  push_stub_jot(L);
+  REQUIRE(jot_lua::load_ui_kit_modules(L));
+  const std::string path = std::string(JOT_LUA_SOURCE_DIR) + "/features/ui.lua";
+  REQUIRE(luaL_loadfile(L, path.c_str()) == LUA_OK);
+  REQUIRE(lua_pcall(L, 0, 1, 0) == LUA_OK);
+  push_module_field(L, 1, "status_line");
+  push_box(L, 0, 23, 60, 1);
+  REQUIRE(luaL_dostring(L, R"(
+    audit_segments = {
+      {text=' triangle.c ', side='left', priority=100},
+      {text=' 1:1 ', side='left', priority=100},
+      {text=' Discord Connected ', side='left', priority=10, optional=true},
+      {text=' LatihanAslab ', side='left', priority=50, optional=true},
+      {text=' Warning 1 ', side='right', priority=80, optional=true},
+      {text=' main ', side='right', priority=70, optional=true},
+      {text=' cpp language server ', side='right', priority=60, optional=true}
+    }
+  )") == LUA_OK);
+  lua_getglobal(L, "audit_segments");
+  lua_setfield(L, -2, "segments");
+  REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+  REQUIRE(g.last_row1.find("Discord") == std::string::npos);
+  REQUIRE(g.last_row1.find("cpp language server") != std::string::npos);
+  REQUIRE(g.last_row1.find("triangle.c") != std::string::npos);
+  REQUIRE(g.last_row1.find("1:1") != std::string::npos);
+  lua_close(L);
+}
+
 TEST_CASE("Status line renders the process memory segment")
 {
   g = StubState{};

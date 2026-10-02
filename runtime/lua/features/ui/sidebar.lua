@@ -158,11 +158,13 @@ local function sidebar(p)
   -- there is no border row to bake it into.
   local hcol = math.max(1, (p.header_x or (content_x + 1)) - x)
   if p.header and p.header ~= "" then
+    local header_bg = p.header_bg and p.header_bg >= 0 and p.header_bg or bg
+    place_fill(content_x, y, math.max(1, content_w - 1), p.header_fg or dir, header_bg)
     place(x + hcol - 1,
           y,
           trunc_cells(p.header, math.max(1, content_w)),
           p.header_fg or dir,
-          bg,
+          header_bg,
           true)
   end
 

@@ -97,6 +97,7 @@ void Editor::request_cpp_definitions_scan(bool announce)
   {
     return;
   }
+  cpp_defs_dirty_signature = cpp_definitions_dirty_signature();
   if (announce)
   {
     cpp_defs_announce = true;
@@ -116,13 +117,16 @@ void Editor::request_cpp_definitions_scan(bool announce)
     return;
   }
 
+  // Snapshot editor text on the main thread; the worker must not read live buffers.
+  const auto unsaved = cpp_definitions_unsaved_texts();
   const std::string root = root_dir;
   const unsigned long long epoch = ++cpp_defs_scan_epoch;
   cpp_defs_scan_root = root;
   cpp_defs_scan_running = true;
 
   task_queue_->submit_val<CppDefinitions::ScanResult>(
-      [root]() -> CppDefinitions::ScanResult { return CppDefinitions::scan_workspace(root); },
+      [root, unsaved]() -> CppDefinitions::ScanResult
+      { return CppDefinitions::scan_workspace(root, CppDefinitions::ScanLimits(), unsaved); },
       [this, root, epoch](CppDefinitions::ScanResult result)
       {
         cpp_defs_scan_running = false;
@@ -146,8 +150,71 @@ void Editor::request_cpp_definitions_scan(bool announce)
       });
 }
 
+std::map<std::string, std::string> Editor::cpp_definitions_unsaved_texts() const
+{
+  // Clean buffers are already on disk; oversized buffers must obey the scan limit.
+  std::map<std::string, std::string> texts;
+  for (const FileBuffer &buf : buffers)
+  {
+    if (!buf.modified || buf.filepath.empty() || !CppDefinitions::is_parseable_file(buf.filepath))
+    {
+      continue;
+    }
+    const std::string text = get_buffer_text(buf);
+    if (text.size() > (std::size_t)CppDefinitions::ScanLimits{}.max_file_bytes)
+    {
+      continue;
+    }
+    texts[buf.filepath] = text;
+  }
+  return texts;
+}
+
+std::string Editor::cpp_definitions_dirty_signature() const
+{
+  std::string signature;
+  for (const auto &entry : cpp_definitions_unsaved_texts())
+  {
+    signature += entry.first;
+    signature += '=';
+    signature += CppDefinitions::signature_of(entry.first, entry.second);
+    signature += '\n';
+  }
+  return signature;
+}
+
+bool Editor::cpp_definitions_dirty_changed()
+{
+  if (!cpp_defs_enabled || root_dir.empty())
+  {
+    return false;
+  }
+  std::string revision;
+  for (const FileBuffer &buf : buffers)
+  {
+    if (buf.modified && CppDefinitions::is_parseable_file(buf.filepath))
+    {
+      revision += buf.filepath + ":" + std::to_string(buf.edit_generation) + "\n";
+    }
+  }
+  if (revision == cpp_defs_dirty_revision)
+  {
+    return false;
+  }
+  cpp_defs_dirty_revision = revision;
+  const std::string signature = cpp_definitions_dirty_signature();
+  if (signature == cpp_defs_dirty_signature)
+  {
+    return false;
+  }
+  cpp_defs_dirty_signature = signature;
+  return true;
+}
+
 void Editor::clear_cpp_definitions()
 {
+  cpp_defs_dirty_signature.clear();
+  cpp_defs_dirty_revision.clear();
   cpp_defs_scan_pending = false;
   cpp_defs_announce = false;
   cpp_defs_pending_jump = 0;

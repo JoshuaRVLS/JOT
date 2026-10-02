@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -237,6 +238,34 @@ TEST_CASE("jot-dark applies the yoru sumi scheme", "[jot][theme]")
   REQUIRE(rgb_of(t.bg_status) == 0x0C0B16);
 }
 
+TEST_CASE("Jot themes keep separators visible and selected rows distinct", "[jot][theme]")
+{
+  const auto luminance = [](long long rgb)
+  {
+    const auto channel = [](int value)
+    {
+      const double v = value / 255.0;
+      return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * channel((rgb >> 16) & 255) + 0.7152 * channel((rgb >> 8) & 255)
+           + 0.0722 * channel(rgb & 255);
+  };
+  const auto contrast = [&](long long a, long long b)
+  {
+    const double x = luminance(a), y = luminance(b);
+    return (std::max(x, y) + 0.05) / (std::min(x, y) + 0.05);
+  };
+  for (const std::string name : {"jot-dark.json", "jot-light.json"})
+  {
+    const auto slots = parse_theme(bundled_themes_dir() / name);
+    INFO(name);
+    REQUIRE(contrast(slots.at("WinSeparator").first.value, slots.at("Normal").second.value) >= 3.0);
+    REQUIRE(contrast(slots.at("SidebarSel").second.value, slots.at("Sidebar").second.value) >= 1.5);
+    REQUIRE(contrast(slots.at("SidebarSel").first.value, slots.at("SidebarSel").second.value)
+            >= 4.5);
+  }
+}
+
 TEST_CASE("The breadcrumb groups reach the Winbar slots", "[jot][theme]")
 {
   // Every group name in a theme file is a string the reader has to translate,
@@ -253,9 +282,9 @@ TEST_CASE("The breadcrumb groups reach the Winbar slots", "[jot][theme]")
   REQUIRE(rgb_of(t.fg_winbar) == 0xC5C0D4);
   REQUIRE(rgb_of(t.fg_winbar_crumb) == 0x7D7994);
   REQUIRE(rgb_of(t.bg_winbar_crumb) == 0x0B0A14);
-  REQUIRE(rgb_of(t.fg_winbar_separator) == 0x2B2745);
+  REQUIRE(rgb_of(t.fg_winbar_separator) == 0x695D7C);
   REQUIRE(rgb_of(t.fg_winbar_hover) == 0xDED9EC);
-  REQUIRE(rgb_of(t.bg_winbar_hover) == 0x161329);
+  REQUIRE(rgb_of(t.bg_winbar_hover) == 0x38304D);
 }
 
 TEST_CASE("jot-light is the same inks as jam and matcha on cream paper", "[jot][theme]")
