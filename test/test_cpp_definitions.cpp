@@ -797,6 +797,21 @@ TEST_CASE("C++ definitions: a declaration typed and not saved is reported", "[jo
   REQUIRE(e.diagnostics_count_for_test((root / "linkedlist.c").string()) == 0);
 }
 
+TEST_CASE("C++ definitions: workspace classification visits each record once", "[jot]")
+{
+  std::vector<FunctionRecord> records;
+  for (int i = 0; i < 2000; ++i)
+  {
+    const std::string name = "helper_" + std::to_string(i);
+    auto parsed = CppDefinitions::parse_file("unit.cpp", "void " + name + "() {}\n");
+    records.insert(records.end(), parsed.begin(), parsed.end());
+  }
+  CppDefinitions::ScanStats stats;
+  REQUIRE(CppDefinitions::analyze(records, &stats).empty());
+  REQUIRE(stats.definitions == 2000);
+  REQUIRE(stats.classification_records == (long long)records.size());
+}
+
 // The scan runs over this project's own sources on every open and save, so a
 // repeated body the checker finds here is one the owner sees while editing. The
 // tree has none: the helper written once per layer (the same right-hand

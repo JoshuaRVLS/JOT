@@ -165,14 +165,27 @@ namespace CppDefinitions
     ScanStats stats;
     std::vector<Issue> issues;
 
+    std::set<std::string> source_files;
     std::set<std::string> program_files;
     for (const FunctionRecord &record : records)
     {
+      stats.classification_records++;
+      if (!record.is_header)
+      {
+        source_files.insert(record.file);
+      }
       if (record.definition && is_program_entry(record))
       {
         program_files.insert(record.file);
       }
     }
+
+    // File classification is workspace-wide, not a per-signature question.
+    const bool standalone_programs =
+        !source_files.empty()
+        && std::all_of(source_files.begin(),
+                       source_files.end(),
+                       [&](const std::string &file) { return program_files.count(file) != 0; });
 
     std::map<std::string, std::vector<const FunctionRecord *>> by_key;
     std::map<std::string, std::vector<const FunctionRecord *>> by_name;
@@ -362,24 +375,6 @@ namespace CppDefinitions
       // file can be linked with any of the programs; the same-file rule is
       // unaffected either way, since two bodies in one file really are a
       // redefinition.
-      std::set<std::string> source_files;
-      for (const FunctionRecord &record : records)
-      {
-        if (record.is_header)
-        {
-          continue;
-        }
-        source_files.insert(record.file);
-      }
-      bool standalone_programs = !source_files.empty();
-      for (const std::string &file : source_files)
-      {
-        if (program_files.count(file) == 0)
-        {
-          standalone_programs = false;
-          break;
-        }
-      }
 
       // Across files only a strong body repeats: an `inline`, `constexpr` or
       // template body and a class-body definition may each appear once per
@@ -470,6 +465,7 @@ namespace CppDefinitions
       stats_out->definitions = stats.definitions;
       stats_out->missing = stats.missing;
       stats_out->duplicates = stats.duplicates;
+      stats_out->classification_records = stats.classification_records;
     }
     return issues;
   }

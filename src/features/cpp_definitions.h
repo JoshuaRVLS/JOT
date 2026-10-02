@@ -100,6 +100,7 @@ namespace CppDefinitions
     int definitions = 0;
     int missing = 0;
     int duplicates = 0;
+    long long classification_records = 0;
     long long bytes_read = 0;
     long long elapsed_ms = 0;
   };
