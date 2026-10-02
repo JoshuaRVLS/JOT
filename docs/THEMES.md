@@ -7,34 +7,37 @@ jot ships four themes: its own pair, and a port of kepano's Flexoki.
 
 | Theme | Look |
 |---|---|
-| `jot-dark` (default) - *yoru sumi* | near-black indigo (`#07060e`) with a compact chrome ladder, a deep low-chroma ink for each syntax family and a single deep-rose accent |
+| `jot-dark` (default) - *obsidian* | pitch black (`#000000`) with a compact chrome ladder, a deep multi-hue ink for each syntax family and a single saturated blue accent |
 | `jot-light` - *mochi milk* | its own warm pastel pair - strawberry jam, matcha and ramune blue on cream paper (`#fffaf4`) |
 | `flexoki-dark` | Flexoki's ink palette: black (`#100f0f`) paper, base-200 text, green keywords, cyan strings |
 | `flexoki-light` | the same scheme on Flexoki paper (`#fffcf0`) with the 600-step accents |
 
-### jot-dark - "yoru sumi" (night ink)
+### jot-dark - "obsidian"
 
-A near-black indigo ground (`#07060e`) - deeper than the usual neutral
-`#1c1c1c`, and not a grey-blue terminal default - carrying a deep low-chroma
-ink for nearly every syntax family instead of a candy-stand spread: **rose**
-(`#c96f9c`) for keywords, control flow and every accent; **coral** (`#c58084`)
-for tags; **jade** (`#6fa886`) for strings; **periwinkle** (`#7b98c2`) for
-functions, methods and builtins; **cyan** (`#6f9fb0`) for members and imported
-modules; **amber** (`#bd9366`) for numbers, constants, directives, attributes
-and warnings; **gold** (`#b8a06a`) for string escapes and macro constants;
-**lilac** (`#9689c4`) for types, constructors, storage keywords and namespaces;
-and **indigo** (`#8b93d6`) for builtin types. Text is a soft lavender
-(`#c5c0d4`) rather than paper white, with comments, punctuation and operators
-one deep tint of it, so a file reads as ink with many quiet places for the eye
-to land.
+A true black ground (`#000000`) - the deepest surface a terminal can paint, so
+the window is all code and no box - carrying a full-strength ink for each
+syntax family rather than a wash of one hue: **orchid** (`#c39cf7`) for
+keywords; **violet** (`#d0b0ff`) for control flow; **deep violet** (`#a98ee0`)
+for storage keywords; **ember** (`#f0a35e`) for numbers and constants;
+**jade** (`#8bd68f`) for strings and hints; **teal** (`#66d9c8`) for string
+escapes; **azure** (`#7ab8ff`) for functions, builtins and diagnostics info;
+**sky** (`#8cc4ff`) for method calls; **gold** (`#e6c069`) for types,
+constructors and namespaces; **pale gold** (`#f2cd82`) for builtin types;
+**coral** (`#f47a8d`) for tags and errors; **amber** (`#d9a95c`) for tag
+attributes; **cyan** (`#6fd3e0`) for members, imported modules and renames; and
+**ochre** (`#e3a95f`) for directives, macro constants and messages. Text is a
+cool near-white (`#e6ebf5`); comments (`#7d8799`), punctuation (`#8593a8`) and
+operators (`#93a1b5`) are one deep tint of it, so a file reads as ink with many
+quiet places for the eye to land.
 
-The chrome is deliberately compact and darker still: sidebar `#0b0a14`, status
-line and tabline `#0c0b16`, floats `#0e0d19`, the selected row `#38304d`, each a
-few steps off the editor's own ground. The frame recedes into the page and the
-border colour (`#695d7c`) remains visible against the near-black ground without adding outer boxes. The rose is the one
-saturated colour in the scheme, and it is spent where a hand goes: the active
-pane border, the cursor, the cursor line number, the focused terminal tab and
-the search hit.
+The chrome is deliberately compact and darker still: sidebar and winbar
+`#05060a`, status line `#070910`, floats and menus `#0a0c12`, the cursor row
+`#0b0d13`, the selected row `#263146`, each a few steps off the editor's own
+ground. The frame recedes into the page and the border colour (`#4f5c78`)
+remains visible against the black ground without adding outer boxes. The blue
+(`#58a6ff`) is the one saturated colour in the scheme, and it is spent where a
+hand goes: the active pane border, the cursor, the cursor line number, the
+focused terminal tab and the selected row of every list.
 
 ### jot-light - "mochi milk"
 
@@ -48,11 +51,12 @@ The surfaces (sidebar `#fdf1f2`, status line
 `#fbe9e7`, selection `#f8d8e3`) are blush tints of the same cream, so the whole
 window reads as one pastel confection rather than white boxes on white.
 
-The rose accent is the jot pair's signature: keywords, tags, the active pane
-border, the cursor, the cursor line number and the focused terminal tab all
-carry it, set against green-tinted strings and violet types on the indigo (or,
-on paper, the strawberry/matcha/ramune set). The chrome reads as jot's own
-scheme rather than a neutral grey editor with a blue border.
+The two jot themes are one design on two grounds: each carries its own
+full-strength ink per syntax family and a single saturated accent - the blue on
+the black ground, the strawberry jam on paper - spent on the active pane
+border, the cursor, the cursor line number and the focused terminal tab. The
+chrome reads as jot's own scheme rather than a neutral grey editor with a blue
+border.
 
 The Flexoki pair is [Flexoki](https://stephango.com/flexoki) by kepano (MIT
 licensed), ported slot by slot from the official VS Code and Helix themes: the
@@ -73,7 +77,7 @@ the change keeps working. Any other name now needs a file of its own.
 Apply with `:colorscheme jot-light` or from Lua:
 
 ```lua
-set_hl("Normal", { fg = "#c5c0d4", bg = "#07060e" })
+set_hl("Normal", { fg = "#e6ebf5", bg = "#000000" })
 set_hl("Keyword", { fg = 215 }) -- an xterm index still works
 ```
 
@@ -86,9 +90,9 @@ is neither is ignored, leaving the slot at whatever it inherited. Use `-1` or
 
 ```json
 {
-  "Normal": {"fg": "#c5c0d4", "bg": "#07060e"},
-  "Comment": {"fg": "#7d7994", "bg": "#07060e"},
-  "Keyword": {"fg": "#c96f9c", "bg": "#07060e"},
+  "Normal": {"fg": "#e6ebf5", "bg": "#000000"},
+  "Comment": {"fg": "#7d8799", "bg": "#000000"},
+  "Keyword": {"fg": "#c39cf7", "bg": "#000000"},
   "Visual": {"fg": 231, "bg": 240}
 }
 ```
@@ -245,19 +249,19 @@ A minimal annotated theme:
 
 ```json
 {
-  "Normal": {"fg": "#c5c0d4", "bg": "#07060e"},         // plain text / editor background
-  "Comment": {"fg": "#7d7994", "bg": "#07060e"},        // comments
-  "keyword": {"fg": "#c96f9c", "bg": "#07060e"},        // all keywords
-  "keyword.control": {"fg": "#cf76a6", "bg": "#07060e"}, // if/for/while - override control
-  "string": {"fg": "#6fa886", "bg": "#07060e"},         // string literals
-  "number": {"fg": "#bd9366", "bg": "#07060e"},         // numbers, constants fall back here
-  "function": {"fg": "#7b98c2", "bg": "#07060e"},       // function names
-  "function.method": {"fg": "#82a6d4", "bg": "#07060e"}, // method names (optional: keep = function)
-  "type": {"fg": "#9689c4", "bg": "#07060e"},           // type identifiers
-  "property": {"fg": "#6f9fb0", "bg": "#07060e"},       // obj.field members
-  "punctuation": {"fg": "#7c7890", "bg": "#07060e"},    // dim the brackets/semicolons
-  "tag": {"fg": "#c58084", "bg": "#07060e"},            // HTML/JSX tags
-  "attribute": {"fg": "#b8a06a", "bg": "#07060e"}       // HTML/JSX tag attributes
+  "Normal": {"fg": "#e6ebf5", "bg": "#000000"},         // plain text / editor background
+  "Comment": {"fg": "#7d8799", "bg": "#000000"},        // comments
+  "keyword": {"fg": "#c39cf7", "bg": "#000000"},        // all keywords
+  "keyword.control": {"fg": "#d0b0ff", "bg": "#000000"}, // if/for/while - override control
+  "string": {"fg": "#8bd68f", "bg": "#000000"},         // string literals
+  "number": {"fg": "#f0a35e", "bg": "#000000"},         // numbers, constants fall back here
+  "function": {"fg": "#7ab8ff", "bg": "#000000"},       // function names
+  "function.method": {"fg": "#8cc4ff", "bg": "#000000"}, // method names (optional: keep = function)
+  "type": {"fg": "#e6c069", "bg": "#000000"},           // type identifiers
+  "property": {"fg": "#6fd3e0", "bg": "#000000"},       // obj.field members
+  "punctuation": {"fg": "#8593a8", "bg": "#000000"},    // dim the brackets/semicolons
+  "tag": {"fg": "#f47a8d", "bg": "#000000"},            // HTML/JSX tags
+  "attribute": {"fg": "#d9a95c", "bg": "#000000"}       // HTML/JSX tag attributes
 }
 ```
 

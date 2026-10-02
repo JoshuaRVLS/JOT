@@ -6,8 +6,9 @@
 
 namespace
 {
-  // jot ships its own pair -- `jot-dark` ("yoru sumi": a near-black indigo with
-  // low-chroma inks and one rose accent) and `jot-light` ("mochi milk": jam,
+  // jot ships its own pair -- `jot-dark` ("obsidian": a true black ground with a
+  // cool near-white ink, a disciplined multi-hue syntax set and one saturated
+  // blue accent) and `jot-light` ("mochi milk": jam,
   // matcha and ramune blue on warm cream paper) -- plus the flexoki
   // pair ported from kepano's Flexoki palette (flexoki-dark / flexoki-light, MIT
   // licensed, https://stephango.com/flexoki). The names the two jot themes

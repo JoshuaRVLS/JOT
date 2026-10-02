@@ -1,4 +1,4 @@
-// The bundled themes: jot-dark ("yoru sumi") and jot-light ("mochi milk"),
+// The bundled themes: jot-dark ("obsidian") and jot-light ("mochi milk"),
 // the schemes jot maintains, plus the flexoki pair ported from kepano's Flexoki
 // palette.
 //
@@ -12,7 +12,7 @@
 // that came out of the engine -- plus the two names that used to be bundled
 // (`dark`, `light`) and still have to work.
 //
-// Both shipped themes name exact 24-bit colours ("#c96f9c") rather than xterm
+// Both shipped themes name exact 24-bit colours ("#c39cf7") rather than xterm
 // palette indices, so a case that wants a slot's colour reads it back through
 // the same conversion the renderer uses instead of comparing an index.
 #include "editor.h"
@@ -206,7 +206,7 @@ namespace
   };
 } // namespace
 
-TEST_CASE("jot-dark applies the yoru sumi scheme", "[jot][theme]")
+TEST_CASE("jot-dark applies the obsidian scheme", "[jot][theme]")
 {
   Editor &e = probe_editor();
   REQUIRE(e.apply_theme_for_test("jot-dark"));
@@ -216,26 +216,27 @@ TEST_CASE("jot-dark applies the yoru sumi scheme", "[jot][theme]")
   // Exact colours, not palette entries: the whole point of the hex form is that
   // the scheme is authored in 24-bit space.
   REQUIRE(jot_ui::is_exact_color(t.fg_default));
-  REQUIRE(rgb_of(t.fg_default) == 0xC5C0D4); // soft lavender ink, not paper white
-  REQUIRE(rgb_of(t.bg_default) == 0x07060E); // near-black indigo, deeper than the neutral #1c1c1c
+  REQUIRE(rgb_of(t.fg_default) == 0xE6EBF5); // cool near-white ink, not paper white
+  REQUIRE(rgb_of(t.bg_default) == 0x000000); // pitch black, the deepest ground a theme can name
   REQUIRE(jot_ui::is_exact_color(t.bg_default));
-  REQUIRE(rgb_of(t.fg_keyword) == 0xC96F9C); // deep rose -- the one accent
-  REQUIRE(rgb_of(t.fg_string) == 0x6FA886);  // jade
-  REQUIRE(rgb_of(t.fg_function_method) == 0x82A6D4);
-  REQUIRE(rgb_of(t.fg_number) == 0xBD9366); // amber
+  REQUIRE(rgb_of(t.fg_keyword) == 0xC39CF7); // orchid
+  REQUIRE(rgb_of(t.fg_string) == 0x8BD68F);  // jade
+  REQUIRE(rgb_of(t.fg_function_method) == 0x8CC4FF);
+  REQUIRE(rgb_of(t.fg_number) == 0xF0A35E); // ember
   // More of the palette is spoken for than the five inks the scheme used to
   // carry: property/module and tag now have hues of their own rather than
-  // borrowing periwinkle and rose.
-  REQUIRE(rgb_of(t.fg_field) == 0x6F9FB0);
-  REQUIRE(rgb_of(t.fg_module) == 0x6F9FB0);
-  REQUIRE(rgb_of(t.fg_tag) == 0xC58084);
-  // The active border carries the accent rather than a blue: that rose is what
-  // makes jot's chrome read as its own palette, not a neutral grey editor.
-  REQUIRE(rgb_of(t.fg_active_border) == 0xC96F9C);
+  // borrowing blue and orchid.
+  REQUIRE(rgb_of(t.fg_field) == 0x6FD3E0);
+  REQUIRE(rgb_of(t.fg_module) == 0x6FD3E0);
+  REQUIRE(rgb_of(t.fg_tag) == 0xF47A8D);
+  // The accent is the one saturated blue in the scheme, and it is spent where a
+  // hand goes: the active border, the cursor, the cursor line number.
+  REQUIRE(rgb_of(t.fg_active_border) == 0x58A6FF);
   // The chrome sits a few steps off the editor's own ground, so the frame
-  // recedes and the code is the only thing with contrast.
-  REQUIRE(rgb_of(t.bg_sidebar) == 0x0B0A14);
-  REQUIRE(rgb_of(t.bg_status) == 0x0C0B16);
+  // recedes and the code is the only thing with contrast. The status line is a
+  // hair above black rather than a grey band.
+  REQUIRE(rgb_of(t.bg_sidebar) == 0x05060A);
+  REQUIRE(rgb_of(t.bg_status) == 0x070910);
 }
 
 TEST_CASE("Jot themes keep separators visible and selected rows distinct", "[jot][theme]")
@@ -278,13 +279,13 @@ TEST_CASE("The breadcrumb groups reach the Winbar slots", "[jot][theme]")
   REQUIRE(e.apply_theme_for_test("jot-dark"));
   const Theme &t = e.theme_for_test();
   REQUIRE(jot_ui::is_exact_color(t.bg_winbar));
-  REQUIRE(rgb_of(t.bg_winbar) == 0x0B0A14);
-  REQUIRE(rgb_of(t.fg_winbar) == 0xC5C0D4);
-  REQUIRE(rgb_of(t.fg_winbar_crumb) == 0x7D7994);
-  REQUIRE(rgb_of(t.bg_winbar_crumb) == 0x0B0A14);
-  REQUIRE(rgb_of(t.fg_winbar_separator) == 0x695D7C);
-  REQUIRE(rgb_of(t.fg_winbar_hover) == 0xDED9EC);
-  REQUIRE(rgb_of(t.bg_winbar_hover) == 0x38304D);
+  REQUIRE(rgb_of(t.bg_winbar) == 0x05060A);
+  REQUIRE(rgb_of(t.fg_winbar) == 0xE6EBF5);
+  REQUIRE(rgb_of(t.fg_winbar_crumb) == 0x7D8799);
+  REQUIRE(rgb_of(t.bg_winbar_crumb) == 0x05060A);
+  REQUIRE(rgb_of(t.fg_winbar_separator) == 0x4F5C78);
+  REQUIRE(rgb_of(t.fg_winbar_hover) == 0xE6EBF5);
+  REQUIRE(rgb_of(t.bg_winbar_hover) == 0x263146);
 }
 
 TEST_CASE("jot-light is the same inks as jam and matcha on cream paper", "[jot][theme]")
@@ -375,9 +376,9 @@ TEST_CASE("Hex theme colours accept every documented form", "[jot][theme]")
   REQUIRE(rgb_of(t.fg_keyword) == 0xA0B0C0);
   REQUIRE(rgb_of(t.fg_cursor) == 0x00FF00);
   // Unparseable colours are ignored: the slot keeps what the base theme set.
-  REQUIRE(rgb_of(t.fg_comment) == 0x7D7994);
-  REQUIRE(rgb_of(t.fg_string) == 0x6FA886);
-  REQUIRE(rgb_of(t.fg_number) == 0xBD9366);
+  REQUIRE(rgb_of(t.fg_comment) == 0x7D8799);
+  REQUIRE(rgb_of(t.fg_string) == 0x8BD68F);
+  REQUIRE(rgb_of(t.fg_number) == 0xF0A35E);
 }
 
 TEST_CASE("A hex and an index can name the same slot value", "[jot][theme]")
@@ -444,7 +445,7 @@ TEST_CASE("The names the removed catalog used still resolve", "[jot][theme]")
   // is actually painted.
   REQUIRE(e.apply_theme_for_test("dark"));
   REQUIRE(e.theme_name_for_test() == "jot-dark");
-  REQUIRE(rgb_of(e.theme_for_test().bg_default) == 0x07060E);
+  REQUIRE(rgb_of(e.theme_for_test().bg_default) == 0x000000);
 
   REQUIRE(e.apply_theme_for_test("light"));
   REQUIRE(e.theme_name_for_test() == "jot-light");
@@ -458,7 +459,7 @@ TEST_CASE("The names the removed catalog used still resolve", "[jot][theme]")
   // than half-applying a palette.
   REQUIRE_FALSE(e.apply_theme_for_test("gruvbox"));
   REQUIRE(e.theme_name_for_test() == "jot-dark");
-  REQUIRE(rgb_of(e.theme_for_test().bg_default) == 0x07060E);
+  REQUIRE(rgb_of(e.theme_for_test().bg_default) == 0x000000);
 }
 
 TEST_CASE("A file the user writes under a legacy name beats the alias", "[jot][theme]")
@@ -527,8 +528,8 @@ TEST_CASE("The chooser lists the schemes jot bundles and nothing else", "[jot][t
 TEST_CASE("Every bundled theme defines the same slots", "[jot][theme]")
 {
   // A slot in one file but not another does not fail loudly -- it falls back to
-  // the struct default, which is a 16-colour value on the wrong palette. jot-dark
-  // is the reference; every other scheme has to carry the same set.
+  // the struct default, which is a 16-colour value on the wrong palette.
+  // jot-dark is the reference; every other scheme has to carry the same set.
   const auto reference = parse_theme(bundled_themes_dir() / "jot-dark.json");
   REQUIRE(reference.size() > 70);
 

@@ -46,8 +46,8 @@ def main():
                 results.append(("80 columns retain sidebar", any("│" in line[:26] for line in lines[2:-1])))
                 results.append(("tooling outranks social chrome", "TOOLING_READY" in lines[-1]
                                 and "SOCIAL_SECONDARY" not in lines[-1]))
-                results.append(("selected tab has stronger band", any(1000 + 0x38304D in row for row in screen.bg)))
-                results.append(("separator uses visible ink", any(1000 + 0x695D7C in row for row in screen.fg)))
+                results.append(("selected tab has stronger band", any(1000 + 0x263146 in row for row in screen.bg)))
+                results.append(("separator uses visible ink", any(1000 + 0x4F5C78 in row for row in screen.fg)))
             if "--dump" in sys.argv:
                 print(text)
     for label, passed in results:

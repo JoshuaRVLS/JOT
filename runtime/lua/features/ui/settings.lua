@@ -139,7 +139,8 @@ local function settings(p)
     local row_fg = item.header and comment or (is_selected and selection_fg or fg)
     local row_bg = is_selected and selection_bg or bg
     -- The affordances take the row's own ink: on the selection bar the accent
-    -- colour can vanish into the fill (jot-dark's accent is its selection bg).
+    -- colour can vanish into the fill (a theme may ink its accent and its
+    -- selection background with the same value).
     local grip_fg = is_selected and selection_fg or comment
     local value_fg = is_selected and selection_fg or accent
 

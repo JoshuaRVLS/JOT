@@ -42,16 +42,16 @@ from pty_screen import run_in_pty  # noqa: E402
 
 # The jot-dark groups the feature resolves: DiagnosticInfo for TODO,
 # DiagnosticError for FIXME. A truecolour cell is tagged as 1000 + 0xRRGGBB.
-INFO = 1000 + 0x7B98C2
-ERROR = 1000 + 0xCC7F86
+INFO = 1000 + 0x7AB8FF
+ERROR = 1000 + 0xFF7B8A
 # jot-dark's PmenuSel pair: the selected picker row keeps the theme's own
 # selection ink, because the family colours are too close to it to read.
-SELECTION_FG = 1000 + 0x0E0D19
-SELECTION_BG = 1000 + 0xC96F9C
+SELECTION_FG = 1000 + 0x000000
+SELECTION_BG = 1000 + 0x58A6FF
 # The theme's normal background. Both bands are mid-light, so the contrast
-# pick (upstream's maximize_contrast) lands on this dark ink, not on #c5c0d4.
+# pick (upstream's maximize_contrast) lands on this dark ink, not on #e6ebf5.
 # Tagged like every truecolour cell (1000 + 0xRRGGBB).
-INK = 1000 + 0x07060E
+INK = 1000 + 0x000000
 
 SOURCE = """\
 local a = 1
