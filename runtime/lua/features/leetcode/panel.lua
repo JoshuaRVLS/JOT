@@ -46,6 +46,7 @@ local function palette()
     ok = pick("git_added", "fg", 2),
     bad = pick("git_deleted", "fg", 1),
     warn = pick("status_warning", "fg", 3),
+    border = pick("panel_border", "fg", 8),
   }
 end
 
@@ -64,6 +65,137 @@ local function split_lines(text)
   local out = {}
   for line in (tostring(text) .. "\n"):gmatch("(.-)\n") do out[#out + 1] = line end
   return out
+end
+
+local function cell_len(text)
+  local n = 0
+  for _, cp in utf8.codes(text) do
+    if cp >= 0x1100 and (cp <= 0x115F or (cp >= 0x2E80 and cp <= 0xA4CF)
+        or (cp >= 0xAC00 and cp <= 0xD7A3) or (cp >= 0xF900 and cp <= 0xFAFF)
+        or (cp >= 0xFE30 and cp <= 0xFE4F) or (cp >= 0xFF00 and cp <= 0xFF60)
+        or (cp >= 0x1F300 and cp <= 0x1FAFF)) then
+      n = n + 2
+    else
+      n = n + 1
+    end
+  end
+  return n
+end
+
+-- Wraps text to at most `width` cells, preserving words where possible. The
+-- statement arrives as HTML stripped to plain text, so this is what turns a
+-- long paragraph into dock rows.
+local function wrap(text, width)
+  width = math.max(8, width)
+  local out = {}
+  for _, source in ipairs(split_lines(text)) do
+    if source == "" then
+      out[#out + 1] = ""
+    else
+      local line = ""
+      for word in source:gmatch("%S+") do
+        local candidate = line == "" and word or (line .. " " .. word)
+        if cell_len(candidate) <= width then
+          line = candidate
+        else
+          if line ~= "" then out[#out + 1] = line end
+          -- A word longer than the width is broken rather than dropped.
+          while cell_len(word) > width do
+            local head = utf8.offset(word, width + 1)
+            out[#out + 1] = word:sub(1, (head or #word + 1) - 1)
+            word = word:sub(head or #word + 1)
+          end
+          line = word
+        end
+      end
+      out[#out + 1] = line
+    end
+  end
+  while #out > 0 and out[#out] == "" do table.remove(out) end
+  return out
+end
+
+local function decode_entities(text)
+  return (text:gsub("&nbsp;", " "):gsub("&lt;", "<"):gsub("&gt;", ">")
+              :gsub("&amp;", "&"):gsub("&quot;", '\"'):gsub("&#39;", "'"))
+end
+
+-- The question's content HTML split into what the site shows: the statement
+-- prose, and the example blocks (`<pre>` on the site) with their labelled
+-- input / output / explanation lines. The API returns them in one field, so
+-- this is the split that lets the panel border the examples like the page.
+local function parse_content(html)
+  local text = tostring(html or "")
+  local statement = text:gsub("<pre[^>]*>.-</pre>", "\n\n")
+  statement = statement:gsub("<br%s*/?>", "\n")
+  statement = statement:gsub("</p%s*>", "\n\n"):gsub("</li%s*>", "\n")
+  statement = statement:gsub("<li[^>]*>", "  - ")
+  statement = statement:gsub("<[^>]->", "")
+  statement = decode_entities(statement)
+  statement = statement:gsub("\n[ \t]+\n", "\n\n"):gsub("\n\n\n+", "\n\n")
+
+  local examples = {}
+  for block in text:gmatch("<pre[^>]*>(.-)</pre>") do
+    block = decode_entities(block:gsub("<br%s*/?>", "\n"):gsub("<[^>]->", ""))
+    local lines = {}
+    for _, raw in ipairs(split_lines(block)) do
+      local line = raw:gsub("^%s+", ""):gsub("%s+$", "")
+      if line ~= "" then lines[#lines + 1] = line end
+    end
+    if #lines > 0 then examples[#examples + 1] = lines end
+  end
+  return statement, examples
+end
+
+-- One labelled value in a bordered block, the way the site boxes Input and
+-- Output: the label, a rule, the value, and a closing rule.
+local function block_rows(colors, label, value, width)
+  local rows = {}
+  rows[#rows + 1] = {text=" " .. tostring(label), fg=colors.comment, bold=true}
+  local rule = "\u{2500}"
+  local corner = "\u{250C}"
+  local bottom = "\u{2514}"
+  local value_lines = wrap(value, width - 4)
+  if #value_lines == 0 then value_lines = {""} end
+  rows[#rows + 1] = {text=" " .. corner .. rule:rep(math.max(1, width - 3)),
+                     fg=colors.border or colors.comment, kind="leet_rule"}
+  for _, value_line in ipairs(value_lines) do
+    rows[#rows + 1] = {text=" \u{2502} " .. value_line, fg=colors.fg, kind="leet_code"}
+  end
+  rows[#rows + 1] = {text=" " .. bottom .. rule:rep(math.max(1, width - 3)),
+                     fg=colors.border or colors.comment, kind="leet_rule"}
+  return rows
+end
+
+-- The selected example as bordered blocks. Its labels come from the content's
+-- own lines (Input: / Output: / Explanation:); a continuation line belongs to
+-- the label above it, which is how a multi-line input stays one block.
+local function example_rows(colors, example, fallback, width)
+  local rows = {}
+  rows[#rows + 1] = {text=""}
+  rows[#rows + 1] = {text="Example", fg=colors.accent, bold=true}
+  local blocks = {}
+  if type(example) == "table" then
+    for _, line in ipairs(example) do
+      local label, value = line:match("^(%a[%a ]*):%s*(.*)$")
+      if label then
+        blocks[#blocks + 1] = {label=label, value=value}
+      elseif #blocks > 0 then
+        blocks[#blocks].value = blocks[#blocks].value .. "\n" .. line
+      else
+        blocks[#blocks + 1] = {label="Input", value=line}
+      end
+    end
+  end
+  if #blocks == 0 then
+    blocks[1] = {label="Input", value=tostring(fallback or "")}
+  end
+  for _, block in ipairs(blocks) do
+    for _, row in ipairs(block_rows(colors, block.label, block.value, width)) do
+      rows[#rows + 1] = row
+    end
+  end
+  return rows
 end
 
 -- The judge console as rows: an icon and a colour per outcome, so a passing
@@ -120,12 +252,24 @@ local function console_rows(colors, console)
   return rows
 end
 
+-- The dock's inner width, so the statement and the example blocks wrap to
+-- what is actually on screen. The panel is redrawn every frame, so reading
+-- it here is how the rows follow a resize.
+local function dock_width()
+  local ok, info = pcall(function() return jot.viewport.info() end)
+  if not ok or type(info) ~= "table" then return 42 end
+  local panel = info.right_panel or {}
+  local width = tonumber(panel.width) or 42
+  return math.max(20, width - 2)
+end
+
 local function build_rows()
   local colors = palette()
   local s = state()
   local console = s.console or {}
   local question = s.question
   local rows = {}
+  local width = dock_width()
 
   if type(question) ~= "table" then
     rows[#rows + 1] = {text="No problem open", icon=ICON_DOT, icon_fg=colors.comment, bold=true}
@@ -162,6 +306,30 @@ local function build_rows()
     text="Next example", detail=tostring(s.testcase or 1) .. "/" .. tostring(#(s.testcases or {})),
     icon=ICON_NEXT, icon_fg=colors.comment, action="next",
   }
+
+  -- The statement and the selected example, the way the site shows them: the
+  -- prose, then the example's input and output in bordered blocks. The
+  -- content's own <pre> blocks carry the labels; the testcase list is the
+  -- fallback for questions whose content has none.
+  local statement, examples = parse_content(question.content)
+  rows[#rows + 1] = {text=""}
+  rows[#rows + 1] = {text="Problem", fg=colors.accent, bold=true}
+  local statement_rows = wrap(statement, width - 2)
+  if #statement_rows == 0 then
+    rows[#rows + 1] = {text="No statement was returned for this problem", fg=colors.comment}
+  else
+    for _, line in ipairs(statement_rows) do
+      rows[#rows + 1] = {text=" " .. line, fg=colors.fg, kind="leet_statement"}
+    end
+  end
+  if type(s.testcases) == "table" and #s.testcases > 0 then
+    local selected = math.max(1, math.min(tonumber(s.testcase) or 1, #s.testcases))
+    local example = examples[selected] or examples[1]
+    local fallback = s.testcases[selected]
+    for _, row in ipairs(example_rows(colors, example, fallback, width - 2)) do
+      rows[#rows + 1] = row
+    end
+  end
 
   rows[#rows + 1] = {text=""}
   rows[#rows + 1] = {text="Console", fg=colors.accent, bold=true}

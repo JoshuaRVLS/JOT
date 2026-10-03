@@ -61,6 +61,7 @@ Every network request reports itself, because a silent request looks like a dead
 Opening a problem brings up the LeetCode panel in the right dock (the secondary sidebar), next to the code instead of over it:
 
 - the question: frontend id, title, difficulty (green easy, amber medium, red hard) and the selected language plus example count
+- the statement prose, wrapped to the dock, and the selected example rendered like the site: **Input**, **Output** and **Explanation** labelled values inside bordered blocks
 - **Run test** and **Submit** as clickable rows with an icon, and **Next example** to cycle the example
 - the judge console below them: an in-flight line while the request runs, then the outcome with an icon and a colour per result - a green check for Accepted and passing case counts, a red cross for a failing status or case count, red compile and runtime error lines
 

@@ -71,7 +71,8 @@ namespace
       editor={request_redraw=function() calls.redraw=(calls.redraw or 0)+1 end},
       timer={set_timeout=function(ms,fn) calls.timer=fn; return 1 end, clear=function() end},
       shell_quote=function(value) return "'"..value.."'" end,
-      viewport={info=function() return {window={width=120,height=40}} end},
+      viewport={info=function() return {window={width=120,height=40},
+                                       right_panel={visible=true, width=42}} end},
     }
     package.loaded["jot_lc.json"] = assert(loadfile(dir .. "json.lua"))()
     package.loaded["jot_lc.config"] = assert(loadfile(dir .. "config.lua"))()
@@ -410,6 +411,69 @@ TEST_CASE("LeetCode dock panel rows carry actions and colored judge outcomes", "
       tostring(calls.panel_shown == 'LeetCode'),
     }, '|')
   )LUA") == "true|true|true|true|true|true|true|true");
+}
+
+TEST_CASE("LeetCode panel shows the statement and bordered examples", "[leetcode][lua]")
+{
+  // The panel carries the problem itself: the statement prose wrapped to the
+  // dock, then the selected example's labelled values in bordered blocks, the
+  // way the site shows them. The content's own <pre> blocks are what carry the
+  // labels, so a question without them still falls back to the testcase text.
+  State state;
+  REQUIRE(state.run(R"LUA(
+    local panel = package.loaded['jot_lc.panel']
+    local json = package.loaded['jot_lc.json']
+    local content = '<p>Given an array of integers <b>nums</b> and an integer target.</p>'
+                    .. '<p>You may assume exactly one solution.</p>'
+                    .. '<pre>' .. string.char(10)
+                    .. '<strong>Input:</strong> nums = [2,7,11,15], target = 9' .. string.char(10)
+                    .. '<strong>Output:</strong> [0,1]' .. string.char(10)
+                    .. '<strong>Explanation:</strong> Because nums[0] + nums[1] == 9, we return [0, 1].'
+                    .. string.char(10) .. '</pre>'
+                    .. '<pre>' .. string.char(10)
+                    .. '<strong>Input:</strong> nums = [3,2,4], target = 6' .. string.char(10)
+                    .. '<strong>Output:</strong> [1,2]' .. string.char(10) .. '</pre>'
+    local question = {id='1', frontend_id='1', title='Two Sum', title_slug='two-sum',
+                      difficulty='Easy', content=content,
+                      testcase_list={'[2,7,11,15]' .. string.char(10) .. '9', '[3,2,4]' .. string.char(10) .. '6'},
+                      code_snippets={{lang='C++', lang_slug='cpp', code='class Solution {};'}}}
+    local ui = package.loaded['jot_lc.ui']
+    ui.list('')
+    calls.callback({ok=true, status=200, body=json.encode({data={problemsetQuestionList={total=1, questions={question}}}}), error=''})
+    calls.picker.callback('two-sum')
+    calls.callback({ok=true, status=200, body=json.encode({data={question=question}}), error=''})
+    calls.picker.callback('cpp')
+    local function joined(rows)
+      local out = {}
+      for _, row in ipairs(rows) do out[#out + 1] = tostring(row.text or '') end
+      return table.concat(out, string.char(10))
+    end
+    local first = calls.panel.fn('LeetCode', nil)
+    local body = joined(first)
+    -- The second example only appears once Next example selects it.
+    local second = joined(calls.panel.fn('LeetCode', {action='next'}))
+    local labels = {}
+    for _, row in ipairs(first) do
+      local label = tostring(row.text or ''):match('^ (Input)$') or tostring(row.text or ''):match('^ (Output)$')
+                            or tostring(row.text or ''):match('^ (Explanation)$')
+      if label then labels[#labels + 1] = label end
+    end
+    return table.concat({
+      -- The statement wraps to the dock, so the sentence is split across rows.
+      tostring(body:find('Given an array of integers nums and an', 1, true) ~= nil
+               and body:find('integer target', 1, true) ~= nil),
+      tostring(body:find('You may assume exactly one solution', 1, true) ~= nil),
+      tostring(body:find(string.char(0xE2, 0x94, 0x8C), 1, true) ~= nil
+               and body:find(string.char(0xE2, 0x94, 0x94), 1, true) ~= nil),
+      tostring(#labels == 3 and labels[1] == 'Input' and labels[2] == 'Output'
+               and labels[3] == 'Explanation'),
+      tostring(body:find('nums = [2,7,11,15], target = 9', 1, true) ~= nil
+               and body:find('[0,1]', 1, true) ~= nil),
+      tostring(body:find('nums = [3,2,4]', 1, true) == nil),
+      tostring(second:find('nums = [3,2,4]', 1, true) ~= nil
+               and second:find('nums = [2,7,11,15]', 1, true) == nil),
+    }, '|')
+  )LUA") == "true|true|true|true|true|true|true");
 }
 
 TEST_CASE("LeetCode solutions open inside the workspace unless configured", "[leetcode][lua]")
