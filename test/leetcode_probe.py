@@ -380,6 +380,36 @@ def main() -> int:
         server.shutdown()
         return 1
 
+    # The panel's keys belong to the panel. Clicking back into the buffer keeps
+    # the caret there, so q is a letter and Esc is an editor key; with the dock
+    # merely visible they used to close it mid-word and swallow the keystroke.
+    # The click lands in the code pane (past the explorer's column and the
+    # line-number gutter, left of the dock) so the caret moves there; a click
+    # in the explorer column would keep the focus in the tree.
+    editing = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
+                         cfg=CFG, cwd=ROOT, env=env,
+                         phases=command_phase("LeetList") + [
+                             (6.0, on_screen(TITLE)),
+                             (0.5, b"\r"),
+                             (6.0, on_screen("C++")),
+                             (0.5, b"\r"),
+                             (5.0, on_screen("Run test")),
+                             (0.4, press(40, 3)),
+                             (0.5, b"qz"),
+                             (0.5, b"\x1b"),
+                             (1.5, lambda s: "qz" in s.text()),
+                         ], until_timeout=20.0)
+    if "qz" not in editing.text():
+        print("leetcode probe: FAIL - q was swallowed instead of typed into the buffer")
+        print(editing.text())
+        server.shutdown()
+        return 1
+    if "Run test" not in editing.text():
+        print("leetcode probe: FAIL - Esc closed the dock while the editor had focus")
+        print(editing.text())
+        server.shutdown()
+        return 1
+
     cookie_start = len(REQUESTS)
     if os.name != "nt" and sys.platform != "darwin":
         masked = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,

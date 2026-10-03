@@ -8,6 +8,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <string>
 
 namespace fs = std::filesystem;
 
@@ -228,6 +230,58 @@ TEST_CASE("Ctrl+B opens the left explorer, Ctrl+Shift+B the right dock", "[jot]"
   {
     e.toggle_right_panel();
   }
+}
+
+// The dock's keys belong to the dock, not to the editor sitting next to it.
+// `jot.ui.panel` opens the plugin tab without moving the focus there
+// (show_plugin_panel), so the caret keeps typing while the LeetCode panel is
+// up -- and with the panel merely visible, q and Esc were read as its close
+// keys: the panel vanished mid-word and the keystroke was swallowed.
+TEST_CASE("Right dock: Esc and q stay with the focused editor", "[jot]")
+{
+  char home[] = "/tmp/jot_right_panel_keys_XXXXXX";
+  mkdtemp(home);
+  setenv("JOT_CONFIG_HOME", home, 1);
+  setenv("JOT_CACHE_HOME", home, 1);
+
+  Editor e;
+  e.set_home_menu_visible(false);
+  const std::string path = std::string(home) + "/typing.txt";
+  {
+    std::ofstream out(path);
+    out << "alpha\nbeta\n";
+  }
+  e.load_file(path);
+  e.apply_resize_for_test(120, 32);
+
+  // The real flow: the LeetCode panel is shown by the feature itself, and
+  // showing a tab does not focus it -- the caret stays in the buffer.
+  e.host().io.show_plugin_panel("LeetCode");
+  REQUIRE(e.right_panel_visible());
+  REQUIRE(e.active_right_panel_tab_for_test() == RIGHT_PANEL_PLUGIN);
+  REQUIRE(e.focus_state_for_test() == (int)FOCUS_EDITOR);
+
+  // Typing q types: it is not the dock's close key while the buffer has focus.
+  e.scroll_cursor_to_for_test(0, 0);
+  e.raw_key_for_test('q');
+  REQUIRE(e.buffer_for_test().line(0) == "qalpha");
+  REQUIRE(e.right_panel_visible());
+
+  // Esc types nothing and closes nothing, so a stuck panel cannot eat the
+  // first key of the next thing typed.
+  e.raw_key_for_test(27);
+  REQUIRE(e.buffer_for_test().line(0) == "qalpha");
+  REQUIRE(e.right_panel_visible());
+  REQUIRE(e.active_right_panel_tab_for_test() == RIGHT_PANEL_PLUGIN);
+
+  // Once the dock has the focus its own keys are back: a click on the dock
+  // body focuses it (hover only highlights), and Esc closes the tab.
+  e.mouse_event_for_test(e.ui_width_for_test() - 1, 5, /*bstate=*/1);
+  REQUIRE(e.focus_state_for_test() == (int)FOCUS_RIGHT_PANEL);
+  e.raw_key_for_test(27);
+  REQUIRE_FALSE(e.right_panel_visible());
+  REQUIRE_FALSE(e.right_panel_tab_open(RIGHT_PANEL_PLUGIN));
+  REQUIRE(e.focus_state_for_test() == (int)FOCUS_EDITOR);
 }
 
 // The three dock chords VS Code uses: Ctrl+B for the primary sidebar,

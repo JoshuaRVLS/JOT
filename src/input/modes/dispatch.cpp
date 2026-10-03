@@ -507,7 +507,14 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
     return;
   }
 
-  if (show_right_panel && active_right_panel_tab == RIGHT_PANEL_GIT && !is_ctrl && !is_alt)
+  // The dock owns its keys only while it has focus. `jot.ui.panel` opens a
+  // plugin tab without moving the focus there, so with the caret still in the
+  // buffer a plain q or Esc is text: reading them as the panel's close keys
+  // closed the LeetCode panel mid-word and swallowed the keystroke.
+  const bool right_panel_focused = focus_state == FOCUS_RIGHT_PANEL;
+
+  if (show_right_panel && right_panel_focused && active_right_panel_tab == RIGHT_PANEL_GIT
+      && !is_ctrl && !is_alt)
   {
     const bool shift = is_shift || std::isupper((unsigned char)ch);
     if (ch == 'q' || ch == 'Q' || ch == 27)
@@ -651,7 +658,8 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
     return;
   }
 
-  if (show_right_panel && active_right_panel_tab == RIGHT_PANEL_GIT_DIFF && !is_ctrl && !is_alt)
+  if (show_right_panel && right_panel_focused && active_right_panel_tab == RIGHT_PANEL_GIT_DIFF
+      && !is_ctrl && !is_alt)
   {
     if (ch == 'q' || ch == 'Q' || ch == 27)
     {
@@ -680,7 +688,8 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
     return;
   }
 
-  if (show_right_panel && active_right_panel_tab == RIGHT_PANEL_SYMBOLS && !is_ctrl && !is_alt)
+  if (show_right_panel && right_panel_focused && active_right_panel_tab == RIGHT_PANEL_SYMBOLS
+      && !is_ctrl && !is_alt)
   {
     if (ch == 'q' || ch == 'Q' || ch == 27)
     {
@@ -718,7 +727,8 @@ void Editor::handle_input(int ch, bool is_ctrl, bool is_shift, bool is_alt, int 
     return;
   }
 
-  if (show_right_panel && active_right_panel_tab == RIGHT_PANEL_PLUGIN && !is_ctrl && !is_alt)
+  if (show_right_panel && right_panel_focused && active_right_panel_tab == RIGHT_PANEL_PLUGIN
+      && !is_ctrl && !is_alt)
   {
     if (ch == 'q' || ch == 'Q' || ch == 27)
     {
