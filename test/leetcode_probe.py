@@ -50,7 +50,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif "questionData" in query:
             payload = {"data": {"question": {
                 "id": "1", "frontend_id": "1", "title": TITLE, "title_slug": SLUG,
-                "difficulty": "Easy", "content": "<p>Return indices of two values.</p>",
+                "difficulty": "Easy", "status": "ac",
+                "content": "<p>Return indices of two values.</p>",
                 # The live API returns exampleTestcaseList as an array of case
                 # strings, not one blank-line separated string; the fixture
                 # mirrors that so a parser that only handles strings fails here.
@@ -67,7 +68,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if int(variables.get("skip") or 0) == 0:
                 questions = [{
                     "frontend_id": "1", "title": TITLE, "title_slug": SLUG,
-                    "difficulty": "Easy", "status": None, "paid_only": False,
+                    "difficulty": "Easy", "status": "ac", "paid_only": False,
                     "topic_tags": [{"name": "Array", "slug": "array"}],
                 }]
             else:
@@ -236,6 +237,12 @@ def main() -> int:
         print("leetcode probe: FAIL - public list request missing or carried a cookie")
         server.shutdown()
         return 1
+    # The list is the checklist: a solved problem leads with a check.
+    if "\u2713" not in screen.text():
+        print("leetcode probe: FAIL - a solved problem is not checked off in the list")
+        print(screen.text())
+        server.shutdown()
+        return 1
 
     # The list picker's trailing row must fetch the next page: one page is
     # capped at 100 questions server-side, so without it the user could never
@@ -336,6 +343,13 @@ def main() -> int:
     run_x, run_y = cell_of(opened, "Run test")
     if run_x < 0:
         print("leetcode probe: FAIL - the Run test row is not on screen to click")
+        print(opened.text())
+        server.shutdown()
+        return 1
+    # The question fetch carries its status, so the dock can say the problem
+    # is already solved instead of leaving the user to remember.
+    if "Completed" not in opened.text():
+        print("leetcode probe: FAIL - the dock did not mark the solved problem")
         print(opened.text())
         server.shutdown()
         return 1

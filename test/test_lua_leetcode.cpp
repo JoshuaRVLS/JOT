@@ -143,9 +143,15 @@ TEST_CASE("LeetCode list pages send filters and normalize status", "[leetcode][l
   REQUIRE(state.run(R"LUA(
     local ui = package.loaded['jot_lc.ui']
     local json = package.loaded['jot_lc.json']
-    local body = json.encode({data={problemsetQuestionList={total=2, questions={
+    -- The checklist glyphs and the inks the theme drives them with; the list
+    -- reads as a checklist: done, in progress, or plain.
+    local check = string.char(0xE2, 0x9C, 0x93)
+    local dot = string.char(0xE2, 0x80, 0xA2)
+    jot.theme.palette = function() return {git_added={fg=2}, status_warning={fg=3}} end
+    local body = json.encode({data={problemsetQuestionList={total=3, questions={
       {frontend_id='1', title='Easy One', title_slug='easy-one', difficulty='Easy', status='ac'},
       {frontend_id='2', title='Hard One', title_slug='hard-one', difficulty='Hard'},
+      {frontend_id='3', title='Attempted One', title_slug='attempted-one', difficulty='Medium', status='notac'},
     }}}})
     ui.list('difficulty=easy, status=solved')
     local live = calls.status.spec.text()
@@ -159,9 +165,13 @@ TEST_CASE("LeetCode list pages send filters and normalize status", "[leetcode][l
       tostring(items[1] and items[1].value == 'easy-one'),
       tostring(items[1] and items[1].detail:find('solved') ~= nil),
       tostring(items[2] and items[2].detail:find('todo') ~= nil),
-      tostring(tostring(calls.message):find('Loaded 2 of 2') ~= nil),
+      tostring(tostring(calls.message):find('Loaded 3 of 3') ~= nil),
+      tostring(items[1] and items[1].label:find(check, 1, true) == 1 and items[1].fg == 2),
+      tostring(items[2] and items[2].label:find(check, 1, true) == nil
+               and items[2].label:find(dot, 1, true) == nil and items[2].fg == nil),
+      tostring(items[3] and items[3].label:find(dot, 1, true) == 1 and items[3].fg == 3),
     }, '|')
-  )LUA") == "true|true|true|true|true|true|true");
+  )LUA") == "true|true|true|true|true|true|true|true|true|true");
 }
 
 TEST_CASE("LeetCode cookie prompt opens masked and strips pasted line breaks", "[leetcode][lua]")
@@ -474,6 +484,55 @@ TEST_CASE("LeetCode panel shows the statement and bordered examples", "[leetcode
                and second:find('nums = [2,7,11,15]', 1, true) == nil),
     }, '|')
   )LUA") == "true|true|true|true|true|true|true");
+}
+
+TEST_CASE("LeetCode panel marks a completed problem", "[leetcode][lua]")
+{
+  // Both surfaces answer "have I done this one?": the platform reports
+  // ac/notac on the list and on the single-question fetch (verified against
+  // the live API), and the dock renders it as a check or a dot with the
+  // theme's success / warning ink.
+  State state;
+  REQUIRE(state.run(R"LUA(
+    local ui = package.loaded['jot_lc.ui']
+    local json = package.loaded['jot_lc.json']
+    jot.theme.palette = function() return {git_added={fg=2}, status_warning={fg=3}} end
+    local function question(status)
+      return json.encode({data={question={
+        id='1', frontend_id='1', title='Easy One', title_slug='easy-one', difficulty='Easy',
+        status=status, content='<p>Add them.</p>', testcase_list={'[1,2]'},
+        code_snippets={{lang='C++', lang_slug='cpp', code='int twoSum() { return 0; }'}},
+      }}})
+    end
+    local sent = {}
+    local function fetch(slug, status)
+      ui.open_question(slug)
+      sent[#sent + 1] = json.decode(calls.request.body).query
+      calls.callback({ok=true, status=200, body=question(status), error=''})
+      calls.picker.callback('cpp')
+    end
+    local function row(rows, needle)
+      for _, row in ipairs(rows) do
+        if tostring(row.text or '') == needle then return row end
+      end
+      return nil
+    end
+    fetch('easy-one', 'ac')
+    local solved_status = tostring(ui.current.status)
+    local solved = row(calls.panel.fn('LeetCode', nil), 'Completed')
+    fetch('hard-one', 'notac')
+    local attempted = row(calls.panel.fn('LeetCode', nil), 'Attempted')
+    return table.concat({
+      tostring(solved_status == 'solved'),
+      -- The marker is only as good as the fetch: the single-question query has
+      -- to ask for status (the live API accepts it, verified once by hand).
+      tostring(sent[1] ~= nil and sent[1]:find(' status ', 1, true) ~= nil),
+      tostring(solved ~= nil and solved.icon == string.char(0xEF, 0x80, 0x8C)
+               and solved.icon_fg == 2),
+      tostring(attempted ~= nil and attempted.icon_fg == 3),
+      tostring(row(calls.panel.fn('LeetCode', nil), 'Completed') == nil),
+    }, '|')
+  )LUA") == "true|true|true|true|true");
 }
 
 TEST_CASE("LeetCode solutions open inside the workspace unless configured", "[leetcode][lua]")

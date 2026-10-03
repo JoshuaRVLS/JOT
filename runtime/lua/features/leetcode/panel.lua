@@ -285,6 +285,17 @@ local function build_rows()
     icon_fg=difficulty_fg(colors, question.difficulty),
     bold=true,
   }
+  -- The checklist: the platform already knows the question's progress, so a
+  -- solved problem says so under its title instead of the user re-reading the
+  -- problem list to remember.
+  local status = tostring(question.status or "")
+  if status == "solved" then
+    rows[#rows + 1] = {text="Completed", icon=ICON_CHECK, icon_fg=colors.ok,
+                       fg=colors.ok, bold=true}
+  elseif status == "attempted" then
+    rows[#rows + 1] = {text="Attempted", icon=ICON_DOT, icon_fg=colors.warn,
+                       fg=colors.warn}
+  end
   local example = ""
   if type(s.testcases) == "table" and #s.testcases > 0 then
     example = " · example " .. tostring(s.testcase or 1) .. " of " .. tostring(#s.testcases)

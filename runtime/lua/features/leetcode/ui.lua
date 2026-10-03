@@ -89,6 +89,8 @@ local function palette()
     comment = pick("comment", "fg", -1),
     selection_fg = pick("selection", "fg", -1),
     selection_bg = pick("selection", "bg", -1),
+    ok = pick("git_added", "fg", -1),
+    warn = pick("status_warning", "fg", -1),
   }
 end
 
@@ -185,12 +187,24 @@ local list_state = nil
 -- questions, so a full problem set cannot be fetched in a single request
 -- without the multi-megabyte decode that froze the editor; the last row
 -- loads the next page and reopens the picker with everything fetched so far.
+-- The list doubles as the checklist: a solved problem leads with a check and
+-- the success ink, an attempted one with a dot in the warning colour, and a
+-- fresh one carries no mark so the eye follows what is left to do.
+local function status_mark(status, colors)
+  if status == "solved" then return "\u{2713} ", colors.ok end
+  if status == "attempted" then return "\u{2022} ", colors.warn end
+  return "", nil
+end
+
 local function show_list()
+  local colors = palette()
   local state = list_state
   local items = {}
   for _, question in ipairs(state.rows) do
-    items[#items + 1] = {label=string.format("%s. %s", question.frontend_id or "?", question.title or question.title_slug or ""),
+    local mark, ink = status_mark(question.status, colors)
+    items[#items + 1] = {label=mark .. string.format("%s. %s", question.frontend_id or "?", question.title or question.title_slug or ""),
                          value=question.title_slug,
+                         fg=ink,
                          detail=tostring(question.difficulty or "") .. (question.status and " · " .. question.status or "")}
   end
   local total = tonumber(state.total) or #state.rows

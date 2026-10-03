@@ -32,7 +32,7 @@ M.queries = {
   daily = [[query questionOfToday { today: activeDailyCodingChallengeQuestion { question { title_slug: titleSlug } } }]],
   random = [[query randomQuestion($categorySlug: String, $filters: QuestionListFilterInput) { question: randomQuestion(categorySlug: $categorySlug, filters: $filters) { title_slug: titleSlug paid_only: isPaidOnly } }]],
   list = [[query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) { problemsetQuestionList: questionList(categorySlug: $categorySlug, limit: $limit, skip: $skip, filters: $filters) { total: totalNum questions: data { frontend_id: questionFrontendId title title_slug: titleSlug difficulty status paid_only: isPaidOnly topic_tags: topicTags { name slug } } } }]],
-  question = [[query questionData($titleSlug: String!) { question(titleSlug: $titleSlug) { id: questionId frontend_id: questionFrontendId title title_slug: titleSlug is_paid_only: isPaidOnly difficulty content code_snippets: codeSnippets { lang lang_slug: langSlug code } testcase_list: exampleTestcaseList stats topic_tags: topicTags { name slug } hints } }]],
+  question = [[query questionData($titleSlug: String!) { question(titleSlug: $titleSlug) { id: questionId frontend_id: questionFrontendId title title_slug: titleSlug is_paid_only: isPaidOnly difficulty status content code_snippets: codeSnippets { lang lang_slug: langSlug code } testcase_list: exampleTestcaseList stats topic_tags: topicTags { name slug } hints } }]],
   profile = [[query userStats($username: String!) { matchedUser(username: $username) { username submit_stats: submitStatsGlobal { acSubmissionNum { difficulty count } } } }]],
 }
 
@@ -136,6 +136,16 @@ local function url_encode(text)
   end))
 end
 
+-- Upstream reports progress as ac/notac/null; the reference filter vocabulary
+-- is solved/attempted/todo, so normalize here once for the list and for the
+-- single-question fetch the dock's completed marker reads.
+local function normalize_status(status)
+  if status == json.null or status == nil then return "todo" end
+  if status == "ac" then return "solved" end
+  if status == "notac" then return "attempted" end
+  return status
+end
+
 function M.auth(callback)
   return graphql(M.queries.auth, {}, true, function(data, err)
     if err then callback(nil, err); return end
@@ -151,11 +161,18 @@ end
 function M.question(slug, callback, refresh)
   if not refresh then
     local cached = cache.get(slug)
-    if cached then callback(cached, nil, true); return true end
+    if cached then
+      -- Entries cached before the status field existed (or by an older build)
+      -- read as todo rather than as a stale answer.
+      cached.status = normalize_status(cached.status)
+      callback(cached, nil, true)
+      return true
+    end
   end
   return graphql(M.queries.question, {titleSlug=slug}, false, function(data, err)
     local question = data and data.question
     if not question then callback(nil, err or "question not found"); return end
+    question.status = normalize_status(question.status)
     cache.put(slug, question)
     callback(question, nil, false)
   end)
@@ -196,12 +213,7 @@ function M.list(filters, skip, callback)
     if type(questions) ~= "table" then callback(nil, nil, err or "problem list unavailable"); return end
     local rows = {}
     for _, item in ipairs(questions) do
-      -- Upstream reports progress as ac/notac/null; the reference filter
-      -- vocabulary is solved/attempted/todo, so normalize here once.
-      local status = item.status
-      if status == json.null or status == nil then status = "todo"
-      elseif status == "ac" then status = "solved"
-      elseif status == "notac" then status = "attempted" end
+      local status = normalize_status(item.status)
       rows[#rows + 1] = {
         id=item.frontend_id,
         frontend_id=item.frontend_id,

@@ -46,7 +46,7 @@ Filters are given as `name=value` pairs:
 :LeetRandom difficulty=hard, status=todo
 ```
 
-Rows show the frontend id, title, difficulty and, when the account has progress, solved/attempted/todo. Public list requests never carry the stored session cookie.
+Rows show the frontend id, title, difficulty and, when the account has progress, solved/attempted/todo. The list doubles as a checklist: a solved problem leads with a green check, an attempted one with an amber dot, and a fresh one carries no mark so what is left to do stands out. Public list requests never carry the stored session cookie.
 
 ## Task feedback
 
@@ -61,6 +61,7 @@ Every network request reports itself, because a silent request looks like a dead
 Opening a problem brings up the LeetCode panel in the right dock (the secondary sidebar), next to the code instead of over it:
 
 - the question: frontend id, title, difficulty (green easy, amber medium, red hard) and the selected language plus example count
+- **Completed** with a green check when the account has already solved the problem, or **Attempted** with an amber dot when it was only tried
 - the statement prose, wrapped to the dock, and the selected example rendered like the site: **Input**, **Output** and **Explanation** labelled values inside bordered blocks
 - **Run test** and **Submit** as clickable rows with an icon, and **Next example** to cycle the example
 - the judge console below them: an in-flight line while the request runs, then the outcome with an icon and a colour per result - a green check for Accepted and passing case counts, a red cross for a failing status or case count, red compile and runtime error lines
