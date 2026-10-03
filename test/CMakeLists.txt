@@ -14,6 +14,7 @@ add_executable(jot_tests
   test_web_completion.cpp
   test_html_preview.cpp
   test_http_file.cpp
+  test_leetcode_services.cpp
   test_cpp_assist.cpp
   test_cpp_definitions.cpp
   test_cpp_flags.cpp
@@ -104,6 +105,7 @@ add_executable(jot_tests
   test_right_panel.cpp
   test_markdown_http.cpp
   test_lua_markdown.cpp
+  test_lua_leetcode.cpp
   test_ai.cpp
   test_lua_snippet.cpp
   test_completion_matching.cpp

@@ -8,6 +8,7 @@ set(JOT_LUA_SOURCES
   jot/lua/bindings_git.cpp
   jot/lua/bindings_layout.cpp
   jot/lua/bindings_lsp.cpp
+  jot/lua/bindings_leetcode.cpp
   jot/lua/bindings_mark.cpp
   jot/lua/bindings_plugin.cpp
   jot/lua/bindings_preview.cpp

@@ -28,6 +28,7 @@ set(JOT_FEATURES_SOURCES
   features/tree_sitter/runtime.cpp
   features/html.cpp
   features/http_file.cpp
+  features/leetcode_http.cpp
   features/language.cpp
   features/quote_text_object.cpp
   features/save_hygiene.cpp

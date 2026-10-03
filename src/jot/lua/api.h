@@ -2,6 +2,7 @@
 #define LUA_API_H
 
 #include "text_features.h"
+#include "features/leetcode_http.h"
 #include "tools/debugger/client.h"
 #include "tools/lsp/client.h"
 #include <array>
@@ -202,6 +203,7 @@ public:
   bool load_markdown_runtime(lua_State *L);
   bool load_html_runtime(lua_State *L);
   bool load_snippet_runtime(lua_State *L);
+  bool load_leetcode_runtime(lua_State *L);
   // Bundled AI assistant (features/ai/*.lua): the CodeCompanion-style chat,
   // inline rewrite and provider adapters. Loaded after the snippet runtime
   // (a chat reply can carry snippets) and before features/update.lua.
@@ -638,6 +640,9 @@ public:
   bool
   run_job_capture(const std::string &command, const std::string &cwd, const std::string &callback);
   bool deliver_job_result(const std::string &callback, const std::string &output, int exit_code);
+  bool leetcode_http_request(const LeetCodeHttp::Request &request, const std::string &callback);
+  bool deliver_leetcode_http_result(const std::string &callback,
+                                   const LeetCodeHttp::Response &response);
   void show_picker(const std::string &title,
                    const std::string &items_callback,
                    const std::string &select_callback);

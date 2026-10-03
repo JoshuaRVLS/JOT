@@ -3,6 +3,9 @@
 #include "editor.h"
 #include "jot/lua/api.h"
 #include "jot/lua/bindings_internal.h"
+#include "tools/file_util.h"
+
+#include <filesystem>
 
 namespace lua_bind
 {
@@ -27,6 +30,54 @@ namespace lua_bind
   {
     api(L).push_file_read(L);
     return lua_isnil(L, -1) ? 2 : 1;
+  }
+  int l_file_write(lua_State *L)
+  {
+    const std::string path = luaL_checkstring(L, 1);
+    size_t size = 0;
+    const char *text = luaL_checklstring(L, 2, &size);
+    std::error_code ec;
+    const std::filesystem::path parent = std::filesystem::path(path).parent_path();
+    if (!parent.empty()) std::filesystem::create_directories(parent, ec);
+    if (ec)
+    {
+      lua_pushboolean(L, 0);
+      lua_pushstring(L, "cannot create parent directory");
+      return 2;
+    }
+    const std::string error = file_util::write_file_atomic(path, std::string(text, size));
+    lua_pushboolean(L, error.empty());
+    if (!error.empty())
+    {
+      lua_pushlstring(L, error.data(), error.size());
+      return 2;
+    }
+    return 1;
+  }
+  int l_file_mkdir(lua_State *L)
+  {
+    std::error_code ec;
+    const bool ok = std::filesystem::create_directories(luaL_checkstring(L, 1), ec)
+                    || (!ec && std::filesystem::is_directory(luaL_checkstring(L, 1), ec));
+    lua_pushboolean(L, ok && !ec);
+    if (ec)
+    {
+      lua_pushstring(L, ec.message().c_str());
+      return 2;
+    }
+    return 1;
+  }
+  int l_file_remove(lua_State *L)
+  {
+    std::error_code ec;
+    const bool removed = std::filesystem::remove(luaL_checkstring(L, 1), ec);
+    lua_pushboolean(L, removed && !ec);
+    if (ec)
+    {
+      lua_pushstring(L, ec.message().c_str());
+      return 2;
+    }
+    return 1;
   }
   int l_editor_default_tab(lua_State *L)
   {

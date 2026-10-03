@@ -115,6 +115,8 @@ else()
   endif()
 endif()
 
+find_package(CURL REQUIRED)
+
 find_path(LUA_INCLUDE_DIR lua.h PATH_SUFFIXES lua5.4 lua54 lua5.3 lua53)
 find_library(LUA_LIBRARY NAMES lua5.4 lua54 lua5.3 lua53 lua)
 if(LUA_INCLUDE_DIR AND LUA_LIBRARY)
@@ -452,7 +454,10 @@ add_library(jot_engine STATIC
   $<TARGET_OBJECTS:jot_lua_api_obj>
   $<TARGET_OBJECTS:jot_ui_obj>
 )
-target_link_libraries(jot_engine PUBLIC ${LUA_LIBRARIES})
+target_link_libraries(jot_engine PUBLIC ${LUA_LIBRARIES} CURL::libcurl)
+if(APPLE)
+  target_link_libraries(jot_engine PUBLIC "-framework Security" "-framework CoreFoundation")
+endif()
 # Same header/lib consistency for the aggregated engine and its consumers
 # (the app, the test suite): the linked Lua's headers must be on the
 # include path, not whatever /usr/include happens to contain.

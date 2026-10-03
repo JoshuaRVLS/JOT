@@ -37,6 +37,7 @@ add --gui flag to use the GUI.
 - [Plugins](docs/PLUGINS.md)
 - [Debugger](docs/DEBUGGER.md)
 - [Tree-sitter](docs/TREE_SITTER.md)
+- [LeetCode workspace](docs/LEETCODE.md)
 
 ## Platform support
 

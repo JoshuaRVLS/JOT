@@ -21,6 +21,7 @@ set(JOT_ENGINE_SOURCES
   jot/app/process_job.cpp
   jot/app/relaunch.cpp
   jot/app/rest_client.cpp
+  tools/leetcode_credentials.cpp
   jot/app/resize.cpp
   jot/app/smooth_scroll.cpp
   jot/app/undo.cpp

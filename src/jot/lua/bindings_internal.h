@@ -91,6 +91,10 @@ namespace lua_bind
   int l_float_on_key(lua_State *L);
   int l_float_on_mouse(lua_State *L);
   int l_job_capture(lua_State *L);
+  int l_leetcode_request(lua_State *L);
+  int l_leetcode_credential_get(lua_State *L);
+  int l_leetcode_credential_set(lua_State *L);
+  int l_leetcode_credential_delete(lua_State *L);
   int l_preview_start(lua_State *L);
   int l_preview_stop(lua_State *L);
   int l_preview_status(lua_State *L);
@@ -191,6 +195,9 @@ namespace lua_bind
   int l_buf_apply_edit(lua_State *L);
   int l_file_list(lua_State *L);
   int l_file_read(lua_State *L);
+  int l_file_write(lua_State *L);
+  int l_file_mkdir(lua_State *L);
+  int l_file_remove(lua_State *L);
   int l_workspace_search(lua_State *L);
   int l_editor_default_tab(lua_State *L);
   int l_editor_default_shift_tab(lua_State *L);

@@ -420,6 +420,23 @@ bool LuaAPI::load_snippet_runtime(lua_State *L)
   return load_bundled_lua_file(L, "features/snippet/init.lua", "Snippets");
 }
 
+bool LuaAPI::load_leetcode_runtime(lua_State *L)
+{
+  static const char *kModules[] = {
+      "features/leetcode/json.lua",
+      "features/leetcode/config.lua",
+      "features/leetcode/cache.lua",
+      "features/leetcode/client.lua",
+      "features/leetcode/solution.lua",
+      "features/leetcode/ui.lua",
+  };
+  for (const char *rel : kModules)
+  {
+    if (!jot_lua::load_bundled_lua_module(L, rel, "jot_lc")) return false;
+  }
+  return jot_lua::load_bundled_lua_file(L, "features/leetcode/init.lua", "LeetCode");
+}
+
 bool LuaAPI::load_ai_runtime(lua_State *L)
 {
   // The AI assistant is a module tree (features/ai/*.lua) like the snippet

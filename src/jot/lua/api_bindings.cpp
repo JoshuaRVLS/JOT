@@ -363,6 +363,9 @@ bool LuaAPI::init()
   field(L, "recent", l_recent_files);
   field(L, "list", l_file_list);
   field(L, "read", l_file_read);
+  field(L, "write", l_file_write);
+  field(L, "mkdir", l_file_mkdir);
+  field(L, "remove", l_file_remove);
   lua_setfield(L, -2, "file");
   lua_newtable(L);
   field(L, "toggle_sidebar", l_toggle_sidebar);
@@ -454,6 +457,12 @@ bool LuaAPI::init()
   field(L, "rerun", l_task_rerun);
   command_field(L, this, "show", "Tasks");
   lua_setfield(L, -2, "tasks");
+  lua_newtable(L);
+  field(L, "request", l_leetcode_request);
+  field(L, "credential_get", l_leetcode_credential_get);
+  field(L, "credential_set", l_leetcode_credential_set);
+  field(L, "credential_delete", l_leetcode_credential_delete);
+  lua_setfield(L, -2, "leetcode");
   lua_newtable(L);
   field(L, "execute", l_command);
   field(L, "clients", l_lsp_clients);
@@ -734,6 +743,9 @@ bool LuaAPI::init()
   // keymaps so its Tab handling shadows the built-in fallback only while a
   // snippet is active.
   load_snippet_runtime(L);
+  // LeetCode workspace: the question browser, file-backed solutions, judge
+  // workflow and OS-keychain-backed session API (features/leetcode/*).
+  load_leetcode_runtime(L);
   // AI assistant (features/ai/*.lua) is disabled for now: skipping
   // load_ai_runtime leaves no :CodeCompanion* commands and no Alt+Shift+A
   // keymap family registered. The module tree and the loader stay in place, so
