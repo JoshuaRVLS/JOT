@@ -41,9 +41,8 @@ function M.open(question, language)
   if not existing then
     local saved = write_solution(path, snippet .. (snippet:sub(-1) == "\n" and "" or "\n"))
     if not saved then return false, "cannot create or save the solution file" end
-  else
-    jot.file.open(path)
   end
+  jot.file.open(path)
   question.lang_slug = language
   question.solution_path = path
   return true, path
