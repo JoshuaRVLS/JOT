@@ -428,6 +428,7 @@ bool LuaAPI::load_leetcode_runtime(lua_State *L)
       "features/leetcode/cache.lua",
       "features/leetcode/client.lua",
       "features/leetcode/solution.lua",
+      "features/leetcode/panel.lua",
       "features/leetcode/ui.lua",
   };
   for (const char *rel : kModules)

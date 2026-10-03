@@ -316,6 +316,12 @@ void Editor::handle_mouse_input(int x,
     bool inside = x >= panel_x && x < panel_x + panel_w && y >= panel_y && y < panel_y + panel_h;
     if (inside)
     {
+      // A panel taller than the dock (the LeetCode console) scrolls its row
+      // list; the renderer clamps the offset to the visible window.
+      if (is_scroll_up || is_scroll_down)
+      {
+        plugin_panel_scroll = std::max(0, plugin_panel_scroll + (is_scroll_up ? -3 : 3));
+      }
       needs_redraw = true;
       return;
     }

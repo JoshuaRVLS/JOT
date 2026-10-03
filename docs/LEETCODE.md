@@ -22,7 +22,7 @@ Jot includes a bundled, jot-native LeetCode workflow inspired by the feature set
 | `:LeetLatest` | Fetch and restore the latest submission for the active problem |
 | `:LeetOpen` | Open the active problem in the configured browser or report its URL |
 | `:LeetInfo` / `:LeetStatus` | Show the active question, tabs, cache TTL and solution path |
-| `:LeetConsole` | Toggle the judge console with the last run or submit result |
+| `:LeetConsole` | Bring up the dock panel with the last run or submit result |
 | `:LeetTabs` | Switch between questions opened this session |
 | `:LeetYank` | Copy the active solution code to the clipboard |
 | `:LeetCacheClear` | Remove cached public question data |
@@ -56,15 +56,15 @@ Every network request reports itself, because a silent request looks like a dead
 - request start and completion are announced as messages (`-> POST /graphql/`, `<- POST /graphql/ HTTP 200`, blocked/stopped/not queued cases)
 - list loads announce `Loading problem list (page N)...` and `Loaded N of M problem(s)`
 
-## Judge console
+## Dock panel
 
-`:LeetRun` and `:LeetSubmit` open a floating judge console (they refresh it when it is already open) with:
+Opening a problem brings up the LeetCode panel in the right dock (the secondary sidebar), next to the code instead of over it:
 
-- the active problem and the selected example
-- the in-flight line while the request runs
-- the result: status, correct cases, runtime, memory, input, output, expected output, stdout, compile and runtime errors
+- the question: frontend id, title, difficulty (green easy, amber medium, red hard) and the selected language plus example count
+- **Run test** and **Submit** as clickable rows with an icon, and **Next example** to cycle the example
+- the judge console below them: an in-flight line while the request runs, then the outcome with an icon and a colour per result - a green check for Accepted and passing case counts, a red cross for a failing status or case count, red compile and runtime error lines
 
-`:LeetTest` updates the console's selected example when it is open. `:LeetConsole` (or `Alt+Shift+L C`) toggles it, and Escape closes it. The console is a read-only float: run, submit and example cycling stay on the commands and keymaps so the console never intercepts ordinary typing.
+A row is highlighted on hover and runs on click through the panel's own callback, so no command has to be typed. `:LeetRun`, `:LeetSubmit` and `:LeetTest` (and the `Alt+Shift+L` keymaps) still work and drive the same panel; `:LeetConsole` brings the panel up. The panel's rows scroll with the wheel when the console is longer than the dock.
 
 ## Configuration
 
@@ -98,7 +98,7 @@ When the operating-system store is unavailable, sign-in reports that state and d
 
 ## Current scope and limits
 
-The real-binary PTY probe covers the list loading indicator and completion feedback, pagination through the load-more row, credential-free public requests, the masked sign-in prompt and stored session, the refusal to send a session to a non-official domain, selecting a problem from the list, the solution template being written to disk and opened, and the judge console opening and reporting its outcome. The probe's API fixture is not an official LeetCode domain, so its judge request is refused before it leaves the process by design; the success-report rendering (status, cases, output, errors) is pinned by the Lua unit tests instead.
+The real-binary PTY probe covers the list loading indicator and completion feedback, pagination through the load-more row, credential-free public requests, the masked sign-in prompt and stored session, the refusal to send a session to a non-official domain, selecting a problem from the list, the solution template being written to disk and opened, and the dock panel: its question, the Run test / Submit rows, the hover highlight on an actionable row, a click on Run test starting the judge, and the console reporting the outcome. The probe's API fixture is not an official LeetCode domain, so its judge request is refused before it leaves the process by design; the success-report rendering (green check, passing case counts, status, output, errors) is pinned by the Lua unit tests instead.
 
 The full online account/judge workflow requires a stored session and the official domain, and has not been exercised end-to-end from this repository's CI. On Linux, the Secret Service prompt is skipped when there is no D-Bus session. Endpoint schemas are undocumented by LeetCode and may change. Reference features not implemented here: inject, fold/toggle, stats, menu and exit.
 

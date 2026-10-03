@@ -355,6 +355,12 @@ public:
                         int buffer,
                         const LuaEditDelta *edit);
   std::vector<std::string> plugin_panel_lines(const std::string &name);
+  // Structured rows of a registered panel. `action` empty means "render":
+  // the callback returns the rows to draw. A non-empty action is a click on
+  // the row at `index`; the callback performs it and its return value is
+  // ignored (the next frame renders the result).
+  std::vector<PluginPanelRow>
+  plugin_panel_rows(const std::string &name, const std::string &action = "", int index = -1);
   // Picker rows: a plain string item carries an empty value, a table item may
   // carry `value` (what the select callback receives instead of the display
   // text), `detail` (right-aligned secondary text) and `fg` (the row's own

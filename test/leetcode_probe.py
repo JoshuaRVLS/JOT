@@ -120,6 +120,33 @@ def on_screen(fragment: str):
     return lambda screen: fragment in screen.text()
 
 
+def cell_of(screen, needle: str) -> tuple[int, int]:
+    """0-based (x, y) of `needle`'s first cell, or (-1, -1)."""
+    for y, line in enumerate(screen.text().split("\n")):
+        x = line.find(needle)
+        if x >= 0:
+            return x, y
+    return -1, -1
+
+
+def row_colors(screen, needle: str) -> tuple[int, int]:
+    """(fg, bg) of the first cell of the row carrying `needle`."""
+    x, y = cell_of(screen, needle)
+    if y < 0:
+        return -1, -1
+    return screen.fg[y][x], screen.bg[y][x]
+
+
+def motion(x: int, y: int) -> bytes:
+    """SGR any-motion report over a cell."""
+    return b"\x1b[<35;%d;%dM" % (x + 1, y + 1)
+
+
+def press(x: int, y: int) -> bytes:
+    """SGR press+release on a cell."""
+    return b"\x1b[<0;%d;%dM\x1b[<0;%d;%dm" % (x + 1, y + 1, x + 1, y + 1)
+
+
 def main() -> int:
     binary = sys.argv[1] if len(sys.argv) > 1 else "build-tests/apps/jot/jot"
     if not os.path.exists(binary):
@@ -219,6 +246,12 @@ def main() -> int:
                       phases=command_phase("LeetList") + [
                           (6.0, on_screen("Load more problems")),
                           (0.3, b"load"),
+                          # Wait for the query to filter the list down to the
+                          # load-more row before accepting it: pressing Enter
+                          # while the unfiltered list is still up opens the
+                          # question instead, which made this phase flaky.
+                          (6.0, lambda s: "Load more problems" in s.text()
+                                          and TITLE not in s.text()),
                           (0.5, b"\r"),
                           (6.0, on_screen(SECOND_TITLE)),
                       ], until_timeout=20.0)
@@ -236,10 +269,11 @@ def main() -> int:
 
     # Choosing a problem from the list: the language picker opens the template
     # for real (the missing-file read used to leave the buffer empty, so the
-    # user saw "loading" and then nothing), and the judge console reports the
-    # run. The fixture is not an official LeetCode domain, so the
+    # user saw "loading" and then nothing), and the dock's LeetCode panel comes
+    # up with the question, its clickable Run test / Submit rows and the judge
+    # console. The fixture is not an official LeetCode domain, so the
     # authenticated judge request is refused before it leaves the process --
-    # the console shows that refusal and the assertion pins that no request
+    # the console reports that refusal and the assertion pins that no request
     # reached the local endpoint with credentials.
     judge_start = len(REQUESTS)
     judge = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
@@ -250,6 +284,7 @@ def main() -> int:
                            (6.0, on_screen("C++")),
                            (0.5, b"\r"),
                            (5.0, on_screen("class Solution")),
+                           (3.0, on_screen("Run test")),
                            (0.4, b"\x1b[112;6u"), (0.6, b"LeetRun"), (0.4, b"\r"),
                            (8.0, on_screen("Judge request failed")),
                        ], until_timeout=20.0)
@@ -258,9 +293,15 @@ def main() -> int:
         print(judge.text())
         server.shutdown()
         return 1
-    if "Judge request failed" not in judge.text() \
-            or "restricted to official LeetCode domains" not in judge.text():
-        print("leetcode probe: FAIL - judge console did not report the run outcome")
+    if "Run test" not in judge.text() or "Submit" not in judge.text():
+        print("leetcode probe: FAIL - the dock panel did not offer the run/submit rows")
+        print(judge.text())
+        server.shutdown()
+        return 1
+    # The error row is clipped to the dock's width, so only its leading cells
+    # are asserted; the full sentence is pinned by the Lua unit tests.
+    if "Judge request failed" not in judge.text() or "restricted to" not in judge.text():
+        print("leetcode probe: FAIL - the dock panel console did not report the run outcome")
         print(judge.text())
         server.shutdown()
         return 1
@@ -273,6 +314,69 @@ def main() -> int:
     if any(request["path"].startswith("/interpret_solution/") for request in recent):
         print("leetcode probe: FAIL - a judge request reached the non-official endpoint")
         print("requests:", recent)
+        server.shutdown()
+        return 1
+
+    # The run/submit rows are buttons in the dock: hovering one lights its
+    # background and clicking it runs the action through the panel callback.
+    # The click path is what the user asked for (instead of typing :LeetRun),
+    # so it is pinned against the real binary, not just the Lua unit tests.
+    # The panel's rows depend on what the frame spends above the dock, so the
+    # row's cells are measured off the grid first and the click reuses them.
+    click_start = len(REQUESTS)
+    opened = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
+                        cfg=CFG, cwd=ROOT, env=env,
+                        phases=command_phase("LeetList") + [
+                            (6.0, on_screen(TITLE)),
+                            (0.5, b"\r"),
+                            (6.0, on_screen("C++")),
+                            (0.5, b"\r"),
+                            (5.0, on_screen("Run test")),
+                        ], until_timeout=20.0)
+    run_x, run_y = cell_of(opened, "Run test")
+    if run_x < 0:
+        print("leetcode probe: FAIL - the Run test row is not on screen to click")
+        print(opened.text())
+        server.shutdown()
+        return 1
+    hovered = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
+                         cfg=CFG, cwd=ROOT, env=env,
+                         phases=command_phase("LeetList") + [
+                             (6.0, on_screen(TITLE)),
+                             (0.5, b"\r"),
+                             (6.0, on_screen("C++")),
+                             (0.5, b"\r"),
+                             (5.0, on_screen("Run test")),
+                             (0.4, motion(run_x, run_y)),
+                             (1.0, lambda s: True),
+                         ], until_timeout=20.0)
+    # `opened` is the same screen without the pointer, so it is the baseline
+    # the hover highlight is told apart from (one less editor run).
+    if row_colors(hovered, "Run test")[1] == row_colors(opened, "Run test")[1]:
+        print("leetcode probe: FAIL - hovering the Run test row did not highlight it")
+        print(hovered.text())
+        server.shutdown()
+        return 1
+
+    clicked = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
+                         cfg=CFG, cwd=ROOT, env=env,
+                         phases=command_phase("LeetList") + [
+                             (6.0, on_screen(TITLE)),
+                             (0.5, b"\r"),
+                             (6.0, on_screen("C++")),
+                             (0.5, b"\r"),
+                             (5.0, on_screen("Run test")),
+                             (0.4, press(run_x, run_y)),
+                             (8.0, on_screen("Judge request failed")),
+                         ], until_timeout=20.0)
+    if "Judge request failed" not in clicked.text():
+        print("leetcode probe: FAIL - clicking the Run test row did not run the judge")
+        print(clicked.text())
+        server.shutdown()
+        return 1
+    if any(request["cookie"] for request in REQUESTS[click_start:]):
+        print("leetcode probe: FAIL - the clicked run sent credentials to the local fixture")
+        print("requests:", REQUESTS[click_start:])
         server.shutdown()
         return 1
 

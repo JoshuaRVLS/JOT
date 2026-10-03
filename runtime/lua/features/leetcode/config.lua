@@ -18,6 +18,20 @@ M.defaults = {
 
 function M.get(name)
   local fallback = M.defaults[name]
+  -- The solution directory follows the workspace unless it was configured
+  -- explicitly: solutions belong in the project being worked on, not in a
+  -- data directory the user has to remember. An explicit
+  -- leetcode_solution_dir still wins, so the old behavior stays reachable.
+  if name == "solution_dir" then
+    local ok, configured = pcall(function() return jot.config.has("leetcode_solution_dir") end)
+    if not (ok and configured) then
+      local workspace = nil
+      pcall(function() workspace = jot.workspace.path() end)
+      if type(workspace) == "string" and workspace ~= "" then
+        return workspace .. "/leetcode"
+      end
+    end
+  end
   if type(fallback) == "number" then
     return jot.config.get_number("leetcode_" .. name, fallback)
   end

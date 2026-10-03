@@ -13,13 +13,16 @@ namespace
   const char *kPrelude = R"LUA(
     local dir = ...
     store, files, calls = {}, {}, {}
+    workspace_path = "/tmp/jot-lc-workspace"
     float_lines, float_callbacks, float_spans = {}, {}, nil
     jot = {
       config = {
         get = function(k, d) local v=store[k]; if v==nil then return d end return v end,
         get_number = function(k, d) local v=store[k]; if v==nil then return d end return tonumber(v) end,
         set = function(k,v) store[k]=v end,
+        has = function(k) return store[k] ~= nil end,
       },
+      workspace = {path = function() return workspace_path end},
       file = {
         read = function(path) return files[path] end,
         write = function(path,text) files[path]=text; return true end,
@@ -37,6 +40,10 @@ namespace
         show_message=function(m) calls.message=m; calls.messages=calls.messages or {}; calls.messages[#calls.messages+1]=m end,
         popup=function(text,title) calls.popup={text=text,title=title} end,
         picker=function(title,items,cb) calls.picker={title=title,items=items,callback=cb} end,
+        -- The LeetCode dock panel: register_panel/panel/request_redraw are the
+        -- three calls the feature makes against the dock.
+        register_panel=function(name,fn,title) calls.panel={name=name,fn=fn,title=title} end,
+        panel=function(name) calls.panel_shown=name end,
         buffer={create=function() return 1 end, set_lines=function(_,_,_,_,lines) float_lines=lines end},
         float={open=function(buf, config)
                  -- Mirror the real binding's luaL_checktype: the float options
@@ -61,6 +68,7 @@ namespace
       clipboard={set=function(text) calls.clipboard=text end},
       theme={palette=function() return {} end},
       command=function(name,fn,detail) calls.commands=calls.commands or {}; calls.commands[name]=fn end,
+      editor={request_redraw=function() calls.redraw=(calls.redraw or 0)+1 end},
       timer={set_timeout=function(ms,fn) calls.timer=fn; return 1 end, clear=function() end},
       shell_quote=function(value) return "'"..value.."'" end,
       viewport={info=function() return {window={width=120,height=40}} end},
@@ -70,6 +78,7 @@ namespace
     package.loaded["jot_lc.cache"] = assert(loadfile(dir .. "cache.lua"))()
     package.loaded["jot_lc.client"] = assert(loadfile(dir .. "client.lua"))()
     package.loaded["jot_lc.solution"] = assert(loadfile(dir .. "solution.lua"))()
+    package.loaded["jot_lc.panel"] = assert(loadfile(dir .. "panel.lua"))()
     package.loaded["jot_lc.ui"] = assert(loadfile(dir .. "ui.lua"))()
     package.loaded["jot_lc.init"] = assert(loadfile(dir .. "init.lua"))()
     feature = package.loaded["jot_lc.init"]
@@ -204,7 +213,21 @@ TEST_CASE("LeetCode tabs, yank and judge console keep the opened question usable
     ui.open_tabs()
     local tabs = calls.picker.items()
     ui.run('run')
-    local running = table.concat(float_lines, string.char(10))
+    -- The judge console lives in the dock panel: the rows the panel callback
+    -- returns are what the native renderer paints, so the test reads them the
+    -- way the host does, with (name, nil).
+    local function panel_rows(event)
+      return calls.panel.fn('LeetCode', event)
+    end
+    local function joined(rows)
+      local out = {}
+      for _, row in ipairs(rows) do
+        out[#out + 1] = tostring(row.text or '') .. '|' .. tostring(row.icon or '')
+                       .. '|' .. tostring(row.action or '') .. '|' .. tostring(row.icon_fg or '')
+      end
+      return table.concat(out, string.char(10))
+    end
+    local running = joined(panel_rows(nil))
     calls.callback({ok=true, status=200, body=json.encode({interpret_id=42}), error=''})
     calls.callback({ok=true, status=200, body=json.encode({
       status_code=10, status_msg='Accepted',
@@ -213,19 +236,24 @@ TEST_CASE("LeetCode tabs, yank and judge console keep the opened question usable
       code_answer={'[0,1]'},
       expected_code_answer={'[0,1]'},
     }), error=''})
-    local finished = table.concat(float_lines, string.char(10))
-    local console_win = calls.float_open
+    local finished = joined(panel_rows(nil))
+    -- A click arrives as (name, {action=...}); the callback runs the handler
+    -- and still returns the rows, so the next frame renders the result.
+    local clicked = panel_rows({action='next', index=6})
     return table.concat({
       tostring(unfiltered.filters ~= nil),
       tostring(calls.clipboard ~= nil and calls.clipboard:find('twoSum') ~= nil),
       tostring(tabs[1] and tabs[1].value == 1),
       tostring(wrote_template),
-      tostring(running:find('Running example 1') ~= nil),
-      tostring(finished:find('Status: Accepted') ~= nil and finished:find('Output:') ~= nil),
-      tostring(finished:find('Correct cases: 1 / 1') ~= nil),
-      tostring(console_win ~= nil and console_win.config.title == 'LeetCode judge · example 1'),
+      tostring(calls.panel_shown == 'LeetCode' and calls.panel.name == 'LeetCode'),
+      tostring(running:find('Running example 1 of 2') ~= nil),
+      tostring(finished:find('Accepted') ~= nil and finished:find('Output:') ~= nil),
+      tostring(finished:find('correct  1 / 1') ~= nil),
+      tostring(finished:find('Run test|' ) ~= nil and finished:find('|run|') ~= nil),
+      tostring(finished:find('Submit|') ~= nil and finished:find('|submit|') ~= nil),
+      tostring(#clicked > 0 and clicked[1].text:find('Easy One') ~= nil),
     }, '|')
-  )LUA") == "true|true|true|true|true|true|true|true");
+  )LUA") == "true|true|true|true|true|true|true|true|true|true|true");
 }
 
 TEST_CASE("LeetCode list load-more accumulates pages instead of stopping at one", "[leetcode][lua]")
@@ -300,6 +328,108 @@ TEST_CASE("LeetCode testcase list accepts the live array shape", "[leetcode][lua
       tostring(#missing == 0 and #empty == 0),
     }, '|')
   )LUA") == "true|true|true");
+}
+
+TEST_CASE("LeetCode dock panel rows carry actions and colored judge outcomes", "[leetcode][lua]")
+{
+  // The panel replaced the floating judge console: its rows are what the dock
+  // renders, and a click comes back as (name, {action}). A row with no action
+  // must stay flat (no hover, no click), or every console line would look like
+  // a button.
+  State state;
+  REQUIRE(state.run(R"LUA(
+    local ui = package.loaded['jot_lc.ui']
+    local json = package.loaded['jot_lc.json']
+    local function rows(event) return calls.panel.fn('LeetCode', event) end
+    local function find(rows_, prefix)
+      for _, row in ipairs(rows_) do
+        if tostring(row.text or ''):find(prefix, 1, true) then return row end
+      end
+      return nil
+    end
+    -- No problem open: the panel says so and offers no actions.
+    local empty = rows(nil)
+    local empty_actions = 0
+    for _, row in ipairs(empty) do if row.action then empty_actions = empty_actions + 1 end end
+
+    -- Open a question, then run: the panel shows the question and the actions.
+    local body = json.encode({data={problemsetQuestionList={total=1, questions={
+      {frontend_id='1', title='Easy One', title_slug='easy-one', difficulty='Easy'},
+    }}}})
+    ui.list('')
+    calls.callback({ok=true, status=200, body=body, error=''})
+    calls.picker.callback('easy-one')
+    calls.callback({ok=true, status=200, body=json.encode({data={question={
+      id='1', frontend_id='1', title='Easy One', title_slug='easy-one', difficulty='Easy',
+      testcase_list={'[1,2]', '[3,4]'},
+      code_snippets={{lang='C++', lang_slug='cpp', code='int twoSum() { return 0; }'}},
+    }}}), error=''})
+    calls.picker.callback('cpp')
+    local opened = rows(nil)
+    local run = find(opened, 'Run test')
+    local submit = find(opened, 'Submit')
+    local next_row = find(opened, 'Next example')
+
+    -- A failing run paints the failure rows red with a cross icon; a passing
+    -- one paints them green with a check.
+    ui.run('run')
+    calls.callback({ok=true, status=200, body=json.encode({interpret_id=7}), error=''})
+    calls.callback({ok=true, status=200, body=json.encode({
+      status_code=11, status_msg='Wrong Answer', total_correct=1, total_testcases=3,
+      code_answer={'[9]'}, expected_code_answer={'[0,1]'},
+    }), error=''})
+    local failed = rows(nil)
+    local fail_status = find(failed, 'Wrong Answer')
+    local fail_cases = find(failed, 'correct  1 / 3')
+
+    ui.run('run')
+    calls.callback({ok=true, status=200, body=json.encode({interpret_id=8}), error=''})
+    calls.callback({ok=true, status=200, body=json.encode({
+      status_code=10, status_msg='Accepted', total_correct=3, total_testcases=3,
+      code_answer={'[0,1]'}, expected_code_answer={'[0,1]'},
+    }), error=''})
+    local passed = rows(nil)
+    local ok_status = find(passed, 'Accepted')
+    local ok_cases = find(passed, 'correct  3 / 3')
+
+    -- Clicking the next-example row advances the selection and repaints.
+    local before = find(rows(nil), 'Next example').detail
+    local after = find(rows({action='next'}), 'Next example').detail
+
+    return table.concat({
+      tostring(#empty == 3 and empty_actions == 0),
+      tostring(run and run.action == 'run' and submit and submit.action == 'submit'
+               and next_row and next_row.action == 'next'),
+      tostring(run.icon ~= '' and submit.icon ~= '' and run.icon ~= submit.icon),
+      tostring(fail_status and fail_status.icon ~= '' and fail_status.icon_fg ~= nil
+               and ok_status and ok_status.icon_fg ~= nil
+               and fail_status.icon_fg ~= ok_status.icon_fg),
+      tostring(fail_cases and fail_cases.fg == fail_status.fg),
+      tostring(ok_status and ok_status.text:find('Accepted') ~= nil and ok_cases ~= nil),
+      tostring(before == '1/2' and after == '2/2'),
+      tostring(calls.panel_shown == 'LeetCode'),
+    }, '|')
+  )LUA") == "true|true|true|true|true|true|true|true");
+}
+
+TEST_CASE("LeetCode solutions open inside the workspace unless configured", "[leetcode][lua]")
+{
+  // The user opens a problem while working in a project, so the template
+  // belongs in that project: the path follows the workspace root unless an
+  // explicit leetcode_solution_dir is set, which still wins.
+  State state;
+  REQUIRE(state.run(R"LUA(
+    local solution = package.loaded['jot_lc.solution']
+    local question = {title_slug='two-sum'}
+    local in_workspace = solution.path(question, 'cpp')
+    store['leetcode_solution_dir'] = '/custom/solutions'
+    local configured = solution.path(question, 'cpp')
+    store['leetcode_solution_dir'] = nil
+    return table.concat({
+      tostring(in_workspace == '/tmp/jot-lc-workspace/leetcode/two-sum.cpp'),
+      tostring(configured == '/custom/solutions/two-sum.cpp'),
+    }, '|')
+  )LUA") == "true|true");
 }
 
 TEST_CASE("LeetCode authenticated requests keep cookies in request headers", "[leetcode][lua]")

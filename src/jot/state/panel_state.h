@@ -76,6 +76,12 @@ struct PanelState
   GitDiffPanel git_diff_panel;
   OutlinePanelState outline_panel;
   std::string active_plugin_panel;
+  // Row under the pointer in the plugin panel (-1 = none): the hover
+  // highlight, and the row a click activates.
+  int plugin_panel_hover_row = -1;
+  // Scroll of the plugin panel's row list, kept here so a panel longer than
+  // the dock (the LeetCode console) can be wheeled through.
+  int plugin_panel_scroll = 0;
   std::string plugin_quick_pick_select_callback;
   // Actions offered by the last code-action response, indexed by the quick
   // pick selection; cleared once the selection is applied.

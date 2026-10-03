@@ -334,6 +334,72 @@ void LuaAPI::show_panel(const std::string &s)
   if (editor && editor->host_api)
     editor->host_api->io.show_plugin_panel(s);
 }
+std::vector<PluginPanelRow>
+LuaAPI::plugin_panel_rows(const std::string &name, const std::string &action, int index)
+{
+  for (auto &p : plugin_panels)
+    if (p.name == name)
+    {
+      auto i = lua_callbacks.find(p.callback);
+      if (i == lua_callbacks.end())
+        return {};
+      lua_State *L = static_cast<lua_State *>(lua_state);
+      const int top = lua_gettop(L);
+      lua_rawgeti(L, LUA_REGISTRYINDEX, i->second);
+      lua_pushstring(L, name.c_str());
+      if (action.empty())
+      {
+        lua_pushnil(L);
+      }
+      else
+      {
+        lua_newtable(L);
+        lua_pushstring(L, action.c_str());
+        lua_setfield(L, -2, "action");
+        lua_pushinteger(L, index);
+        lua_setfield(L, -2, "index");
+      }
+      if (lua_pcall(L, 2, 1, 0))
+      {
+        std::cerr << "Lua plugin panel error: " << lua_tostring(L, -1) << "\n";
+        lua_settop(L, top);
+        return {};
+      }
+      std::vector<PluginPanelRow> out;
+      if (lua_istable(L, -1))
+      {
+        const int rows = lua_gettop(L);
+        const size_t count = lua_rawlen(L, rows);
+        for (size_t r = 1; r <= count; r++)
+        {
+          lua_rawgeti(L, rows, (int)r);
+          PluginPanelRow row;
+          if (lua_istable(L, -1))
+          {
+            row.text = table_string(L, -1, "text", "");
+            row.detail = table_string(L, -1, "detail", "");
+            row.kind = table_string(L, -1, "kind", "");
+            row.action = table_string(L, -1, "action", "");
+            row.icon = table_string(L, -1, "icon", "");
+            row.icon_fg = table_color(L, -1, "icon_fg");
+            row.fg = table_color(L, -1, "fg");
+            row.bold = table_bool(L, -1, "bold", false);
+            row.selected = table_bool(L, -1, "selected", false);
+          }
+          else if (lua_isstring(L, -1))
+          {
+            row.text = lua_tostring(L, -1);
+          }
+          lua_pop(L, 1);
+          out.push_back(std::move(row));
+        }
+      }
+      lua_settop(L, top);
+      return out;
+    }
+  return {};
+}
+
 std::vector<std::string> LuaAPI::plugin_panel_lines(const std::string &name)
 {
   for (auto &p : plugin_panels)

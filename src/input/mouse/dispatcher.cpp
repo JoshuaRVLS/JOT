@@ -817,6 +817,11 @@ void Editor::handle_mouse(void *event_ptr)
     return;
   }
 
+  if ((is_click || is_motion) && handle_plugin_panel_mouse(event->x, event->y, is_click))
+  {
+    return;
+  }
+
   if (is_click && begin_pane_resize_drag(event->x, event->y))
   {
     return;

@@ -2,6 +2,7 @@ local config = require("jot_lc.config")
 local client = require("jot_lc.client")
 local solution = require("jot_lc.solution")
 local cache = require("jot_lc.cache")
+local panel = require("jot_lc.panel")
 local M = {current=nil, busy=false, cache_hit=false, testcase=1, testcases={}, tabs={}, console_output=nil}
 
 local function notify(text)
@@ -152,6 +153,9 @@ local function language_picker(question)
     M.testcase = 1
     remember_tab(question)
     notify("Opened " .. value)
+    -- The question's dock panel carries its title, its run/submit rows and the
+    -- judge console, so opening the problem is what brings it up.
+    M.show_panel()
   end)
 end
 
@@ -326,18 +330,10 @@ end
 
 -- Judge console: run and submit answers carry a status, per-case counts and
 -- often a compile or runtime error, and the selected example they ran
--- against. That is too much for the one-line message area and the user wants
--- to compare it with the code after the request returns, so it lives in a
--- float that stays open until esc. The float consumes only esc: run, submit
--- and example cycling stay on the LeetCode commands/keymaps instead of
--- stealing ordinary typing from the editor.
-local console = {win=nil, title=nil, progress=nil, report=nil}
-
-local function split_lines(text)
-  local out = {}
-  for line in (tostring(text) .. "\n"):gmatch("(.-)\n") do out[#out + 1] = line end
-  return out
-end
+-- against. It lives in the right dock's LeetCode panel (panel.lua) as rows
+-- under the question, so the outcome sits next to the code instead of in a
+-- floating window the user has to close.
+local console = {progress=nil, report=nil, result=nil, error=nil}
 
 local function join_output(value)
   if type(value) == "table" then
@@ -375,72 +371,25 @@ local function judge_report(result, kind)
   return table.concat(lines, "\n")
 end
 
-local function console_body()
-  local lines = {}
-  local question = M.current
-  if question then
-    lines[#lines + 1] = tostring(question.frontend_id or "") .. ". "
-                         .. tostring(question.title or question.title_slug)
-  else
-    lines[#lines + 1] = "No problem open: use :LeetList, :LeetDaily or :LeetRandom."
-  end
-  if #M.testcases > 0 then
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = "Example " .. M.testcase .. " of " .. #M.testcases
-    for _, case_line in ipairs(split_lines(M.testcases[M.testcase])) do
-      lines[#lines + 1] = "  " .. case_line
-    end
-  end
-  lines[#lines + 1] = ""
-  if console.progress then
-    lines[#lines + 1] = console.progress
-  elseif console.report then
-    for _, report_line in ipairs(split_lines(console.report)) do lines[#lines + 1] = report_line end
-  else
-    lines[#lines + 1] = "No run or submit yet. :LeetRun sends the selected example,"
-    lines[#lines + 1] = ":LeetSubmit sends the whole solution."
-  end
-  return lines
+-- The dock panel reads the live workflow state through this provider; a
+-- click on a row comes back through the action handlers below, so the panel
+-- is the surface that runs and reports the judge.
+local function panel_state()
+  return {
+    question=M.current,
+    testcases=M.testcases,
+    testcase=M.testcase,
+    cache_hit=M.cache_hit,
+    console=console,
+  }
 end
 
-function M.console_update()
-  local height_limit = math.max(5, math.min(22, jot.viewport.info().window.height - 10))
-  local lines = console_body()
-  if #lines > height_limit then
-    local shown = {}
-    for i = 1, height_limit - 1 do shown[i] = lines[i] end
-    shown[height_limit] = "… " .. tostring(#lines - height_limit + 1) .. " more line(s)"
-    lines = shown
-  end
-  local height = #lines + 2
-  local x, y, width = centered_over_pane(76, 3)
-  local title = console.title or "LeetCode judge"
-  local win = console.win
-  if win and jot.ui.float.is_valid(win) then
-    jot.ui.float.set_lines(win, lines)
-    jot.ui.float.configure(win, {col=x, row=y, width=width, height=height})
-    return win
-  end
-  local colors = palette()
-  local buffer = jot.ui.buffer.create(false, true)
-  jot.ui.buffer.set_lines(buffer, 0, -1, false, lines)
-  win = jot.ui.float.open(buffer, {
-    relative="editor", col=x, row=y, width=width, height=height,
-    border="single", focusable=true, zindex=60,
-    title=title, footer="esc closes · :LeetRun run · :LeetSubmit submit",
-    fg=colors.fg, bg=colors.bg, border_fg=colors.border,
-    title_fg=colors.accent, footer_fg=colors.comment,
-  })
-  console.win = win
-  jot.ui.float.on_key(win, function(event)
-    if event.key == 27 then
-      jot.ui.float.close(win, true)
-      console.win = nil
-      return true
-    end
-    return false
-  end)
-  return win
+panel.bind(panel_state, {run=function() M.run("run") end,
+                         submit=function() M.run("submit") end,
+                         next=function() M.next_case() end})
+
+function M.show_panel()
+  panel.open()
 end
 
 function M.run(kind)
@@ -452,34 +401,36 @@ function M.run(kind)
   code = solution.submission_code(question, question.lang_slug or config.get("language"), code)
   local case = M.testcases[M.testcase] or ""
   local submit = kind == "submit"
-  console.title = submit and "LeetCode judge · submit" or ("LeetCode judge · example " .. M.testcase)
   console.progress = submit and "Submitting solution..."
                           or ("Running example " .. M.testcase .. " of " .. math.max(1, #M.testcases) .. "...")
   console.report = nil
-  M.console_update()
+  console.result = nil
+  console.error = nil
+  -- The dock panel is where the outcome shows; open it so a run started from
+  -- the command line is visible without hunting for the tab.
+  panel.open()
   begin_work(submit and "submitting solution" or "running selected example")
   client.judge(kind, question, code, case, function(result, err)
     end_work()
     console.progress = nil
     if err then
+      console.error = tostring(err)
       console.report = "Judge request failed.\n\n" .. tostring(err)
       notify("Judge request failed: " .. tostring(err))
     else
+      console.result = result
       console.report = judge_report(result, kind)
       notify(tostring(result.status_msg or "Judge completed"))
     end
-    M.console_update()
+    panel.refresh()
   end)
 end
 
 function M.next_case()
   if #M.testcases == 0 then notify("This question has no examples"); return end
   M.testcase = M.testcase % #M.testcases + 1
-  if console.win and jot.ui.float.is_valid(console.win) then
-    M.console_update()
-    return
-  end
-  popup("LeetCode testcase", "Example " .. M.testcase .. " of " .. #M.testcases .. "\n\n" .. M.testcases[M.testcase])
+  notify("Example " .. M.testcase .. " of " .. #M.testcases)
+  panel.refresh()
 end
 
 function M.change_language()
@@ -662,12 +613,9 @@ function M.open_cookie_prompt()
 end
 
 function M.console()
-  if console.win and jot.ui.float.is_valid(console.win) then
-    jot.ui.float.close(console.win, true)
-    console.win = nil
-    return
-  end
-  M.console_update()
+  -- The judge console is the dock panel's bottom section now; the command
+  -- brings that panel up instead of toggling a float.
+  M.show_panel()
 end
 
 function M.open_tabs()
@@ -692,6 +640,7 @@ function M.open_tabs()
     M.testcase = 1
     if entry.path then jot.file.open(entry.path) end
     notify("Switched to " .. tostring(question.title or question.title_slug))
+    M.show_panel()
   end)
 end
 
@@ -709,6 +658,11 @@ end
 function M.setup(options)
   config.setup(options)
 end
+
+-- Register the dock panel at load time so :LeetRun and the language picker
+-- can bring it up; registering twice is harmless (the host replaces the
+-- entry), which keeps a runtime reload working.
+pcall(panel.register)
 
 M.notify = notify
 

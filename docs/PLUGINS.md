@@ -78,7 +78,14 @@ report modifier-only keys, prefix chords (the previous section) are the way
 to reach multi-step keymaps.
 
 Callbacks receive a string. Autocmd callbacks receive `event\nfile\nbuffer`.
-Picker and panel callbacks return a Lua array of strings.
+Picker callbacks return a Lua array of strings.
+
+Panel callbacks (`register_panel`) receive `(name, event)` and return an array
+of rows. A row is a plain string, or a table with `text`, `detail`, `kind`,
+`icon`, `icon_fg`, `fg`, `bold`, `selected` and `action`. A row with an
+`action` is a button: the dock highlights it on hover and, when it is clicked,
+calls the same callback with `event.action` set (and `event.index`), so a panel
+can run its own actions without registering a command per button.
 
 Use `:reloadplugins` while developing. `:plugins` lists loaded files, commands,
 keymaps, panels, and errors.

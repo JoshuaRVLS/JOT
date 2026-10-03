@@ -139,6 +139,10 @@ private:
   void outline_move_selection(int delta);
   void outline_jump_selected();
   void render_plugin_panel();
+  // The plugin panel's row area: the dock minus its border, tab strip and
+  // title row. Shared by the renderer and the mouse hit-test so a row's pixels
+  // and its clickable extent cannot drift apart.
+  TerminalBox plugin_panel_body() const;
   int effective_right_panel_width() const;
   void render_menu_bar();
   void render_menu_dropdown();

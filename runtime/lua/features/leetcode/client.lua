@@ -6,10 +6,11 @@ local M = {}
 M.pending_requests = 0
 M.feedback = nil
 
--- The editor shows one message line, so a silent HTTP request leaves the user
--- guessing whether anything happened. Every request reports its start and
--- outcome here; ui.lua wires this to the status line and counts in-flight
--- requests for its live status segment.
+-- A request that fails silently leaves the user guessing whether anything
+-- happened, so failures are reported here. Successful requests are not: the
+-- live status segment (ui.lua) already shows the work in flight, and a toast
+-- per request was noise the user asked to drop. ui.lua wires this to the
+-- message line.
 function M.set_feedback(handler)
   M.feedback = handler
 end
@@ -83,7 +84,6 @@ local function request(method, url, body, authenticated, callback)
     local csrf = cookie:match("csrftoken=([^;]+)")
     if csrf then headers[#headers + 1] = {name="x-csrftoken", value=csrf} end
   end
-  report("-> " .. target)
   M.pending_requests = M.pending_requests + 1
   local queued, err = jot.leetcode.request({
     method=method,
@@ -93,11 +93,10 @@ local function request(method, url, body, authenticated, callback)
     body=body or "",
   }, function(response)
     M.pending_requests = math.max(0, M.pending_requests - 1)
-    report(response.ok and ("<- " .. target .. " HTTP " .. tostring(response.status))
-                    or ("<- " .. target .. " failed: "
-                        .. (response.error ~= "" and response.error
-                            or ("HTTP " .. tostring(response.status)))))
     if not response.ok then
+      report("<- " .. target .. " failed: "
+             .. (response.error ~= "" and response.error
+                 or ("HTTP " .. tostring(response.status))))
       callback(nil, response.error ~= "" and response.error or ("HTTP " .. tostring(response.status)))
       return
     end

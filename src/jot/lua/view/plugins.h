@@ -134,6 +134,23 @@ struct PluginPanel
   std::string title;
 };
 
+// One row of a plugin panel. A plain string row carries only `text`; a table
+// row may carry the structured fields below. `action` is what the panel's
+// callback receives when the row is clicked (empty = not clickable), so a
+// panel can host buttons without a command per button.
+struct PluginPanelRow
+{
+  std::string text;
+  std::string detail;
+  std::string kind;
+  std::string action;
+  std::string icon;
+  int icon_fg = -1;
+  int fg = -1;
+  bool bold = false;
+  bool selected = false;
+};
+
 struct PluginStatusSegment
 {
   std::string name;

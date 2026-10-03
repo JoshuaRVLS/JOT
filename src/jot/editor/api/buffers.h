@@ -130,5 +130,8 @@ private:
   void git_panel_pull();
   void git_panel_copy();
   bool handle_git_panel_mouse(int x, int y, bool is_click, bool is_double_click);
+  // The plugin panel's rows: motion highlights, a click runs the row's
+  // action through the panel callback. Declines outside the dock.
+  bool handle_plugin_panel_mouse(int x, int y, bool is_click);
   void set_clipboard_text(const std::string &text);
 
