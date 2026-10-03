@@ -122,6 +122,22 @@ def main() -> int:
         server.shutdown()
         return 1
 
+    request_start = len(REQUESTS)
+    screen = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
+                        cfg=CFG, cwd=ROOT, env=env,
+                        phases=command_phase("LeetDaily") + [(4.0, on_screen("C++"))])
+    if "C++" not in screen.text():
+        print("leetcode probe: FAIL - daily question did not reach language selection")
+        print(screen.text())
+        server.shutdown()
+        return 1
+    recent = REQUESTS[request_start:]
+    if len(recent) < 2 or any(request["cookie"] for request in recent):
+        print("leetcode probe: FAIL - daily/question requests were missing or carried credentials")
+        print("requests:", recent)
+        server.shutdown()
+        return 1
+
     if os.name == "nt" or sys.platform == "darwin":
         screen = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
                             cfg=CFG, cwd=ROOT, env=env,

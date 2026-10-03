@@ -3,6 +3,8 @@ local config = require("jot_lc.config")
 local M = {}
 
 local function cache_root()
+  local override = os.getenv("JOT_CACHE_HOME")
+  if override and override ~= "" then return override .. package.config:sub(1, 1) .. "leetcode" end
   if package.config:sub(1, 1) == "\\" then
     return (os.getenv("LOCALAPPDATA") or ((os.getenv("APPDATA") or ".") .. "\\jot")) .. "\\jot\\leetcode-cache"
   end
