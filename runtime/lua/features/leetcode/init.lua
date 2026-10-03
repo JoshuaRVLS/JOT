@@ -7,9 +7,9 @@ end
 
 local commands = {
   {"Leet", ui.actions, "Open the LeetCode workspace"},
-  {"LeetList", ui.list, "Browse LeetCode problems"},
+  {"LeetList", function(value) ui.list(value) end, "Browse problems (page=, difficulty=, status=, tags=)"},
   {"LeetDaily", ui.daily, "Open today's LeetCode problem"},
-  {"LeetRandom", ui.random, "Open a random LeetCode problem"},
+  {"LeetRandom", function(value) ui.random(value) end, "Open a random problem (difficulty=, status=, tags=)"},
   {"LeetProfile", ui.profile, "Show LeetCode profile statistics"},
   {"LeetCookie", ui.open_cookie_prompt, "Store a session in the OS credential store"},
   {"LeetSignOut", ui.sign_out, "Remove the LeetCode session"},
@@ -22,6 +22,10 @@ local commands = {
   {"LeetLatest", ui.restore_latest, "Restore the latest accepted submission"},
   {"LeetOpen", ui.open_browser, "Open the active problem in a browser"},
   {"LeetStatus", ui.status, "Show LeetCode workspace status"},
+  {"LeetInfo", ui.status, "Show the active question, cache and tab state"},
+  {"LeetConsole", ui.console, "Toggle the judge console with the last run or submit result"},
+  {"LeetTabs", ui.open_tabs, "Switch between opened LeetCode questions"},
+  {"LeetYank", ui.yank, "Copy the active solution code to the clipboard"},
   {"LeetActions", ui.actions, "Open LeetCode actions"},
   {"LeetCacheClear", function() ui.notify("Removed " .. require("jot_lc.cache").clear() .. " cached question(s)") end, "Clear cached public problem data"},
   {"LeetSetup", function(value)
@@ -44,6 +48,8 @@ key("Alt+Shift+L R", ui.random, "LeetCode: random problem")
 key("Alt+Shift+L A", ui.actions, "LeetCode: actions")
 key("Alt+Shift+L T", function() ui.next_case() end, "LeetCode: next example")
 key("Alt+Shift+L S", function() ui.run("submit") end, "LeetCode: submit")
+key("Alt+Shift+L C", ui.console, "LeetCode: judge console")
+key("Alt+Shift+L Y", ui.yank, "LeetCode: copy solution")
 
 jot.leetcode_feature = {
   setup = ui.setup,
@@ -52,6 +58,9 @@ jot.leetcode_feature = {
   daily = ui.daily,
   random = ui.random,
   status = ui.status,
+  tabs = function() return ui.tabs end,
+  console = ui.console,
+  yank = ui.yank,
   active_question = function() return ui.current end,
   client = require("jot_lc.client"),
   cache = require("jot_lc.cache"),

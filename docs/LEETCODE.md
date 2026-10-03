@@ -7,9 +7,9 @@ Jot includes a bundled, jot-native LeetCode workflow inspired by the feature set
 | Command | Action |
 | --- | --- |
 | `:Leet` / `:LeetActions` | Open the action picker |
-| `:LeetList` | Fetch and browse the algorithms problem list |
+| `:LeetList` | Browse problems (supports `page=`, `difficulty=`, `status=`, `tags=`) |
 | `:LeetDaily` | Fetch today's problem |
-| `:LeetRandom` | Fetch a random algorithms problem |
+| `:LeetRandom` | Fetch a random problem (supports `difficulty=`, `status=`, `tags=`) |
 | `:LeetProfile` | Show solved counts for the signed-in account |
 | `:LeetCookie` | Enter a session cookie in a masked prompt and store it in the OS credential store |
 | `:LeetSignOut` | Remove the saved session |
@@ -21,11 +21,50 @@ Jot includes a bundled, jot-native LeetCode workflow inspired by the feature set
 | `:LeetDesc` | Show the current problem statement, topics and example count |
 | `:LeetLatest` | Fetch and restore the latest submission for the active problem |
 | `:LeetOpen` | Open the active problem in the configured browser or report its URL |
+| `:LeetInfo` / `:LeetStatus` | Show the active question, tabs, cache TTL and solution path |
+| `:LeetConsole` | Toggle the judge console with the last run or submit result |
+| `:LeetTabs` | Switch between questions opened this session |
+| `:LeetYank` | Copy the active solution code to the clipboard |
 | `:LeetCacheClear` | Remove cached public question data |
-| `:LeetStatus` | Show active question, endpoint, language and solution path |
 | `:LeetSetup name=value` | Change a supported option for the current session |
 
-Keymap family: `Alt+Shift+L`, followed by `L` for the list, `D` for daily, `R` for random, `A` for actions, `T` for the next example, or `S` to submit. The family uses Jot's which-key display.
+Keymap family: `Alt+Shift+L`, followed by `L` for the list, `D` for daily, `R` for random, `A` for actions, `T` for the next example, `S` to submit, `C` for the judge console, or `Y` to copy the solution. The family uses Jot's which-key display.
+
+## Problem list and filters
+
+`:LeetList` fetches one page through the paginated GraphQL question list. LeetCode caps a single page at 100 questions, so the picker's last row, **Load more problems**, fetches the next page and reopens the picker with everything loaded so far. The row's detail shows how many questions are loaded out of the total. `page=n` starts directly on a page instead (the picker then still offers load-more from there).
+
+Filters are given as `name=value` pairs:
+
+- `difficulty=easy|medium|hard` - passed through uppercased
+- `status=solved|todo` - mapped to the API's `UserQuestionStatus` enum (`AC` / `NOT_STARTED`). LeetCode has no server-side "attempted" filter, so that value is reported as unsupported and dropped instead of failing the request.
+- `tags=array,hash-table` - tag slugs, comma or space separated
+- `page=n` - starting page
+
+```vim
+:LeetList difficulty=easy, tags=array
+:LeetRandom difficulty=hard, status=todo
+```
+
+Rows show the frontend id, title, difficulty and, when the account has progress, solved/attempted/todo. Public list requests never carry the stored session cookie.
+
+## Task feedback
+
+Every network request reports itself, because a silent request looks like a dead command:
+
+- the status line carries a live `leet: ...` segment while anything is in flight (an operation label, or the number of pending requests)
+- request start and completion are announced as messages (`-> POST /graphql/`, `<- POST /graphql/ HTTP 200`, blocked/stopped/not queued cases)
+- list loads announce `Loading problem list (page N)...` and `Loaded N of M problem(s)`
+
+## Judge console
+
+`:LeetRun` and `:LeetSubmit` open a floating judge console (they refresh it when it is already open) with:
+
+- the active problem and the selected example
+- the in-flight line while the request runs
+- the result: status, correct cases, runtime, memory, input, output, expected output, stdout, compile and runtime errors
+
+`:LeetTest` updates the console's selected example when it is open. `:LeetConsole` (or `Alt+Shift+L C`) toggles it, and Escape closes it. The console is a read-only float: run, submit and example cycling stay on the commands and keymaps so the console never intercepts ordinary typing.
 
 ## Configuration
 
@@ -36,7 +75,7 @@ jot.leetcode_feature.setup({
   solution_dir = "/path/to/solutions",
   cache_ttl = 604800,
   timeout = 20,
-  list_limit = 50,
+  list_limit = 100,
   api_base = "",
 })
 ```
@@ -45,9 +84,11 @@ The China host can be selected with `endpoint = "leetcode.cn"`. `api_base` is in
 
 Problem metadata is cached under the OS cache directory (`XDG_CACHE_HOME` on POSIX, `LOCALAPPDATA` on Windows). Cookies are not written to config, cache, request body files, shell commands or logs.
 
-## Credential storage
+## Sign in and credential storage
 
-`:LeetCookie` accepts a cookie header value in a masked float. The feature stores it under a Jot-specific key in the platform credential service:
+There is no embedded browser or supported LeetCode OAuth callback in Jot, so opening LeetCode in a browser does not sign Jot in automatically. Run `:LeetCookie`, open LeetCode in your browser, copy the value of the `Cookie` request header (not the `Cookie:` label), paste it into Jot's masked prompt, then press Enter. You can also paste only the `LEETCODE_SESSION` value. The prompt is a themed panel that strips pasted line breaks, echoes the stored value as stars, warns when Enter is pressed with nothing to save, and checks the session as soon as it is stored. Escape cancels without saving.
+
+`:LeetOpen` only opens the active problem page in the system browser. It cannot read that browser's cookies or transfer its login session to Jot. The feature stores the cookie under a Jot-specific key in the platform credential service:
 
 - Windows Credential Manager
 - Apple Keychain
@@ -57,6 +98,8 @@ When the operating-system store is unavailable, sign-in reports that state and d
 
 ## Current scope and limits
 
-The local PTY fixture verifies the problem list and daily-question fetch against a local API fixture. Unit tests cover the JSON decoder, command registration, HTTP validation and credential-store availability. Question display, browser opening, profile requests, judge polling, cache helpers and solution-buffer setup are present, but the full online account/judge workflow has not been validated against LeetCode. In the current Linux environment the Secret Service prompt is skipped when there is no D-Bus session. The language picker opens a `two-sum.cpp` buffer, but the PTY probe has not confirmed the corresponding file exists on disk. Treat run/submit and LSP-backed solution editing as incomplete until file persistence and the judge flow pass the real-binary probe. Endpoint schemas are undocumented by LeetCode and may change.
+The real-binary PTY probe covers the list loading indicator and completion feedback, pagination through the load-more row, credential-free public requests, the masked sign-in prompt and stored session, the refusal to send a session to a non-official domain, selecting a problem from the list, the solution template being written to disk and opened, and the judge console opening and reporting its outcome. The probe's API fixture is not an official LeetCode domain, so its judge request is refused before it leaves the process by design; the success-report rendering (status, cases, output, errors) is pinned by the Lua unit tests instead.
+
+The full online account/judge workflow requires a stored session and the official domain, and has not been exercised end-to-end from this repository's CI. On Linux, the Secret Service prompt is skipped when there is no D-Bus session. Endpoint schemas are undocumented by LeetCode and may change. Reference features not implemented here: inject, fold/toggle, stats, menu and exit.
 
 MIT License. This feature is a separate implementation using the public API shape as reference. No leetcode.nvim source is bundled.

@@ -29,7 +29,13 @@ namespace lua_bind
   int l_file_read(lua_State *L)
   {
     api(L).push_file_read(L);
-    return lua_isnil(L, -1) ? 2 : 1;
+    // push_file_read pushes (nil, error) for a failed read and a lone content
+    // string otherwise. Probing the top would find the error string and report
+    // it as the file's text, so every caller that checks for nil saw a missing
+    // file as the literal "cannot read file" and skipped its fallback (the
+    // LeetCode solution template was never written because of it). The nil is
+    // one below the error.
+    return (lua_gettop(L) >= 2 && lua_isnil(L, -2)) ? 2 : 1;
   }
   int l_file_write(lua_State *L)
   {

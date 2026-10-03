@@ -84,6 +84,8 @@ bool LuaAPI::delete_scratch_buffer(int id)
           luaL_unref((lua_State *)lua_state, LUA_REGISTRYINDEX, wi->second.key_callback);
         if (wi->second.mouse_callback >= 0)
           luaL_unref((lua_State *)lua_state, LUA_REGISTRYINDEX, wi->second.mouse_callback);
+        if (wi->second.paste_callback >= 0)
+          luaL_unref((lua_State *)lua_state, LUA_REGISTRYINDEX, wi->second.paste_callback);
       }
       wi = float_windows.erase(wi);
     }
@@ -183,6 +185,20 @@ bool LuaAPI::configure_float(int id, lua_State *L, int ti)
         luaL_unref(L, LUA_REGISTRYINDEX, f.mouse_callback);
       lua_pushvalue(L, -1);
       f.mouse_callback = luaL_ref(L, LUA_REGISTRYINDEX);
+      lua_pop(L, 1);
+      break;
+    }
+    lua_pop(L, 1);
+  }
+  for (const char *key : {"on_paste", "paste_callback"})
+  {
+    lua_getfield(L, ti, key);
+    if (lua_isfunction(L, -1))
+    {
+      if (f.paste_callback >= 0)
+        luaL_unref(L, LUA_REGISTRYINDEX, f.paste_callback);
+      lua_pushvalue(L, -1);
+      f.paste_callback = luaL_ref(L, LUA_REGISTRYINDEX);
       lua_pop(L, 1);
       break;
     }
@@ -297,6 +313,8 @@ bool LuaAPI::close_float(int id, bool)
       luaL_unref((lua_State *)lua_state, LUA_REGISTRYINDEX, it->second.key_callback);
     if (it->second.mouse_callback >= 0)
       luaL_unref((lua_State *)lua_state, LUA_REGISTRYINDEX, it->second.mouse_callback);
+    if (it->second.paste_callback >= 0)
+      luaL_unref((lua_State *)lua_state, LUA_REGISTRYINDEX, it->second.paste_callback);
   }
   float_windows.erase(it);
   if (current_float_window == id)
@@ -360,6 +378,46 @@ bool LuaAPI::float_input(int ch, bool ctrl, bool shift, bool alt)
   }
   return false;
 }
+bool LuaAPI::float_paste(const std::string &text)
+{
+  if (!lua_state || !editor || !editor->event_loop_.is_main_thread())
+    return false;
+  // Same topmost-first scan as float_input: jot.ui.float.open enters every
+  // float it creates, so the background chrome (recreated each frame) keeps
+  // overwriting current_float_window and cannot be trusted to name the float
+  // the user is actually typing into.
+  std::vector<LuaFloatWindow *> fs;
+  for (auto &x : float_windows)
+    fs.push_back(&x.second);
+  std::sort(fs.begin(),
+            fs.end(),
+            [](auto *a, auto *b)
+            {
+              return a->zindex != b->zindex ? a->zindex > b->zindex
+                                            : a->creation_order > b->creation_order;
+            });
+  for (auto *f : fs)
+  {
+    if (f->hide || !f->focusable || f->paste_callback < 0)
+      continue;
+    const int handle = f->handle;
+    const int callback = f->paste_callback;
+    lua_State *L = static_cast<lua_State *>(lua_state);
+    const int top = lua_gettop(L);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
+    lua_pushlstring(L, text.data(), text.size());
+    lua_pushinteger(L, handle);
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK)
+    {
+      std::cerr << "Lua float paste callback error: " << lua_tostring(L, -1) << "\n";
+    }
+    lua_settop(L, top);
+    current_float_window = handle;
+    return true;
+  }
+  return false;
+}
+
 bool LuaAPI::float_mouse(int x,
                          int y,
                          int button,

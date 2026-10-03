@@ -26,6 +26,11 @@ void Editor::handle_terminal_event(const Event &ev)
     {
       return;
     }
+    if (lua_api && lua_api->float_paste(ev.paste.text ? ev.paste.text : ""))
+    {
+      needs_redraw = true;
+      return;
+    }
     cancel_lsp_mouse_hover();
     clipboard = ev.paste.text ? ev.paste.text : "";
     paste_text(clipboard);

@@ -11,6 +11,7 @@ import os
 import shutil
 import sys
 import threading
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pty_screen import run_in_pty  # noqa: E402
@@ -20,8 +21,13 @@ ROOT = "/tmp/jot_leetcode_probe"
 CFG = "/tmp/jot_leetcode_probe_cfg"
 SLUG = "two-sum"
 TITLE = "Two Sum Local Fixture"
+SECOND_SLUG = "add-two-numbers"
+SECOND_TITLE = "Add Two Numbers Local Fixture"
 REQUESTS: list[dict] = []
 RESPONDED: list[bool] = []
+COOKIE = "LEETCODE_SESSION=probe-cookie; csrftoken=csrf"
+PASTE = b"\x1b[200~" + b"LEETCODE_SESSION=probe-cookie; \r\ncsrftoken=csrf" + b"\x1b[201~"
+PROMPT_INTRO = "Open LeetCode in your browser."
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -32,6 +38,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length)
         REQUESTS.append({"path": self.path, "cookie": self.headers.get("Cookie"), "body": raw})
+        if self.path.startswith("/interpret_solution/"):
+            self.respond({"interpret_id": "probe-run"})
+            return
+        if self.path.startswith("/submit/"):
+            self.respond({"submission_id": "probe-submit"})
+            return
         query = json.loads(raw).get("query", "")
         if "questionOfToday" in query:
             payload = {"data": {"today": {"question": {"title_slug": SLUG}}}}
@@ -39,13 +51,35 @@ class Handler(http.server.BaseHTTPRequestHandler):
             payload = {"data": {"question": {
                 "id": "1", "frontend_id": "1", "title": TITLE, "title_slug": SLUG,
                 "difficulty": "Easy", "content": "<p>Return indices of two values.</p>",
-                "testcase_list": "[2,7,11,15]\n9", "topic_tags": [{"name": "Array"}],
+                "testcase_list": "[2,7,11,15]\\n9", "topic_tags": [{"name": "Array"}],
                 "code_snippets": [{"lang": "C++", "lang_slug": "cpp", "code": "class Solution { public: int twoSum(vector<int>& nums, int target) {} };"}],
             }}}
+        elif "problemsetQuestionList" in query:
+            # Slow enough that the probe can observe the live status indicator
+            # while the request is in flight. Page two is served from the same
+            # handler so the picker's load-more row has something to fetch.
+            time.sleep(0.9)
+            variables = json.loads(raw).get("variables", {})
+            if int(variables.get("skip") or 0) == 0:
+                questions = [{
+                    "frontend_id": "1", "title": TITLE, "title_slug": SLUG,
+                    "difficulty": "Easy", "status": None, "paid_only": False,
+                    "topic_tags": [{"name": "Array", "slug": "array"}],
+                }]
+            else:
+                questions = [{
+                    "frontend_id": "2", "title": SECOND_TITLE, "title_slug": SECOND_SLUG,
+                    "difficulty": "Medium", "status": None, "paid_only": False,
+                    "topic_tags": [{"name": "Linked List", "slug": "linked-list"}],
+                }]
+            payload = {"data": {"problemsetQuestionList": {"total": 2, "questions": questions}}}
         elif "globalData" in query:
             payload = {"data": {"userStatus": {"id": None, "name": "", "is_signed_in": False, "is_verified": False}}}
         else:
             payload = {"errors": [{"message": "fixture has no such query"}]}
+        self.respond(payload)
+
+    def respond(self, payload):
         data = json.dumps(payload).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -56,25 +90,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         REQUESTS.append({"path": self.path, "cookie": self.headers.get("Cookie"), "body": b""})
-        if self.path.startswith("/api/problems/algorithms/"):
-            pairs = [{"stat": {"question_id": 1, "frontend_question_id": "1", "question__title": TITLE,
-                                "question__title_slug": SLUG, "question__hide": False,
-                                "total_acs": 100, "total_submitted": 120},
-                      "difficulty": {"level": 1}, "status": None, "paid_only": False}]
-            data = json.dumps({"stat_status_pairs": pairs}).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-            RESPONDED.append(True)
-            return
-        data = b"{}"
+        if self.path.startswith("/submissions/detail/"):
+            # Held briefly so the console's in-flight line is observable before
+            # the result lands.
+            time.sleep(1.0)
+            payload = {"status_code": 10, "status_msg": "Accepted", "total_correct": 1,
+                       "total_testcases": 1, "runtime": "4", "memory": "10.2 MB",
+                       "code_answer": ["[0,1]"], "expected_code_answer": ["[0,1]"]}
+        else:
+            payload = {}
+        data = json.dumps(payload).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+        RESPONDED.append(True)
 
 
 def command_phase(command: str):
@@ -98,16 +129,64 @@ def main() -> int:
     port = server.server_address[1]
     threading.Thread(target=server.serve_forever, daemon=True).start()
     os.makedirs(os.path.join(CFG, "configs"), exist_ok=True)
+    # The solution dir is pinned under the probe root as well: a leftover
+    # template in the real data dir would let a broken read-and-write path
+    # pass by accident (the file the editor opens would already exist).
+    solutions = os.path.join(CFG, "solutions")
+    os.makedirs(solutions, exist_ok=True)
     with open(os.path.join(CFG, "configs", "settings.conf"), "w") as fh:
-        fh.write("lsp_enabled=false\nleetcode_api_base=http://127.0.0.1:%d\n" % port)
+        fh.write("lsp_enabled=false\nleetcode_api_base=http://127.0.0.1:%d\n"
+                 "leetcode_solution_dir=%s\n" % (port, solutions))
     os.makedirs(ROOT, exist_ok=True)
     env = {"JOT_CONFIG_HOME": CFG, "JOT_CACHE_HOME": CFG}
+    # The Linux credential store refuses to open until a session bus and
+    # secret-tool exist, which is why the sign-in prompt used to be skipped on
+    # the platform where it shipped broken. Stub both so the prompt itself is
+    # exercised everywhere; the stub records what was stored on the way out.
+    stub_bin = os.path.join(CFG, "stub_bin")
+    stub_store = os.path.join(CFG, "stub_session")
+    os.makedirs(stub_bin, exist_ok=True)
+    stub = os.path.join(stub_bin, "secret-tool")
+    with open(stub, "w") as fh:
+        fh.write("#!/bin/sh\n"
+                 "case \"$1\" in\n"
+                 "  lookup) if [ -f \"$JOT_LEETCODE_STUB_STORE\" ]; then cat \"$JOT_LEETCODE_STUB_STORE\"; exit 0; fi; exit 1 ;;\n"
+                 "  store) cat > \"$JOT_LEETCODE_STUB_STORE\" ;;\n"
+                 "  clear) rm -f \"$JOT_LEETCODE_STUB_STORE\" ;;\n"
+                 "esac\nexit 0\n")
+    os.chmod(stub, 0o755)
+    cookie_env = {"JOT_LEETCODE_STUB_STORE": stub_store}
+    if os.name != "nt" and sys.platform != "darwin":
+        cookie_env["PATH"] = stub_bin + os.pathsep + os.environ.get("PATH", "")
+        cookie_env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/tmp/jot-leetcode-probe-bus"
+
+    loading_seen = {"value": False}
+    feedback_seen = {"value": False}
+
+    def mark_loading(screen):
+        if "leet: loading list" in screen.text():
+            loading_seen["value"] = True
+            return True
+        return False
+
+    def mark_feedback(screen):
+        if "Loaded 1 of 2 problem" in screen.text():
+            feedback_seen["value"] = True
+            return True
+        return False
 
     screen = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
                         cfg=CFG, cwd=ROOT, env=env,
-                        phases=command_phase("LeetList") + [(4.0, on_screen(TITLE))])
+                        phases=command_phase("LeetList") + [(0.0, mark_loading),
+                                                            (0.0, mark_feedback),
+                                                            (4.0, on_screen(TITLE))])
     if not RESPONDED:
         print("leetcode probe: FAIL - HTTP request did not complete")
+        server.shutdown()
+        return 1
+    if not loading_seen["value"]:
+        print("leetcode probe: FAIL - no loading indicator while the list request was in flight")
+        print(screen.text())
         server.shutdown()
         return 1
     if TITLE not in screen.text():
@@ -117,45 +196,170 @@ def main() -> int:
         print("responses:", RESPONDED)
         server.shutdown()
         return 1
+    if not feedback_seen["value"]:
+        print("leetcode probe: FAIL - list completion had no feedback message")
+        print(screen.text())
+        server.shutdown()
+        return 1
     if not REQUESTS or REQUESTS[-1]["cookie"]:
         print("leetcode probe: FAIL - public list request missing or carried a cookie")
         server.shutdown()
         return 1
 
-    request_start = len(REQUESTS)
-    screen = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
-                        cfg=CFG, cwd=ROOT, env=env,
-                        phases=command_phase("LeetDaily") + [(4.0, on_screen("C++"))])
-    if "C++" not in screen.text():
-        print("leetcode probe: FAIL - daily question did not reach language selection")
-        print(screen.text())
+    # The list picker's trailing row must fetch the next page: one page is
+    # capped at 100 questions server-side, so without it the user could never
+    # see past the first page.
+    load_start = len(REQUESTS)
+    more = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
+                      cfg=CFG, cwd=ROOT, env=env,
+                      phases=command_phase("LeetList") + [
+                          (6.0, on_screen("Load more problems")),
+                          (0.3, b"load"),
+                          (0.5, b"\r"),
+                          (6.0, on_screen(SECOND_TITLE)),
+                      ], until_timeout=20.0)
+    if SECOND_TITLE not in more.text():
+        print("leetcode probe: FAIL - load-more did not fetch the next page")
+        print(more.text())
         server.shutdown()
         return 1
-    recent = REQUESTS[request_start:]
+    if not any(b'"skip":100' in request["body"] or b'"skip": 100' in request["body"]
+               for request in REQUESTS[load_start:]):
+        print("leetcode probe: FAIL - load-more did not request the second page")
+        print("requests:", REQUESTS[load_start:])
+        server.shutdown()
+        return 1
+
+    # Choosing a problem from the list: the language picker opens the template
+    # for real (the missing-file read used to leave the buffer empty, so the
+    # user saw "loading" and then nothing), and the judge console reports the
+    # run. The fixture is not an official LeetCode domain, so the
+    # authenticated judge request is refused before it leaves the process --
+    # the console shows that refusal and the assertion pins that no request
+    # reached the local endpoint with credentials.
+    judge_start = len(REQUESTS)
+    judge = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
+                       cfg=CFG, cwd=ROOT, env=env,
+                       phases=command_phase("LeetList") + [
+                           (6.0, on_screen(TITLE)),
+                           (0.5, b"\r"),
+                           (6.0, on_screen("C++")),
+                           (0.5, b"\r"),
+                           (5.0, on_screen("class Solution")),
+                           (0.4, b"\x1b[112;6u"), (0.6, b"LeetRun"), (0.4, b"\r"),
+                           (8.0, on_screen("Judge request failed")),
+                       ], until_timeout=20.0)
+    if "class Solution" not in judge.text():
+        print("leetcode probe: FAIL - selecting a language did not open the solution template")
+        print(judge.text())
+        server.shutdown()
+        return 1
+    if "Judge request failed" not in judge.text() \
+            or "restricted to official LeetCode domains" not in judge.text():
+        print("leetcode probe: FAIL - judge console did not report the run outcome")
+        print(judge.text())
+        server.shutdown()
+        return 1
+    recent = REQUESTS[judge_start:]
     if len(recent) < 2 or any(request["cookie"] for request in recent):
         print("leetcode probe: FAIL - daily/question requests were missing or carried credentials")
         print("requests:", recent)
         server.shutdown()
         return 1
+    if any(request["path"].startswith("/interpret_solution/") for request in recent):
+        print("leetcode probe: FAIL - a judge request reached the non-official endpoint")
+        print("requests:", recent)
+        server.shutdown()
+        return 1
 
-    if os.name == "nt" or sys.platform == "darwin":
+    cookie_start = len(REQUESTS)
+    if os.name != "nt" and sys.platform != "darwin":
+        masked = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
+                            cfg=CFG, cwd=ROOT, env=cookie_env,
+                            phases=command_phase("LeetCookie") + [
+                                (1.0, on_screen(PROMPT_INTRO)),
+                                (0.4, PASTE),
+                                (1.0, on_screen("Session  **")),
+                            ])
+        if PROMPT_INTRO not in masked.text() or "Session  **" not in masked.text():
+            print("leetcode probe: FAIL - credential prompt or masked paste did not appear")
+            print(masked.text())
+            server.shutdown()
+            return 1
+        if "probe-cookie" in masked.text():
+            print("leetcode probe: FAIL - pasted cookie was shown in clear")
+            print(masked.text())
+            server.shutdown()
+            return 1
+        signin_feedback = {"value": False}
+
+        def mark_signin(screen):
+            # The local fixture is not an official LeetCode HTTPS domain, so
+            # the auth request is refused before it goes out; the refusal is
+            # itself the visible feedback this asserts. Real custom api_base
+            # setups must not receive the stored cookie.
+            if "restricted to official LeetCode domains" in screen.text():
+                signin_feedback["value"] = True
+                return True
+            return False
+
+        screen = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
+                            cfg=CFG, cwd=ROOT, env=cookie_env,
+                            phases=command_phase("LeetCookie") + [
+                                (1.0, on_screen(PROMPT_INTRO)),
+                                (0.4, PASTE),
+                                (1.0, on_screen("Session  **")),
+                                (0.4, b"\r"),
+                                (1.0, lambda s: PROMPT_INTRO not in s.text()),
+                                (0.0, mark_signin),
+                            ])
+        stored = ""
+        if os.path.exists(stub_store):
+            stored = open(stub_store).read().strip()
+        if stored != COOKIE:
+            print("leetcode probe: FAIL - pasted cookie was not stored (got %r)" % stored)
+            print(screen.text())
+            server.shutdown()
+            return 1
+        if "probe-cookie" in screen.text():
+            print("leetcode probe: FAIL - cookie stayed visible or leaked after save")
+            print(screen.text())
+            server.shutdown()
+            return 1
+        if not signin_feedback["value"]:
+            print("leetcode probe: FAIL - storing the cookie produced no sign-in feedback")
+            print(screen.text())
+            server.shutdown()
+            return 1
+
+        screen = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
+                            cfg=CFG, cwd=ROOT, env=cookie_env,
+                            phases=command_phase("LeetSignOut") + [(1.0, on_screen("Session removed"))])
+        if "Session removed from the OS credential store" not in screen.text():
+            print("leetcode probe: FAIL - sign-out produced no feedback")
+            print(screen.text())
+            server.shutdown()
+            return 1
+        if os.path.exists(stub_store):
+            print("leetcode probe: FAIL - sign-out left the stored session behind")
+            server.shutdown()
+            return 1
+    else:
         screen = run_in_pty(binary, [ROOT], b"", settle=3.5, after=0.4, cols=COLS, rows=ROWS,
                             cfg=CFG, cwd=ROOT, env=env,
-                            phases=command_phase("LeetCookie") + [(0.8, on_screen("Paste the LeetCode session cookie"))])
-        if "Paste the LeetCode session cookie" not in screen.text():
+                            phases=command_phase("LeetCookie") + [(1.0, on_screen(PROMPT_INTRO))])
+        if PROMPT_INTRO not in screen.text():
             print("leetcode probe: FAIL - credential prompt did not open")
             print(screen.text())
             server.shutdown()
             return 1
-    else:
-        print("credential prompt: SKIP - Linux Secret Service has no session bus")
 
-    if any(request["cookie"] for request in REQUESTS):
+    if any(request["cookie"] for request in REQUESTS[:cookie_start]):
         print("leetcode probe: FAIL - a public request carried credentials")
         server.shutdown()
         return 1
     server.shutdown()
-    print("leetcode probe: PASS - problem list and cookie-free public requests")
+    print("leetcode probe: PASS - problem list, cookie-free public requests and masked sign-in")
     return 0
 
 

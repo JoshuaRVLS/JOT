@@ -660,6 +660,7 @@ bool LuaAPI::init()
   field(L, "current", l_ui_float_current);
   field(L, "on_key", l_float_on_key);
   field(L, "on_mouse", l_float_on_mouse);
+  field(L, "on_paste", l_float_on_paste);
   field(L, "set_spans", l_float_set_spans);
   lua_setfield(L, -2, "float");
   lua_pop(L, 2);

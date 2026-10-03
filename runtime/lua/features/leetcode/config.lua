@@ -10,7 +10,9 @@ M.defaults = {
   api_base = "",
   solution_dir = windows and (data_home .. "\\jot\\leetcode") or (data_home .. "/leetcode"),
   cache_ttl = 604800,
-  list_limit = 50,
+  -- The list query clamps one page at 100 rows server-side; the picker's
+  -- "Load more" row fetches further pages with this step.
+  list_limit = 100,
   timeout = 20,
 }
 

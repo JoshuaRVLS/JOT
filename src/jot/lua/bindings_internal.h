@@ -90,6 +90,7 @@ namespace lua_bind
   int l_float_close(lua_State *L);
   int l_float_on_key(lua_State *L);
   int l_float_on_mouse(lua_State *L);
+  int l_float_on_paste(lua_State *L);
   int l_job_capture(lua_State *L);
   int l_leetcode_request(lua_State *L);
   int l_leetcode_credential_get(lua_State *L);

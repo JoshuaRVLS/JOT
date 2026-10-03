@@ -3,10 +3,34 @@ local config = require("jot_lc.config")
 local cache = require("jot_lc.cache")
 local M = {}
 
+M.pending_requests = 0
+M.feedback = nil
+
+-- The editor shows one message line, so a silent HTTP request leaves the user
+-- guessing whether anything happened. Every request reports its start and
+-- outcome here; ui.lua wires this to the status line and counts in-flight
+-- requests for its live status segment.
+function M.set_feedback(handler)
+  M.feedback = handler
+end
+
+function M.pending()
+  return M.pending_requests
+end
+
+local function report(text)
+  if type(M.feedback) == "function" then M.feedback(text) end
+end
+
+local function label(method, url)
+  return method .. " " .. tostring(url):gsub("^https?://[^/]+", "")
+end
+
 M.queries = {
   auth = [[query globalData { userStatus { id: userId name: username is_signed_in: isSignedIn is_premium: isPremium is_verified: isVerified } }]],
   daily = [[query questionOfToday { today: activeDailyCodingChallengeQuestion { question { title_slug: titleSlug } } }]],
-  random = [[query randomQuestion { question: randomQuestion(categorySlug: "algorithms") { title_slug: titleSlug paid_only: isPaidOnly } }]],
+  random = [[query randomQuestion($categorySlug: String, $filters: QuestionListFilterInput) { question: randomQuestion(categorySlug: $categorySlug, filters: $filters) { title_slug: titleSlug paid_only: isPaidOnly } }]],
+  list = [[query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) { problemsetQuestionList: questionList(categorySlug: $categorySlug, limit: $limit, skip: $skip, filters: $filters) { total: totalNum questions: data { frontend_id: questionFrontendId title title_slug: titleSlug difficulty status paid_only: isPaidOnly topic_tags: topicTags { name slug } } } }]],
   question = [[query questionData($titleSlug: String!) { question(titleSlug: $titleSlug) { id: questionId frontend_id: questionFrontendId title title_slug: titleSlug is_paid_only: isPaidOnly difficulty content code_snippets: codeSnippets { lang lang_slug: langSlug code } testcase_list: exampleTestcaseList stats topic_tags: topicTags { name slug } hints } }]],
   profile = [[query userStats($username: String!) { matchedUser(username: $username) { username submit_stats: submitStatsGlobal { acSubmissionNum { difficulty count } } } }]],
 }
@@ -41,18 +65,26 @@ local function request(method, url, body, authenticated, callback)
     {name="Origin", value=base_url() .. "/"},
     {name="User-Agent", value="Mozilla/5.0"},
   }
+  local target = label(method, url)
   if authenticated then
     if not official_url(url) then
+      report("<! " .. target .. " blocked: credentials are restricted to official LeetCode domains")
       callback(nil, "session credentials are restricted to official LeetCode domains")
       return false
     end
     local cookie, err = session_cookie()
-    if not cookie then callback(nil, err); return false end
+    if not cookie then
+      report("<! " .. target .. " stopped: " .. tostring(err))
+      callback(nil, err)
+      return false
+    end
     if not cookie:find("LEETCODE_SESSION=", 1, true) then cookie = "LEETCODE_SESSION=" .. cookie end
     headers[#headers + 1] = {name="Cookie", value=cookie}
     local csrf = cookie:match("csrftoken=([^;]+)")
     if csrf then headers[#headers + 1] = {name="x-csrftoken", value=csrf} end
   end
+  report("-> " .. target)
+  M.pending_requests = M.pending_requests + 1
   local queued, err = jot.leetcode.request({
     method=method,
     url=url,
@@ -60,6 +92,11 @@ local function request(method, url, body, authenticated, callback)
     headers=headers,
     body=body or "",
   }, function(response)
+    M.pending_requests = math.max(0, M.pending_requests - 1)
+    report(response.ok and ("<- " .. target .. " HTTP " .. tostring(response.status))
+                    or ("<- " .. target .. " failed: "
+                        .. (response.error ~= "" and response.error
+                            or ("HTTP " .. tostring(response.status)))))
     if not response.ok then
       callback(nil, response.error ~= "" and response.error or ("HTTP " .. tostring(response.status)))
       return
@@ -72,7 +109,12 @@ local function request(method, url, body, authenticated, callback)
     end
     callback(payload)
   end)
-  if not queued then callback(nil, err or "request could not be queued"); return false end
+  if not queued then
+    M.pending_requests = math.max(0, M.pending_requests - 1)
+    report("<! " .. target .. " not queued: " .. tostring(err))
+    callback(nil, err or "request could not be queued")
+    return false
+  end
   return true
 end
 
@@ -129,42 +171,50 @@ function M.daily(callback)
   end)
 end
 
-function M.random(callback)
-  return graphql(M.queries.random, {}, false, function(data, err)
+function M.random(callback, filters)
+  -- filters is required by the resolver even when empty; omitting the variable
+  -- fails with "resolve_question_list() missing ... 'filters'" from the API.
+  local variables = {categorySlug="all-code-essentials", filters=filters or {}}
+  return graphql(M.queries.random, variables, false, function(data, err)
     local question = data and data.question
     if not question or not question.title_slug then callback(nil, err or "random question unavailable"); return end
     M.question(question.title_slug, callback)
   end)
 end
 
-function M.list(_, callback)
-  return request("GET", rest_url("/api/problems/algorithms/"), "", false, function(response, err)
-    if err then callback(nil, err); return end
-    local pairs_list = response.stat_status_pairs or {}
+-- One page of the problem set. The REST dump the reference caches is already
+-- several megabytes; decoding it with the bundled pure-Lua JSON parser froze
+-- the editor for seconds, so the paginated GraphQL query is the list path and
+-- the filters are applied upstream. "all-code-essentials" is the category slug
+-- the site itself uses now ("algorithms" is gone from this query).
+function M.list(filters, skip, callback)
+  local variables = {categorySlug="all-code-essentials", limit=config.get("list_limit"),
+                     skip=skip or 0, filters=filters or {}}
+  return graphql(M.queries.list, variables, false, function(data, err)
+    if err then callback(nil, nil, err); return end
+    local page = data and data.problemsetQuestionList
+    local questions = page and page.questions
+    if type(questions) ~= "table" then callback(nil, nil, err or "problem list unavailable"); return end
     local rows = {}
-    for _, item in ipairs(pairs_list) do
-      local stat = item.stat or {}
-      if not stat.question__hide then
-        local level = item.difficulty and item.difficulty.level
-        rows[#rows + 1] = {
-          id=stat.question_id,
-          frontend_id=stat.frontend_question_id,
-          title=stat.question__title,
-          title_slug=stat.question__title_slug,
-          difficulty=({[1]="Easy", [2]="Medium", [3]="Hard"})[level] or "Unknown",
-          status=(item.status == json.null or item.status == nil) and "todo" or item.status,
-          paid_only=item.paid_only == true,
-        }
-      end
+    for _, item in ipairs(questions) do
+      -- Upstream reports progress as ac/notac/null; the reference filter
+      -- vocabulary is solved/attempted/todo, so normalize here once.
+      local status = item.status
+      if status == json.null or status == nil then status = "todo"
+      elseif status == "ac" then status = "solved"
+      elseif status == "notac" then status = "attempted" end
+      rows[#rows + 1] = {
+        id=item.frontend_id,
+        frontend_id=item.frontend_id,
+        title=item.title,
+        title_slug=item.title_slug,
+        difficulty=item.difficulty or "Unknown",
+        status=status,
+        paid_only=item.paid_only == true,
+        topic_tags=item.topic_tags,
+      }
     end
-    table.sort(rows, function(a, b)
-      local an, bn = tonumber(a.frontend_id), tonumber(b.frontend_id)
-      if an and bn then return an < bn end
-      if an then return true end
-      if bn then return false end
-      return tostring(a.frontend_id) < tostring(b.frontend_id)
-    end)
-    callback(rows, nil, #pairs_list)
+    callback(rows, page.total or #rows, nil)
   end)
 end
 

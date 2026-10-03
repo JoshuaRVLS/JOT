@@ -79,6 +79,7 @@ struct LuaFloatWindow
   std::map<int, std::vector<FloatSpan>> spans;
   int key_callback = -1;
   int mouse_callback = -1;
+  int paste_callback = -1;
   int creation_order = 0;
 };
 

@@ -107,14 +107,17 @@ namespace
 
 void LuaAPI::show_message(const std::string &msg)
 {
+  // With the Lua UI kit owning the status line the message text is not painted
+  // there, so the toast has to be requested explicitly; the default (false)
+  // made every jot.ui.show_message call invisible.
   if (editor)
-    editor->set_message(msg);
+    editor->set_message(msg, true);
 }
 
 void LuaAPI::show_transient_message(const std::string &msg, int duration_ms)
 {
   if (editor)
-    editor->set_transient_message(msg, duration_ms);
+    editor->set_transient_message(msg, duration_ms, true);
 }
 
 bool LuaAPI::apply_theme_file(const std::string &name, std::vector<std::string> &stack)

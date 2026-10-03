@@ -240,6 +240,19 @@ namespace lua_bind
     it->second.mouse = true;
     return (lua_pushboolean(L, 1), 1);
   }
+  int l_float_on_paste(lua_State *L)
+  {
+    const int window = (int)luaL_checkinteger(L, 1);
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+    auto it = api(L).float_windows.find(window);
+    if (it == api(L).float_windows.end())
+      return (lua_pushboolean(L, 0), 1);
+    if (it->second.paste_callback >= 0)
+      luaL_unref(L, LUA_REGISTRYINDEX, it->second.paste_callback);
+    lua_pushvalue(L, 2);
+    it->second.paste_callback = luaL_ref(L, LUA_REGISTRYINDEX);
+    return (lua_pushboolean(L, 1), 1);
+  }
   int l_decoration_set(lua_State *L)
   {
     auto &a = api(L);

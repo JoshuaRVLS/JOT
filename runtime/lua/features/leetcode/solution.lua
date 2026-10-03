@@ -38,7 +38,10 @@ function M.open(question, language)
   end
   local path = M.path(question, language)
   local existing = jot.file.read(path)
-  if not existing then
+  -- An empty file is treated as absent as well: earlier builds opened the
+  -- buffer before writing it, so a save from that session left a zero-byte
+  -- solution behind and the template would never come back.
+  if existing == nil or existing == "" then
     local saved = write_solution(path, snippet .. (snippet:sub(-1) == "\n" and "" or "\n"))
     if not saved then return false, "cannot create or save the solution file" end
   end

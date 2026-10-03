@@ -1,10 +1,125 @@
 local config = require("jot_lc.config")
 local client = require("jot_lc.client")
 local solution = require("jot_lc.solution")
-local M = {current=nil, busy=false, cache_hit=false, testcase=1, testcases={}}
+local cache = require("jot_lc.cache")
+local M = {current=nil, busy=false, cache_hit=false, testcase=1, testcases={}, tabs={}, console_output=nil}
 
 local function notify(text)
   jot.ui.show_message("[leet] " .. text)
+end
+
+client.set_feedback(notify)
+
+-- The status line carries a live marker while anything is in flight: an
+-- operation label set by the caller, or the raw in-flight HTTP count. Without
+-- it a slow request looks exactly like a dead command.
+local activity = ""
+local function begin_work(label)
+  activity = label
+end
+local function end_work()
+  activity = ""
+end
+
+pcall(function()
+  jot.status.register("leetcode", {
+    side = "right",
+    priority = 22,
+    text = function()
+      if activity ~= "" then return " leet: " .. activity end
+      local pending = client.pending()
+      if pending > 0 then return " leet: " .. pending .. " request(s)" end
+      return ""
+    end,
+  })
+end)
+
+local function parse_filters(value)
+  local filters = {}
+  for raw_name, raw_setting in tostring(value or ""):gmatch("([%w_]+)%s*=%s*([^,]+)") do
+    local name = raw_name:lower()
+    local setting = raw_setting:gsub("^%s+", ""):gsub("%s+$", ""):lower()
+    if name == "difficulty" then filters.difficulty = setting
+    elseif name == "status" then filters.status = setting
+    elseif name == "tags" or name == "tag" then filters.tags = setting
+    elseif name == "page" then filters.page = tonumber(setting)
+    end
+  end
+  return filters
+end
+
+local status_enum = {solved="AC", todo="NOT_STARTED"}
+
+-- The list and random queries take QuestionListFilterInput. Difficulty is
+-- uppercased, tags are slugs, but the status vocabulary is not the site's:
+-- UserQuestionStatus only accepts AC and NOT_STARTED (verified against the
+-- live API, which rejects SOLVED/ATTEMPTED/TODO), so solved and todo are
+-- mapped here and any other value is reported as unsupported.
+local function graphql_filters(filters)
+  local input = {}
+  local unsupported
+  if filters.difficulty then input.difficulty = filters.difficulty:upper() end
+  if filters.status then
+    local mapped = status_enum[filters.status]
+    if mapped then input.status = mapped else unsupported = filters.status end
+  end
+  if filters.tags then
+    local tags = {}
+    for tag in tostring(filters.tags):gmatch("[^,%s]+") do tags[#tags + 1] = tag end
+    if #tags > 0 then input.tags = tags end
+  end
+  if next(input) == nil then return nil, unsupported end
+  return input, unsupported
+end
+
+local function palette()
+  local theme = {}
+  pcall(function() theme = jot.theme.palette() or {} end)
+  local function pick(slot, field, fallback)
+    local value = type(theme[slot]) == "table" and theme[slot][field]
+    if type(value) == "number" then return value end
+    return fallback
+  end
+  return {
+    fg = pick("default", "fg", -1),
+    bg = pick("command", "bg", pick("default", "bg", -1)),
+    border = pick("panel_border", "fg", -1),
+    accent = pick("status_info", "fg", -1),
+    comment = pick("comment", "fg", -1),
+    selection_fg = pick("selection", "fg", -1),
+    selection_bg = pick("selection", "bg", -1),
+  }
+end
+
+-- Floats paint over the editor, but the sidebar and pane chrome are floats
+-- too and are recreated every frame, so they repaint over any part of a
+-- panel that reaches into their columns (the console's left border and first
+-- title cells vanished under a visible sidebar). Center inside the focused
+-- pane and let callers keep the box above the chrome layer (zindex 60).
+local function centered_over_pane(width, row)
+  local ok, viewport = pcall(function() return jot.viewport.info() end)
+  if not ok or type(viewport) ~= "table" then viewport = {} end
+  local window = viewport.window or {}
+  local window_width = tonumber(window.width) or 100
+  local pane = viewport.pane or {}
+  local pane_x = tonumber(pane.x) or 0
+  local pane_width = tonumber(pane.width) or (window_width - pane_x)
+  local w = math.max(24, math.min(width, pane_width - 4))
+  local x = pane_x + math.max(1, math.floor((pane_width - w) / 2))
+  return x, row, w
+end
+
+local function remember_tab(question)
+  if type(question) ~= "table" or type(question.title_slug) ~= "string" then return end
+  for _, entry in ipairs(M.tabs) do
+    if entry.question.title_slug == question.title_slug then
+      entry.question = question
+      entry.language = question.lang_slug
+      entry.path = question.solution_path
+      return
+    end
+  end
+  M.tabs[#M.tabs + 1] = {question=question, language=question.lang_slug, path=question.solution_path}
 end
 
 local function popup(title, text)
@@ -35,16 +150,19 @@ local function language_picker(question)
     M.current = question
     M.testcases = solution.testcases(question)
     M.testcase = 1
+    remember_tab(question)
     notify("Opened " .. value)
   end)
 end
 
-function M.open_question(slug)
+function M.open_question(slug, refresh)
   if M.busy then notify("A question request is already running"); return end
   M.busy = true
-  notify("Loading question " .. slug .. "...")
+  begin_work("loading " .. tostring(slug))
+  notify("Loading question " .. tostring(slug) .. "...")
   client.question(slug, function(question, err, cached)
     M.busy = false
+    end_work()
     if err then popup("LeetCode error", "Question failed to load.\n\n" .. err); return end
     if type(question) ~= "table" then popup("LeetCode", "No question data was returned."); return end
     M.current = question
@@ -54,18 +172,66 @@ function M.open_question(slug)
     notify(tostring(question.frontend_id or "") .. ". " .. tostring(question.title or slug)
            .. " · " .. tostring(question.difficulty or "Unknown"))
     language_picker(question)
-  end)
+  end, refresh)
 end
 
-local function open_rows(rows, title)
+local list_state = nil
+
+-- The picker rows for the accumulated list. GraphQL caps one page at 100
+-- questions, so a full problem set cannot be fetched in a single request
+-- without the multi-megabyte decode that froze the editor; the last row
+-- loads the next page and reopens the picker with everything fetched so far.
+local function show_list()
+  local state = list_state
   local items = {}
-  for _, question in ipairs(rows) do
+  for _, question in ipairs(state.rows) do
     items[#items + 1] = {label=string.format("%s. %s", question.frontend_id or "?", question.title or question.title_slug or ""),
                          value=question.title_slug,
                          detail=tostring(question.difficulty or "") .. (question.status and " · " .. question.status or "")}
   end
+  local total = tonumber(state.total) or #state.rows
+  if #state.rows < total then
+    items[#items + 1] = {label="Load more problems", value="__more__",
+                         detail=tostring(#state.rows) .. " of " .. tostring(total) .. " loaded"}
+  end
   if #items == 0 then notify("No problems in this result"); return end
-  jot.ui.picker(title, function() return items end, function(slug) M.open_question(slug) end)
+  jot.ui.picker(state.title, function() return items end, function(value)
+    if value == "__more__" then M.load_more() else M.open_question(value) end
+  end)
+end
+
+local function fetch_list_page(page, replace)
+  local state = list_state
+  local page_size = math.min(100, tonumber(config.get("list_limit")) or 100)
+  local filter_input, unsupported = graphql_filters(state.filters)
+  M.busy = true
+  begin_work("loading list page " .. page)
+  notify("Loading problem list (page " .. page .. ")...")
+  if unsupported then
+    notify("status=" .. unsupported .. " has no LeetCode filter; use solved or todo")
+  end
+  client.list(filter_input, (page - 1) * page_size, function(rows, total, err)
+    M.busy = false
+    end_work()
+    if err then
+      jot.picker.close()
+      popup("LeetCode error", "Problem list failed to load.\n\n" .. err)
+      return
+    end
+    if not rows or #rows == 0 then
+      jot.picker.close()
+      popup("LeetCode", "No problem matches that page or filter.")
+      return
+    end
+    if replace then state.rows = rows
+    else
+      for _, row in ipairs(rows) do state.rows[#state.rows + 1] = row end
+    end
+    state.page = page
+    state.total = total or state.total or #state.rows
+    notify("Loaded " .. #state.rows .. " of " .. tostring(state.total) .. " problem(s)")
+    show_list()
+  end)
 end
 
 function M.description()
@@ -89,33 +255,30 @@ function M.description()
   popup("LeetCode problem", table.concat(lines, "\n"))
 end
 
-function M.list()
+function M.list(value)
   if M.busy then notify("A request is already running"); return end
-  M.busy = true
-  notify("Loading problem list...")
-  client.list(0, function(rows, err)
-    M.busy = false
-    notify("List response: " .. (err or tostring(rows and #rows or "nil")))
-    if err then
-      jot.picker.close()
-      popup("LeetCode error", "Problem list failed to load.\n\n" .. err)
-      return
-    end
-    if not rows or #rows == 0 then
-      jot.picker.close()
-      popup("LeetCode", "The problem-list response contained no visible problems.")
-      return
-    end
-    open_rows(rows, "LeetCode problems")
-  end)
+  local filters = parse_filters(value)
+  local page = math.max(1, math.floor(filters.page or 1))
+  list_state = {filters=filters, page=page, rows={}, title="LeetCode problems"}
+  fetch_list_page(page, true)
+end
+
+function M.load_more()
+  local state = list_state
+  if not state or M.busy then return end
+  local total = tonumber(state.total) or #state.rows
+  if #state.rows >= total then notify("All problems are already loaded"); return end
+  fetch_list_page(state.page + 1, false)
 end
 
 function M.daily()
   if M.busy then notify("A request is already running"); return end
   M.busy = true
+  begin_work("loading daily problem")
   notify("Loading today's problem...")
   client.daily(function(question, err)
     M.busy = false
+    end_work()
     if err then popup("LeetCode error", "Daily problem failed to load.\n\n" .. err); return end
     M.current = question
     M.testcases = solution.testcases(question)
@@ -125,24 +288,33 @@ function M.daily()
   end)
 end
 
-function M.random()
+function M.random(value)
   if M.busy then notify("A request is already running"); return end
+  local filters = parse_filters(value)
+  local filter_input, unsupported = graphql_filters(filters)
   M.busy = true
+  begin_work("choosing a random problem")
   notify("Choosing a random problem...")
+  if unsupported then
+    notify("status=" .. unsupported .. " has no LeetCode filter; use solved or todo")
+  end
   client.random(function(question, err)
     M.busy = false
+    end_work()
     if err then popup("LeetCode error", "Random problem failed.\n\n" .. err); return end
     M.current = question
     M.testcases = solution.testcases(question)
     M.testcase = 1
     notify(tostring(question.title) .. " · " .. tostring(question.difficulty or "Unknown"))
     language_picker(question)
-  end)
+  end, filter_input)
 end
 
 function M.profile()
+  begin_work("loading profile")
   popup("LeetCode profile", "Loading profile statistics...")
   client.profile(function(data, err)
+    end_work()
     if err then popup("LeetCode error", "Profile request failed.\n\n" .. err); return end
     local rows = {}
     for _, item in ipairs((data and data.submit_stats and data.submit_stats.acSubmissionNum) or {}) do
@@ -150,6 +322,125 @@ function M.profile()
     end
     popup("LeetCode profile", #rows > 0 and table.concat(rows, "\n") or "No profile statistics were returned.")
   end)
+end
+
+-- Judge console: run and submit answers carry a status, per-case counts and
+-- often a compile or runtime error, and the selected example they ran
+-- against. That is too much for the one-line message area and the user wants
+-- to compare it with the code after the request returns, so it lives in a
+-- float that stays open until esc. The float consumes only esc: run, submit
+-- and example cycling stay on the LeetCode commands/keymaps instead of
+-- stealing ordinary typing from the editor.
+local console = {win=nil, title=nil, progress=nil, report=nil}
+
+local function split_lines(text)
+  local out = {}
+  for line in (tostring(text) .. "\n"):gmatch("(.-)\n") do out[#out + 1] = line end
+  return out
+end
+
+local function join_output(value)
+  if type(value) == "table" then
+    local parts = {}
+    for _, entry in ipairs(value) do parts[#parts + 1] = tostring(entry) end
+    if #parts == 0 then return nil end
+    return table.concat(parts, "\n")
+  end
+  if type(value) == "string" and value ~= "" then return value end
+  return nil
+end
+
+local function judge_report(result, kind)
+  local lines = {"Status: " .. tostring(result.status_msg or "judge finished without a status")}
+  if result.total_correct ~= nil or result.total_testcases ~= nil then
+    lines[#lines + 1] = "Correct cases: " .. tostring(result.total_correct or "?")
+                         .. " / " .. tostring(result.total_testcases or "?")
+  end
+  if result.runtime ~= nil then lines[#lines + 1] = "Runtime: " .. tostring(result.runtime) .. " ms" end
+  if result.memory ~= nil then lines[#lines + 1] = "Memory: " .. tostring(result.memory) end
+  local input = join_output(result.input_formatted) or result.last_testcase
+  if input then lines[#lines + 1] = "Input:\n" .. tostring(input) end
+  local output = join_output(result.code_output) or join_output(result.code_answer)
+  if output then lines[#lines + 1] = "Output:\n" .. output end
+  local expected = join_output(result.expected_output) or join_output(result.expected_code_answer)
+  if expected then lines[#lines + 1] = "Expected:\n" .. expected end
+  local stdout = join_output(result.std_output)
+  if stdout then lines[#lines + 1] = "Stdout:\n" .. stdout end
+  if type(result.full_runtime_error) == "string" and result.full_runtime_error ~= "" then
+    lines[#lines + 1] = "Runtime error:\n" .. result.full_runtime_error
+  end
+  if type(result.full_compile_error) == "string" and result.full_compile_error ~= "" then
+    lines[#lines + 1] = "Compile error:\n" .. result.full_compile_error
+  end
+  return table.concat(lines, "\n")
+end
+
+local function console_body()
+  local lines = {}
+  local question = M.current
+  if question then
+    lines[#lines + 1] = tostring(question.frontend_id or "") .. ". "
+                         .. tostring(question.title or question.title_slug)
+  else
+    lines[#lines + 1] = "No problem open: use :LeetList, :LeetDaily or :LeetRandom."
+  end
+  if #M.testcases > 0 then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "Example " .. M.testcase .. " of " .. #M.testcases
+    for _, case_line in ipairs(split_lines(M.testcases[M.testcase])) do
+      lines[#lines + 1] = "  " .. case_line
+    end
+  end
+  lines[#lines + 1] = ""
+  if console.progress then
+    lines[#lines + 1] = console.progress
+  elseif console.report then
+    for _, report_line in ipairs(split_lines(console.report)) do lines[#lines + 1] = report_line end
+  else
+    lines[#lines + 1] = "No run or submit yet. :LeetRun sends the selected example,"
+    lines[#lines + 1] = ":LeetSubmit sends the whole solution."
+  end
+  return lines
+end
+
+function M.console_update()
+  local height_limit = math.max(5, math.min(22, jot.viewport.info().window.height - 10))
+  local lines = console_body()
+  if #lines > height_limit then
+    local shown = {}
+    for i = 1, height_limit - 1 do shown[i] = lines[i] end
+    shown[height_limit] = "… " .. tostring(#lines - height_limit + 1) .. " more line(s)"
+    lines = shown
+  end
+  local height = #lines + 2
+  local x, y, width = centered_over_pane(76, 3)
+  local title = console.title or "LeetCode judge"
+  local win = console.win
+  if win and jot.ui.float.is_valid(win) then
+    jot.ui.float.set_lines(win, lines)
+    jot.ui.float.configure(win, {col=x, row=y, width=width, height=height})
+    return win
+  end
+  local colors = palette()
+  local buffer = jot.ui.buffer.create(false, true)
+  jot.ui.buffer.set_lines(buffer, 0, -1, false, lines)
+  win = jot.ui.float.open(buffer, {
+    relative="editor", col=x, row=y, width=width, height=height,
+    border="single", focusable=true, zindex=60,
+    title=title, footer="esc closes · :LeetRun run · :LeetSubmit submit",
+    fg=colors.fg, bg=colors.bg, border_fg=colors.border,
+    title_fg=colors.accent, footer_fg=colors.comment,
+  })
+  console.win = win
+  jot.ui.float.on_key(win, function(event)
+    if event.key == 27 then
+      jot.ui.float.close(win, true)
+      console.win = nil
+      return true
+    end
+    return false
+  end)
+  return win
 end
 
 function M.run(kind)
@@ -160,23 +451,34 @@ function M.run(kind)
   if not code then notify("Save the solution file before running it"); return end
   code = solution.submission_code(question, question.lang_slug or config.get("language"), code)
   local case = M.testcases[M.testcase] or ""
-  popup("LeetCode judge", kind == "submit" and "Submitting solution..." or "Running selected example...")
+  local submit = kind == "submit"
+  console.title = submit and "LeetCode judge · submit" or ("LeetCode judge · example " .. M.testcase)
+  console.progress = submit and "Submitting solution..."
+                          or ("Running example " .. M.testcase .. " of " .. math.max(1, #M.testcases) .. "...")
+  console.report = nil
+  M.console_update()
+  begin_work(submit and "submitting solution" or "running selected example")
   client.judge(kind, question, code, case, function(result, err)
-    if err then popup("LeetCode error", "Judge request failed.\n\n" .. err); return end
-    local lines = {
-      tostring(result.status_msg or "Judge completed"),
-      "Correct cases: " .. tostring(result.total_correct or "?"),
-      "Total cases: " .. tostring(result.total_testcases or "?"),
-      "Runtime: " .. tostring(result.runtime or "?") .. " ms",
-      "Memory: " .. tostring(result.memory or "?"),
-    }
-    popup("LeetCode result", table.concat(lines, "\n"))
+    end_work()
+    console.progress = nil
+    if err then
+      console.report = "Judge request failed.\n\n" .. tostring(err)
+      notify("Judge request failed: " .. tostring(err))
+    else
+      console.report = judge_report(result, kind)
+      notify(tostring(result.status_msg or "Judge completed"))
+    end
+    M.console_update()
   end)
 end
 
 function M.next_case()
   if #M.testcases == 0 then notify("This question has no examples"); return end
   M.testcase = M.testcase % #M.testcases + 1
+  if console.win and jot.ui.float.is_valid(console.win) then
+    M.console_update()
+    return
+  end
   popup("LeetCode testcase", "Example " .. M.testcase .. " of " .. #M.testcases .. "\n\n" .. M.testcases[M.testcase])
 end
 
@@ -210,7 +512,10 @@ function M.auth_status()
   if not result.available then notify(result.error); return end
   if not result.ok then notify("Session store error: " .. result.error); return end
   if result.value == "" then notify("No LeetCode session stored"); return end
+  begin_work("checking session")
+  notify("Checking the stored LeetCode session...")
   client.auth(function(user, err)
+    end_work()
     if err then notify(err); return end
     notify("Signed in as " .. tostring(user.name or "LeetCode user"))
   end)
@@ -222,15 +527,17 @@ function M.sign_out()
 end
 
 function M.status()
-  local title = M.current and M.current.title or "No active problem"
   popup("LeetCode", table.concat({
-    title,
+    M.current and (tostring(M.current.frontend_id or "") .. ". " .. tostring(M.current.title))
+      or "No active problem",
+    "Difficulty: " .. tostring(M.current and M.current.difficulty or "n/a"),
     "Endpoint: " .. config.get("endpoint"),
-    "Language: " .. config.get("language"),
+    "Language: " .. tostring(M.current and M.current.lang_slug or config.get("language")),
     "Solution: " .. tostring(M.current and M.current.solution_path or "not opened"),
     "On disk: " .. tostring(M.current and jot.file.read(M.current.solution_path or "") ~= nil or false),
     "Examples: " .. tostring(#M.testcases),
-    "Cache: " .. tostring(config.get("cache_ttl")) .. " seconds",
+    "Tabs: " .. tostring(#M.tabs),
+    "Cache TTL: " .. tostring(config.get("cache_ttl")) .. " seconds",
     "",
     "Use :Leet list, :Leet daily, or :Leet random to choose a problem.",
   }, "\n"))
@@ -249,6 +556,9 @@ function M.actions()
     {label="Reset solution", detail="Restore the platform template"},
     {label="Show active problem status", detail="Endpoint, language and testcase"},
   }
+  if #M.tabs > 0 then
+    items[#items + 1] = {label="Switch LeetCode tab", detail="Reopen a question you already opened"}
+  end
   if M.current then
     items[#items + 1] = {label="Run selected example", detail="Send code and selected testcase"}
     items[#items + 1] = {label="Submit solution", detail="Send code to LeetCode judge"}
@@ -257,6 +567,8 @@ function M.actions()
     items[#items + 1] = {label="Open problem in browser", detail="Open the official problem page"}
     items[#items + 1] = {label="Show description", detail="Display statement and examples"}
     items[#items + 1] = {label="Change language", detail="Open a solution template in another language"}
+    items[#items + 1] = {label="Copy solution to clipboard", detail="Yank the code section"}
+    items[#items + 1] = {label="Open judge console", detail="Show the last run or submit output"}
   end
   jot.ui.picker("LeetCode", function() return items end, function(action)
     if action == "Browse problem list" then M.list()
@@ -265,7 +577,7 @@ function M.actions()
     elseif action == "Profile statistics" then M.profile()
     elseif action == "Session status" then M.auth_status()
     elseif action == "Sign out" then M.sign_out()
-    elseif action == "Clear question cache" then notify("Removed " .. require("jot_lc.cache").clear() .. " cached question(s)")
+    elseif action == "Clear question cache" then notify("Removed " .. cache.clear() .. " cached question(s)")
     elseif action == "Refresh active question" and M.current then M.open_question(M.current.title_slug, true)
     elseif action == "Reset solution" then M.reset()
     elseif action == "Show active problem status" then M.status()
@@ -275,7 +587,10 @@ function M.actions()
     elseif action == "Restore latest submission" then M.restore_latest()
     elseif action == "Open problem in browser" then M.open_browser()
     elseif action == "Show description" then M.description()
-    elseif action == "Change language" then M.change_language() end
+    elseif action == "Change language" then M.change_language()
+    elseif action == "Copy solution to clipboard" then M.yank()
+    elseif action == "Open judge console" then M.console()
+    elseif action == "Switch LeetCode tab" then M.open_tabs() end
   end)
 end
 
@@ -283,32 +598,60 @@ function M.open_cookie_prompt()
   local result = jot.leetcode.credential_get()
   if not result.available then notify(result.error); return end
   local value = ""
+  local colors = palette()
+  local width = 60
+  local function prompt_lines()
+    return {
+      "",
+      "Open LeetCode in your browser.",
+      "Copy the Cookie header value only.",
+      "",
+      "Session  " .. string.rep("*", math.min(#value, 48)),
+      "",
+    }
+  end
   local function render()
-    local display = string.rep("*", math.min(#value, 48))
-    local width = 58
-    local x = math.max(0, math.floor((jot.viewport.info().window.width - width) / 2))
     local win = M.cookie_win
-    local lines = {"Paste the LeetCode session cookie.", "", "Session: " .. display, "", "Enter saves it. Esc cancels."}
+    local lines = prompt_lines()
     if not win or not jot.ui.float.is_valid(win) then
+      local x, y, prompt_width = centered_over_pane(width, 4)
       local buffer = jot.ui.buffer.create(false, true)
       jot.ui.buffer.set_lines(buffer, 0, -1, false, lines)
-      win = jot.ui.float.open(buffer, true, {relative="editor", col=x, row=4, width=width, height=9, border="rounded", title=" LeetCode sign-in ", focusable=true})
+      win = jot.ui.float.open(buffer, {
+        relative="editor", col=x, row=y, width=prompt_width, height=9,
+        border="single", focusable=true, zindex=60,
+        title="LeetCode sign-in", footer="enter saves · esc cancels",
+        fg=colors.fg, bg=colors.bg, border_fg=colors.border,
+        title_fg=colors.accent, footer_fg=colors.comment,
+      })
       M.cookie_win = win
+      -- Highlight the session row like the UI kit's input rows: the full-line
+      -- span paints the selection background behind the masked value.
+      jot.ui.float.set_spans(win, 5, {{start=0, len=65535, fg=colors.selection_fg, bg=colors.selection_bg}})
+      jot.ui.float.on_paste(win, function(text)
+        local pasted = tostring(text or ""):gsub(string.char(13), ""):gsub(string.char(10), "")
+        value = value .. pasted
+        jot.ui.float.set_lines(win, prompt_lines())
+      end)
       jot.ui.float.on_key(win, function(event)
         local key = event.key
         if key == 27 then
+          value = ""
           jot.ui.float.close(win, true); M.cookie_win=nil; return true
         elseif key == 13 or key == 10 then
+          if #value == 0 then notify("Nothing to save yet: paste the Cookie header first"); return true end
           local saved = jot.leetcode.credential_set(value)
+          value = ""
           jot.ui.float.close(win, true); M.cookie_win=nil
           if not saved.ok then notify(saved.error); return true end
+          notify("Session stored, checking sign-in...")
           M.auth_status(); return true
         elseif key == 127 or key == 8 then
           value = value:sub(1, -2)
         elseif type(key) == "number" and key >= 32 and key <= 126 and not event.ctrl and not event.alt then
           value = value .. string.char(key)
         end
-        jot.ui.float.set_lines(win, {"Paste the LeetCode session cookie.", "", "Session: " .. string.rep("*", math.min(#value, 48)), "", "Enter saves it. Esc cancels."})
+        jot.ui.float.set_lines(win, prompt_lines())
         return true
       end)
     else
@@ -316,6 +659,51 @@ function M.open_cookie_prompt()
     end
   end
   render()
+end
+
+function M.console()
+  if console.win and jot.ui.float.is_valid(console.win) then
+    jot.ui.float.close(console.win, true)
+    console.win = nil
+    return
+  end
+  M.console_update()
+end
+
+function M.open_tabs()
+  if #M.tabs == 0 then notify("No LeetCode questions opened yet"); return end
+  local items = {}
+  for index, entry in ipairs(M.tabs) do
+    local question = entry.question
+    items[#items + 1] = {
+      label=string.format("%d. %s", index, tostring(question.title or question.title_slug)),
+      detail=tostring(entry.language or "") .. (entry.path and (" · " .. entry.path) or ""),
+      value=index,
+    }
+  end
+  jot.ui.picker("LeetCode tabs", function() return items end, function(index)
+    local entry = M.tabs[tonumber(index) or 0]
+    if not entry then return end
+    local question = entry.question
+    question.lang_slug = entry.language
+    question.solution_path = entry.path
+    M.current = question
+    M.testcases = solution.testcases(question)
+    M.testcase = 1
+    if entry.path then jot.file.open(entry.path) end
+    notify("Switched to " .. tostring(question.title or question.title_slug))
+  end)
+end
+
+function M.yank()
+  if not M.current then notify("Open a question first"); return end
+  local language = M.current.lang_slug or config.get("language")
+  local path = M.current.solution_path or solution.path(M.current, language)
+  local code = jot.file.read(path)
+  if not code then notify("Nothing to copy: save the solution file first"); return end
+  if not (jot.clipboard and jot.clipboard.set) then notify("Clipboard API is unavailable"); return end
+  jot.clipboard.set(solution.submission_code(M.current, language, code))
+  notify("Copied " .. path .. " to the clipboard")
 end
 
 function M.setup(options)

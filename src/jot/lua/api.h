@@ -659,6 +659,7 @@ public:
   bool close_float(int window, bool force);
   bool is_float_valid(int window) const;
   bool float_input(int ch, bool ctrl, bool shift, bool alt);
+  bool float_paste(const std::string &text);
   bool float_mouse(int x,
                    int y,
                    int button,
