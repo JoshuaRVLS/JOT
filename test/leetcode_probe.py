@@ -51,7 +51,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             payload = {"data": {"question": {
                 "id": "1", "frontend_id": "1", "title": TITLE, "title_slug": SLUG,
                 "difficulty": "Easy", "content": "<p>Return indices of two values.</p>",
-                "testcase_list": "[2,7,11,15]\\n9", "topic_tags": [{"name": "Array"}],
+                # The live API returns exampleTestcaseList as an array of case
+                # strings, not one blank-line separated string; the fixture
+                # mirrors that so a parser that only handles strings fails here.
+                "testcase_list": ["[2,7,11,15]\\n9", "[3,3]\\n6"],
+                "topic_tags": [{"name": "Array"}],
                 "code_snippets": [{"lang": "C++", "lang_slug": "cpp", "code": "class Solution { public: int twoSum(vector<int>& nums, int target) {} };"}],
             }}}
         elif "problemsetQuestionList" in query:

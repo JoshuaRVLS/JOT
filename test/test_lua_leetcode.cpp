@@ -193,7 +193,7 @@ TEST_CASE("LeetCode tabs, yank and judge console keep the opened question usable
     calls.picker.callback('easy-one')
     local question = json.encode({data={question={
       id='1', frontend_id='1', title='Easy One', title_slug='easy-one', difficulty='Easy',
-      content='<p>Add them.</p>', testcase_list='[1,2]',
+      content='<p>Add them.</p>', testcase_list={'[1,2]', '[3,4]'},
       code_snippets={{lang='C++', lang_slug='cpp', code='int twoSum() { return 0; }'}},
     }}})
     calls.callback({ok=true, status=200, body=question, error=''})
@@ -280,6 +280,26 @@ TEST_CASE("LeetCode status filter maps to the API enum", "[leetcode][lua]")
     return tostring(solved.status == 'AC' and attempted.status == nil)
            .. '|' .. tostring(warned:find('has no LeetCode filter') ~= nil)
   )LUA") == "true|true");
+}
+
+TEST_CASE("LeetCode testcase list accepts the live array shape", "[leetcode][lua]")
+{
+  // The live API returns exampleTestcaseList as an array of case strings; the
+  // old string-only parser concatenated it and threw inside the question
+  // callback, so the language picker never opened after the loading toast.
+  State state;
+  REQUIRE(state.run(R"LUA(
+    local solution = package.loaded['jot_lc.solution']
+    local live = solution.testcases({testcase_list={'[2,7,11,15]' .. string.char(10) .. '9', '[3,3]' .. string.char(10) .. '6'}})
+    local legacy = solution.testcases({testcase_list='[1,2]' .. string.char(10) .. string.char(10) .. '[3,4]'})
+    local missing = solution.testcases({})
+    local empty = solution.testcases({testcase_list={}})
+    return table.concat({
+      tostring(#live == 2 and live[1]:find('2,7,11,15') ~= nil),
+      tostring(#legacy == 2 and legacy[2] == '[3,4]'),
+      tostring(#missing == 0 and #empty == 0),
+    }, '|')
+  )LUA") == "true|true|true");
 }
 
 TEST_CASE("LeetCode authenticated requests keep cookies in request headers", "[leetcode][lua]")

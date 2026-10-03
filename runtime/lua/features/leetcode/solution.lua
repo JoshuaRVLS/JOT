@@ -88,8 +88,18 @@ function M.submission_code(question, language, source)
 end
 
 function M.testcases(question)
-  local raw = question.testcase_list or ""
+  local raw = question.testcase_list
   local cases = {}
+  -- The live API returns exampleTestcaseList as an array of case strings, so
+  -- accept both that and the blank-line separated shape older caches stored.
+  if type(raw) == "table" then
+    for _, entry in ipairs(raw) do
+      local text = tostring(entry)
+      if text:match("%S") then cases[#cases + 1] = text end
+    end
+    return cases
+  end
+  if type(raw) ~= "string" then return cases end
   for block in (raw .. "\n\n"):gmatch("(.-)\n%s*\n") do
     if block:match("%S") then cases[#cases + 1] = block end
   end
